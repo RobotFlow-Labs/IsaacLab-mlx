@@ -6,14 +6,14 @@
 """Sub-module for utilities for working with dictionaries."""
 
 import collections.abc
+import contextlib
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sized
 from typing import Any
 
-import torch
-
-from .array import TENSOR_TYPE_CONVERSIONS, TENSOR_TYPES
+with contextlib.suppress(ModuleNotFoundError):
+    import torch
 from .string import callable_to_string, string_to_callable, string_to_slice
 
 """
@@ -42,7 +42,7 @@ def class_to_dict(obj: object) -> dict[str, Any]:
     # convert object to dictionary
     if isinstance(obj, dict):
         obj_dict = obj
-    elif isinstance(obj, torch.Tensor):
+    elif "torch" in globals() and isinstance(obj, torch.Tensor):
         # We have to treat torch tensors specially because `torch.tensor.__dict__` returns an empty
         # dict, which would mean that a torch.tensor would be stored as an empty dict. Instead we
         # want to store it directly as the tensor.
@@ -226,6 +226,8 @@ def convert_dict_to_backend(
     Returns:
         The updated dict with the data converted to the desired backend.
     """
+    from .array import TENSOR_TYPE_CONVERSIONS, TENSOR_TYPES
+
     # THINK: Should we also support converting to a specific device, e.g. "cuda:0"?
     # Check the backend is valid.
     if backend not in TENSOR_TYPE_CONVERSIONS:

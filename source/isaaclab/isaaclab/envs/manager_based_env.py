@@ -14,6 +14,7 @@ import torch
 import omni.physx
 from isaacsim.core.simulation_manager import SimulationManager
 
+from isaaclab.backends import configure_torch_device, create_sim_backend
 from isaaclab.managers import ActionManager, EventManager, ObservationManager, RecorderManager
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
@@ -108,10 +109,10 @@ class ManagerBasedEnv:
             if not builtins.ISAAC_LAUNCHED_FROM_TERMINAL:
                 raise RuntimeError("Simulation context already exists. Cannot create a new one.")
             self.sim: SimulationContext = SimulationContext.instance()
+        self.sim_backend = create_sim_backend(simulation_context=self.sim)
 
         # make sure torch is running on the correct device
-        if "cuda" in self.device:
-            torch.cuda.set_device(self.device)
+        configure_torch_device(self.device)
 
         # print useful information
         print("[INFO]: Base environment:")

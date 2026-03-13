@@ -11,9 +11,9 @@ configuring the environment instances, viewer settings, and simulation parameter
 
 from typing import Any, Literal
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from .spawners.materials import RigidBodyMaterialCfg
+from .spawners.materials.physics_materials_cfg import RigidBodyMaterialCfg
 
 
 @configclass

@@ -13,21 +13,44 @@ fault occurs. The launched :class:`isaacsim.simulation_app.SimulationApp` instan
 """
 
 import argparse
-import contextlib
 import logging
 import os
 import re
 import signal
 import sys
-from typing import Any, Literal
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, Literal
 
-with contextlib.suppress(ModuleNotFoundError):
-    import isaacsim  # noqa: F401
+from isaaclab.backends import (
+    UnsupportedBackendError,
+    is_isaacsim_available,
+    resolve_runtime_selection,
+    set_runtime_selection,
+)
 
-from isaacsim import SimulationApp
+if TYPE_CHECKING:
+    from isaacsim import SimulationApp
 
 # import logger
 logger = logging.getLogger(__name__)
+
+
+def _get_isaacsim_module() -> ModuleType:
+    """Return the imported Isaac Sim module with a clear failure mode."""
+    try:
+        import isaacsim
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Isaac Sim Python modules are not available. Install/activate Isaac Sim for the"
+            " `isaacsim` runtime path, or switch to `--sim-backend mac-sim` once the macOS"
+            " simulator entrypoints are implemented."
+        ) from exc
+    return isaacsim
+
+
+def _get_simulation_app_class():
+    """Return the Isaac Sim `SimulationApp` class on demand."""
+    return _get_isaacsim_module().SimulationApp
 
 
 class ExplicitAction(argparse.Action):
@@ -167,7 +190,7 @@ class AppLauncher:
     """
 
     @property
-    def app(self) -> SimulationApp:
+    def app(self) -> Any:
         """The launched SimulationApp."""
         if self._app is not None:
             return self._app
@@ -304,6 +327,20 @@ class AppLauncher:
             default=AppLauncher._APPLAUNCHER_CFG_INFO["device"][1],
             help='The device to run the simulation on. Can be "cpu", "cuda", "cuda:N", where N is the device ID',
         )
+        arg_group.add_argument(
+            "--compute-backend",
+            type=str,
+            default=AppLauncher._APPLAUNCHER_CFG_INFO["compute_backend"][1],
+            choices={"torch-cuda", "mlx"},
+            help="Tensor/runtime backend. Use 'torch-cuda' for the upstream Isaac Sim path and 'mlx' for the macOS port path.",
+        )
+        arg_group.add_argument(
+            "--sim-backend",
+            type=str,
+            default=AppLauncher._APPLAUNCHER_CFG_INFO["sim_backend"][1],
+            choices={"isaacsim", "mac-sim"},
+            help="Simulation backend. 'isaacsim' preserves the upstream runtime, 'mac-sim' selects the macOS port path.",
+        )
         # Add the deprecated cpu flag to raise an error if it is used
         arg_group.add_argument("--cpu", action="store_true", help=argparse.SUPPRESS)
         arg_group.add_argument(
@@ -387,6 +424,8 @@ class AppLauncher:
         "enable_cameras": ([bool], False),
         "xr": ([bool], False),
         "device": ([str], "cuda:0"),
+        "compute_backend": ([str], "torch-cuda"),
+        "sim_backend": ([str], "isaacsim"),
         "experience": ([str], ""),
         "rendering_mode": ([str], "balanced"),
     }
@@ -492,6 +531,9 @@ class AppLauncher:
 
         # Handle device and distributed settings
         self._resolve_device_settings(launcher_args)
+
+        # Resolve compute/sim backends before Isaac Sim-specific setup.
+        self._resolve_backend_settings(launcher_args)
 
         # Handle experience file settings
         self._resolve_experience_file(launcher_args)
@@ -704,6 +746,41 @@ class AppLauncher:
 
         print(f"[INFO][AppLauncher]: Using device: {device}")
 
+    def _resolve_backend_settings(self, launcher_args: dict):
+        """Resolve compute/sim backends and reject unsupported combinations early."""
+        runtime = resolve_runtime_selection(
+            compute_backend=launcher_args.pop("compute_backend", None),
+            sim_backend=launcher_args.pop("sim_backend", None),
+            device=launcher_args.get("device", AppLauncher._APPLAUNCHER_CFG_INFO["device"][1]),
+        )
+        set_runtime_selection(runtime)
+
+        self.compute_backend = runtime.compute_backend
+        self.sim_backend = runtime.sim_backend
+
+        print(
+            "[INFO][AppLauncher]: Using runtime backends:"
+            f" compute={self.compute_backend}, sim={self.sim_backend}"
+        )
+
+        if self.sim_backend != "isaacsim":
+            raise UnsupportedBackendError(
+                "`AppLauncher` only supports `--sim-backend isaacsim` today."
+                " The `mac-sim` path is being introduced behind separate entrypoints."
+            )
+
+        if self.compute_backend != "torch-cuda":
+            raise UnsupportedBackendError(
+                "`AppLauncher` only supports `--compute-backend torch-cuda` with `--sim-backend isaacsim`."
+                " Use `--compute-backend mlx --sim-backend mac-sim` for the macOS port path."
+            )
+
+        if not is_isaacsim_available():
+            raise ModuleNotFoundError(
+                "Isaac Sim Python modules are not available for the selected runtime."
+                " Install/activate Isaac Sim before using `--sim-backend isaacsim`."
+            )
+
     def _resolve_experience_file(self, launcher_args: dict):
         """Resolve experience file related settings."""
         # Check if input keywords contain an 'experience' file setting
@@ -820,7 +897,8 @@ class AppLauncher:
             sys.argv = sys.argv[:idx] + sys.argv[idx + 1 :]
 
         # launch simulation app
-        self._app = SimulationApp(self._sim_app_config, experience=self._sim_experience_file)
+        simulation_app_cls = _get_simulation_app_class()
+        self._app = simulation_app_cls(self._sim_app_config, experience=self._sim_experience_file)
         # enable sys stdout and stderr
         sys.stdout = sys.__stdout__
 
@@ -944,6 +1022,7 @@ class AppLauncher:
 
     def is_isaac_sim_version_4_5(self) -> bool:
         if not hasattr(self, "_is_sim_ver_4_5"):
+            isaacsim = _get_isaacsim_module()
             # 1) Try to read the VERSION file (for manual / binary installs)
             version_path = os.path.abspath(os.path.join(os.path.dirname(isaacsim.__file__), "../../VERSION"))
             if os.path.isfile(version_path):
@@ -995,13 +1074,14 @@ class AppLauncher:
         if launcher_args.get("disable_pinocchio_patch", False):
             return
 
-        original_start_app = SimulationApp._start_app
+        simulation_app_cls = _get_simulation_app_class()
+        original_start_app = simulation_app_cls._start_app
 
         def _start_app_patch(sim_app_instance, *args, **kwargs):
             original_start_app(sim_app_instance, *args, **kwargs)
             self.__patch_pxr_gf_matrix4d(launcher_args)
 
-        SimulationApp._start_app = _start_app_patch
+        simulation_app_cls._start_app = _start_app_patch
 
     def __patch_pxr_gf_matrix4d(self, launcher_args: dict):
         import traceback

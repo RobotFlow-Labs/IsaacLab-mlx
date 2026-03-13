@@ -5,7 +5,7 @@
 
 from dataclasses import MISSING
 
-from isaaclab.devices.openxr import XrCfg
+from isaaclab.devices.openxr.xr_cfg import XrCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass

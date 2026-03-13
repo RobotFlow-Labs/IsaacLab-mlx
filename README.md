@@ -1,59 +1,253 @@
-![Isaac Lab](docs/source/_static/isaaclab.jpg)
+![MLX](assets/mlx_logo_dark.png)
 
 ---
 
-# Isaac Lab
+# IsaacLab-MLX
 
-[![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html)
+[![MLX](https://img.shields.io/badge/backend-MLX-black.svg)](https://github.com/ml-explore/mlx)
+[![Apple Silicon](https://img.shields.io/badge/platform-Apple%20Silicon-black.svg)](https://www.apple.com/mac/)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
-[![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
-[![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/)
-[![pre-commit](https://img.shields.io/github/actions/workflow/status/isaac-sim/IsaacLab/pre-commit.yaml?logo=pre-commit&logoColor=white&label=pre-commit&color=brightgreen)](https://github.com/isaac-sim/IsaacLab/actions/workflows/pre-commit.yaml)
-[![docs status](https://img.shields.io/github/actions/workflow/status/isaac-sim/IsaacLab/docs.yaml?label=docs&color=brightgreen)](https://github.com/isaac-sim/IsaacLab/actions/workflows/docs.yaml)
 [![License](https://img.shields.io/badge/license-BSD--3-yellow.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![License](https://img.shields.io/badge/license-Apache--2.0-yellow.svg)](https://opensource.org/license/apache-2-0)
 
+**IsaacLab-MLX** is a public fork of [Isaac Lab](https://github.com/isaac-sim/IsaacLab) focused on making the Isaac Lab workflow runnable on Apple Silicon macOS by replacing the CUDA-first training/runtime slice with `MLX + mac-sim`.
 
-**Isaac Lab** is a GPU-accelerated, open-source framework designed to unify and simplify robotics research workflows,
-such as reinforcement learning, imitation learning, and motion planning. Built on [NVIDIA Isaac Sim](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html),
-it combines fast and accurate physics and sensor simulation, making it an ideal choice for sim-to-real
-transfer in robotics.
+The fork is not trying to recreate full Omniverse, RTX, or PhysX GPU parity on macOS. The practical goal is narrower and more useful: preserve the high-level Isaac Lab task and training ergonomics wherever possible, introduce clean backend seams for compute and simulation, and build a Mac-native path that can grow task by task.
 
-Isaac Lab provides developers with a range of essential features for accurate sensor simulation, such as RTX-based
-cameras, LIDAR, or contact sensors. The framework's GPU acceleration enables users to run complex simulations and
-computations faster, which is key for iterative processes like reinforcement learning and data-intensive tasks.
-Moreover, Isaac Lab can run locally or be distributed across the cloud, offering flexibility for large-scale deployments.
+## Why This Fork Exists
 
-A detailed description of Isaac Lab can be found in our [arXiv paper](https://arxiv.org/abs/2511.04831).
+Upstream Isaac Lab is built around NVIDIA Isaac Sim and a CUDA-oriented runtime. That is the right choice for Linux and NVIDIA GPU deployments, but it leaves Apple Silicon users without a realistic local development path.
 
-## Key Features
+This fork exists to close that gap:
 
-Isaac Lab offers a comprehensive set of tools and environments designed to facilitate robot learning:
+- keep Isaac Lab recognizable to existing users
+- run the learning stack on Apple Silicon with [MLX](https://github.com/ml-explore/mlx)
+- replace import-time CUDA and Omniverse crashes with explicit backend capability checks
+- build a Mac-native simulator adapter for the first useful environments instead of waiting for full engine parity
 
-- **Robots**: A diverse collection of robots, from manipulators, quadrupeds, to humanoids, with more than 16 commonly available models.
-- **Environments**: Ready-to-train implementations of more than 30 environments, which can be trained with popular reinforcement learning frameworks such as RSL RL, SKRL, RL Games, or Stable Baselines. We also support multi-agent reinforcement learning.
-- **Physics**: Rigid bodies, articulated systems, deformable objects
-- **Sensors**: RGB/depth/segmentation cameras, camera annotations, IMU, contact sensors, ray casters.
+## Current Status
 
+What works today:
 
-## Getting Started
+- runtime/backend selection seam for `torch-cuda|mlx` and `isaacsim|mac-sim`
+- lazy import boundaries so the macOS path fails explicitly instead of exploding on missing `omni.*`
+- reproducible source bootstrap script for upstream repositories
+- a runnable `MLX + mac-sim` cartpole vertical slice
+- MLX training, checkpoint save/load, and replay scripts
+- smoke tests for the backend seam and mac-native cartpole flow
 
-### Documentation
+What this does not claim yet:
 
-Our [documentation page](https://isaac-sim.github.io/IsaacLab) provides everything you need to get started, including
-detailed tutorials and step-by-step guides. Follow these links to learn more about:
+- full Isaac Sim compatibility on macOS
+- RTX sensors, camera pipelines, Warp kernels, cuRobo, or the full task zoo
+- Isaac ROS acceleration or CUDA transport parity
+
+## MLX Port Architecture
+
+The fork is organized around two explicit seams:
+
+### Compute backend
+
+The compute backend isolates tensor/runtime concerns:
+
+- device selection
+- checkpoint save/load
+- RNG and backend metadata
+- room for MLX-native custom kernel paths
+
+Current public options:
+
+- `torch-cuda`: upstream Isaac Sim path
+- `mlx`: Apple Silicon path
+
+Implementation entrypoint:
+
+- [`source/isaaclab/isaaclab/backends/runtime.py`](source/isaaclab/isaaclab/backends/runtime.py)
+
+### Simulation backend
+
+The simulation backend isolates the minimum simulator contract Isaac Lab environments need:
+
+- `reset(soft=...)`
+- `step(render=..., update_fabric=...)`
+- joint state reads
+- joint effort writes
+- root/joint state writes
+- backend capability reporting
+
+Current public options:
+
+- `isaacsim`: upstream runtime adapter
+- `mac-sim`: Mac-native adapter path
+
+The current `mac-sim` implementation is intentionally narrow. It only implements the cartpole slice required to prove the full MLX training loop can run without CUDA.
+
+## MLX Quick Start
+
+This path is for Apple Silicon macOS.
+
+### 1. Create the environment with `uv`
+
+```bash
+cd IsaacLab
+uv venv --python 3.11 .venv
+uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+```
+
+### 2. Train the MLX cartpole baseline
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_cartpole.py \
+  --num-envs 256 \
+  --updates 200 \
+  --rollout-steps 64 \
+  --epochs-per-update 4 \
+  --checkpoint logs/mlx/cartpole_policy.npz
+```
+
+### 3. Replay a trained checkpoint
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_cartpole.py \
+  --checkpoint logs/mlx/cartpole_policy.npz \
+  --episodes 3
+```
+
+### 4. Run the focused backend test suite
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
+  scripts/tools/test/test_bootstrap_isaac_sources.py \
+  source/isaaclab/test/backends/test_runtime.py \
+  source/isaaclab/test/backends/test_mac_cartpole.py -q
+```
+
+## Runtime Selection
+
+The backend seam is exposed through the app/runtime layer:
+
+- `--compute-backend torch-cuda|mlx`
+- `--sim-backend isaacsim|mac-sim`
+
+These flags are published through:
+
+- [`source/isaaclab/isaaclab/app/app_launcher.py`](source/isaaclab/isaaclab/app/app_launcher.py)
+
+Examples:
+
+```bash
+# Upstream path
+python some_script.py --compute-backend torch-cuda --sim-backend isaacsim
+
+# macOS port path
+python some_script.py --compute-backend mlx --sim-backend mac-sim
+```
+
+Important constraint: `AppLauncher` itself still only launches the upstream Isaac Sim runtime path. The MLX cartpole scripts run directly on the `mac-sim` backend and do not launch Isaac Sim.
+
+## Implemented MLX Vertical Slice
+
+The current vertical slice is cartpole:
+
+- environment config: [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
+- trainer entrypoint: [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
+- replay entrypoint: [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+
+The cartpole path preserves the important upstream task semantics:
+
+- observation order remains `pole_pos, pole_vel, cart_pos, cart_vel`
+- reward structure matches upstream Isaac Lab cartpole
+- termination conditions remain cart out-of-bounds or pole angle exceeding `pi/2`
+- reset sampling keeps the pole-angle randomization behavior
+- observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
+
+## Bootstrapping Upstream Sources
+
+This fork also includes a repository bootstrap script so the Isaac Lab / Isaac Sim / Isaac ROS sources can be cloned reproducibly into a workspace.
+
+Script:
+
+- [`scripts/bootstrap_isaac_sources.py`](scripts/bootstrap_isaac_sources.py)
+
+Example:
+
+```bash
+uv run scripts/bootstrap_isaac_sources.py \
+  --dest ../isaac-sources \
+  --with-isaacsim \
+  --with-isaac-ros
+```
+
+The script:
+
+- clones `IsaacLab` by default
+- optionally clones `IsaacSim`
+- optionally clones `isaac_ros_common`
+- runs `git lfs install` / `git lfs pull` only for `IsaacSim`
+- writes a manifest with remotes, requested refs, and resolved SHAs
+
+## What Has Changed Relative To Upstream
+
+The most important fork changes are:
+
+- backend/runtime abstractions in [`source/isaaclab/isaaclab/backends`](source/isaaclab/isaaclab/backends)
+- MLX cartpole reference implementation in [`source/isaaclab/isaaclab/backends/mac_sim`](source/isaaclab/isaaclab/backends/mac_sim)
+- lazy import handling in `envs`, `sim`, and `utils` so Mac users get explicit unsupported-backend errors
+- CUDA device binding moved behind an adapter instead of direct unconditional `torch.cuda.set_device(...)`
+- public README and bootstrap path oriented around a publishable MLX fork
+
+## Roadmap
+
+Near-term priorities:
+
+1. Expand `mac-sim` from cartpole-only logic into a more general articulation/scene layer.
+2. Add a second and third task with compatible observation/action structure.
+3. Push more task code through backend capability checks instead of import-time backend assumptions.
+4. Define a stable checkpoint/config story across multiple MLX tasks.
+5. Add Apple Silicon CI for the MLX backend slice.
+
+Deferred work:
+
+- Omniverse UI and Kit extension parity
+- RTX camera and sensor parity
+- Warp and CUDA custom kernel replacements beyond the first task set
+- cuRobo and Isaac ROS CUDA transport features
+
+## Relationship To Upstream Isaac Lab
+
+This repository is a fork of the upstream Isaac Lab project and still depends heavily on its architecture, APIs, tasks, and research workflow design.
+
+Upstream remains the reference source for:
+
+- task semantics
+- asset conventions
+- environment configuration patterns
+- Isaac Sim integrations
+
+Original upstream repository:
+
+- [isaac-sim/IsaacLab](https://github.com/isaac-sim/IsaacLab)
+
+Related reference repositories:
+
+- [isaac-sim/IsaacSim](https://github.com/isaac-sim/IsaacSim)
+- [NVIDIA-ISAAC-ROS/isaac_ros_common](https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common)
+- [ml-explore/mlx](https://github.com/ml-explore/mlx)
+
+## Documentation
+
+The upstream Isaac Lab documentation remains the best reference for the broader project model:
 
 - [Installation steps](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html#local-installation)
 - [Reinforcement learning](https://isaac-sim.github.io/IsaacLab/main/source/overview/reinforcement-learning/rl_existing_scripts.html)
 - [Tutorials](https://isaac-sim.github.io/IsaacLab/main/source/tutorials/index.html)
 - [Available environments](https://isaac-sim.github.io/IsaacLab/main/source/overview/environments.html)
 
-
 ## Isaac Sim Version Dependency
 
-Isaac Lab is built on top of Isaac Sim and requires specific versions of Isaac Sim that are compatible with each
-release of Isaac Lab. Below, we outline the recent Isaac Lab releases and GitHub branches and their corresponding
-dependency versions for Isaac Sim.
+Upstream Isaac Lab is built on top of Isaac Sim and requires compatible Isaac Sim versions. This fork still treats Isaac Sim as the reference runtime for the upstream path.
 
 | Isaac Lab Version             | Isaac Sim Version         |
 | ----------------------------- | ------------------------- |
@@ -63,69 +257,47 @@ dependency versions for Isaac Sim.
 | `v2.1.X`                      | Isaac Sim 4.5             |
 | `v2.0.X`                      | Isaac Sim 4.5             |
 
+## Contributing
 
-## Contributing to Isaac Lab
+Contributions are welcome, especially in these areas:
 
-We wholeheartedly welcome contributions from the community to make this framework mature and useful for everyone.
-These may happen as bug reports, feature requests, or code contributions. For details, please check our
-[contribution guidelines](https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html).
+- additional MLX-backed task ports
+- generalized `mac-sim` asset and articulation support
+- capability gating around CUDA-only integrations
+- Apple Silicon verification and CI
+- documentation for MLX and macOS users
 
-## Show & Tell: Share Your Inspiration
+For general upstream contribution guidance, see:
 
-We encourage you to utilize our [Show & Tell](https://github.com/isaac-sim/IsaacLab/discussions/categories/show-and-tell)
-area in the `Discussions` section of this repository. This space is designed for you to:
-
-* Share the tutorials you've created
-* Showcase your learning content
-* Present exciting projects you've developed
-
-By sharing your work, you'll inspire others and contribute to the collective knowledge
-of our community. Your contributions can spark new ideas and collaborations, fostering
-innovation in robotics and simulation.
+- [Upstream contributing guide](https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html)
 
 ## Troubleshooting
 
-Please see the [troubleshooting](https://isaac-sim.github.io/IsaacLab/main/source/refs/troubleshooting.html) section for
-common fixes or [submit an issue](https://github.com/isaac-sim/IsaacLab/issues).
+Common current pitfalls:
 
-For issues related to Isaac Sim, we recommend checking its [documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html)
-or opening a question on its [forums](https://forums.developer.nvidia.com/c/agx-autonomous-machines/isaac/67).
+- If `mlx` is missing, install it into the active `uv` environment.
+- If imports fail on `omni.*` or `isaacsim.*`, you are probably invoking an upstream Isaac Sim path rather than the `mac-sim` path.
+- If you expect `AppLauncher` to boot the MLX cartpole slice, that is not wired yet. Use the dedicated MLX scripts instead.
+- If a task depends on cameras, Warp, cuRobo, or Omniverse-only features, it should currently be treated as unsupported on the macOS path.
 
 ## Support
 
-* Please use GitHub [Discussions](https://github.com/isaac-sim/IsaacLab/discussions) for discussing ideas,
-  asking questions, and requests for new features.
-* Github [Issues](https://github.com/isaac-sim/IsaacLab/issues) should only be used to track executable pieces of
-  work with a definite scope and a clear deliverable. These can be fixing bugs, documentation issues, new features,
-  or general updates.
-
-## Connect with the NVIDIA Omniverse Community
-
-Do you have a project or resource you'd like to share more widely? We'd love to hear from you!
-Reach out to the NVIDIA Omniverse Community team at OmniverseCommunity@nvidia.com to explore opportunities
-to spotlight your work.
-
-You can also join the conversation on the [Omniverse Discord](https://discord.com/invite/nvidiaomniverse) to
-connect with other developers, share your projects, and help grow a vibrant, collaborative ecosystem
-where creativity and technology intersect. Your contributions can make a meaningful impact on the Isaac Lab
-community and beyond!
+- Use GitHub Discussions for design discussions, roadmap ideas, and supported-task requests.
+- Use GitHub Issues for concrete bugs, missing capability checks, broken MLX scripts, or backend portability problems.
 
 ## License
 
-The Isaac Lab framework is released under [BSD-3 License](LICENSE). The `isaaclab_mimic` extension and its
-corresponding standalone scripts are released under [Apache 2.0](LICENSE-mimic). The license files of its
-dependencies and assets are present in the [`docs/licenses`](docs/licenses) directory.
+The Isaac Lab framework is released under [BSD-3 License](LICENSE). The `isaaclab_mimic` extension and its corresponding standalone scripts are released under [Apache 2.0](LICENSE-mimic). The license files of dependencies and assets are present in the [`docs/licenses`](docs/licenses) directory.
 
-Note that Isaac Lab requires Isaac Sim, which includes components under proprietary licensing terms. Please see the [Isaac Sim license](docs/licenses/dependencies/isaacsim-license.txt) for information on Isaac Sim licensing.
+Isaac Lab still requires Isaac Sim for the upstream runtime path, and Isaac Sim includes components under proprietary licensing terms. Please see the [Isaac Sim license](docs/licenses/dependencies/isaacsim-license.txt) for details.
 
-Note that the `isaaclab_mimic` extension requires cuRobo, which has proprietary licensing terms that can be found in [`docs/licenses/dependencies/cuRobo-license.txt`](docs/licenses/dependencies/cuRobo-license.txt).
-
+The `isaaclab_mimic` extension requires cuRobo, which has proprietary licensing terms listed in [`docs/licenses/dependencies/cuRobo-license.txt`](docs/licenses/dependencies/cuRobo-license.txt).
 
 ## Citation
 
-If you use Isaac Lab in your research, please cite the technical report:
+If you use Isaac Lab or this MLX fork in your research, please cite the technical report:
 
-```
+```bibtex
 @article{mittal2025isaaclab,
   title={Isaac Lab: A GPU-Accelerated Simulation Framework for Multi-Modal Robot Learning},
   author={Mayank Mittal and Pascal Roth and James Tigue and Antoine Richard and Octi Zhang and Peter Du and Antonio Serrano-Muñoz and Xinjie Yao and René Zurbrügg and Nikita Rudin and Lukasz Wawrzyniak and Milad Rakhsha and Alain Denzler and Eric Heiden and Ales Borovicka and Ossama Ahmed and Iretiayo Akinola and Abrar Anwar and Mark T. Carlson and Ji Yuan Feng and Animesh Garg and Renato Gasoto and Lionel Gulich and Yijie Guo and M. Gussert and Alex Hansen and Mihir Kulkarni and Chenran Li and Wei Liu and Viktor Makoviychuk and Grzegorz Malczyk and Hammad Mazhar and Masoud Moghani and Adithyavairavan Murali and Michael Noseworthy and Alexander Poddubny and Nathan Ratliff and Welf Rehberg and Clemens Schwarke and Ritvik Singh and James Latham Smith and Bingjie Tang and Ruchik Thaker and Matthew Trepte and Karl Van Wyk and Fangzhou Yu and Alex Millane and Vikram Ramasamy and Remo Steiner and Sangeeta Subramanian and Clemens Volk and CY Chen and Neel Jawale and Ashwin Varghese Kuruttukulam and Michael A. Lin and Ajay Mandlekar and Karsten Patzwaldt and John Welsh and Huihua Zhao and Fatima Anes and Jean-Francois Lafleche and Nicolas Moënne-Loccoz and Soowan Park and Rob Stepinski and Dirk Van Gelder and Chris Amevor and Jan Carius and Jumyung Chang and Anka He Chen and Pablo de Heras Ciechomski and Gilles Daviet and Mohammad Mohajerani and Julia von Muralt and Viktor Reutskyy and Michael Sauter and Simon Schirm and Eric L. Shi and Pierre Terdiman and Kenny Vilella and Tobias Widmer and Gordon Yeoman and Tiffany Chen and Sergey Grizan and Cathy Li and Lotus Li and Connor Smith and Rafael Wiltz and Kostas Alexis and Yan Chang and David Chu and Linxi "Jim" Fan and Farbod Farshidian and Ankur Handa and Spencer Huang and Marco Hutter and Yashraj Narang and Soha Pouya and Shiwei Sheng and Yuke Zhu and Miles Macklin and Adam Moravanszky and Philipp Reist and Yunrong Guo and David Hoeller and Gavriel State},
@@ -137,5 +309,4 @@ If you use Isaac Lab in your research, please cite the technical report:
 
 ## Acknowledgement
 
-Isaac Lab development initiated from the [Orbit](https://isaac-orbit.github.io/) framework.
-We gratefully acknowledge the authors of Orbit for their foundational contributions.
+Isaac Lab development initiated from the [Orbit](https://isaac-orbit.github.io/) framework. This fork builds on that work and on the upstream Isaac Lab architecture.

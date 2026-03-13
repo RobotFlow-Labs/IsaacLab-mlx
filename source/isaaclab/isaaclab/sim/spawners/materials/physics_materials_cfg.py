@@ -7,9 +7,19 @@ from collections.abc import Callable
 from dataclasses import MISSING
 from typing import Literal
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from . import physics_materials
+
+def _spawn_rigid_body_material(*args, **kwargs):
+    from .physics_materials import spawn_rigid_body_material
+
+    return spawn_rigid_body_material(*args, **kwargs)
+
+
+def _spawn_deformable_body_material(*args, **kwargs):
+    from .physics_materials import spawn_deformable_body_material
+
+    return spawn_deformable_body_material(*args, **kwargs)
 
 
 @configclass
@@ -33,7 +43,7 @@ class RigidBodyMaterialCfg(PhysicsMaterialCfg):
     See :meth:`spawn_rigid_body_material` for more information.
     """
 
-    func: Callable = physics_materials.spawn_rigid_body_material
+    func: Callable = _spawn_rigid_body_material
 
     static_friction: float = 0.5
     """The static friction coefficient. Defaults to 0.5."""
@@ -87,7 +97,7 @@ class DeformableBodyMaterialCfg(PhysicsMaterialCfg):
 
     """
 
-    func: Callable = physics_materials.spawn_deformable_body_material
+    func: Callable = _spawn_deformable_body_material
 
     density: float | None = None
     """The material density. Defaults to None, in which case the simulation decides the default density."""

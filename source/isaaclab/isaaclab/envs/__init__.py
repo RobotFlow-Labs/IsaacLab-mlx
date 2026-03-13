@@ -3,55 +3,72 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package for environment definitions.
+"""Sub-package for environment definitions."""
 
-Environments define the interface between the agent and the simulation.
-In the simplest case, the environment provides the agent with the current
-observations and executes the actions provided by the agent. However, the
-environment can also provide additional information such as the current
-reward, done flag, and information about the current episode.
+from __future__ import annotations
 
-There are two types of environment designing workflows:
+import importlib
 
-* **Manager-based**: The environment is decomposed into individual components (or managers)
-  for different aspects (such as computing observations, applying actions, and applying
-  randomization. The users mainly configure the managers and the environment coordinates the
-  managers and calls their functions.
-* **Direct**: The user implements all the necessary functionality directly into a single class
-  directly without the need for additional managers.
+from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-Based on these workflows, there are the following environment classes for single and multi-agent RL:
+_MODULE_EXPORTS = {
+    "VecEnvObs": (".common", "VecEnvObs"),
+    "VecEnvStepReturn": (".common", "VecEnvStepReturn"),
+    "ViewerCfg": (".common", "ViewerCfg"),
+    "DirectMARLEnv": (".direct_marl_env", "DirectMARLEnv"),
+    "DirectMARLEnvCfg": (".direct_marl_env_cfg", "DirectMARLEnvCfg"),
+    "DirectRLEnv": (".direct_rl_env", "DirectRLEnv"),
+    "DirectRLEnvCfg": (".direct_rl_env_cfg", "DirectRLEnvCfg"),
+    "ManagerBasedEnv": (".manager_based_env", "ManagerBasedEnv"),
+    "ManagerBasedEnvCfg": (".manager_based_env_cfg", "ManagerBasedEnvCfg"),
+    "ManagerBasedRLEnv": (".manager_based_rl_env", "ManagerBasedRLEnv"),
+    "ManagerBasedRLEnvCfg": (".manager_based_rl_env_cfg", "ManagerBasedRLEnvCfg"),
+    "ManagerBasedRLMimicEnv": (".manager_based_rl_mimic_env", "ManagerBasedRLMimicEnv"),
+    "DataGenConfig": (".mimic_env_cfg", "DataGenConfig"),
+    "SubTaskConfig": (".mimic_env_cfg", "SubTaskConfig"),
+    "SubTaskConstraintType": (".mimic_env_cfg", "SubTaskConstraintType"),
+    "SubTaskConstraintCoordinationScheme": (".mimic_env_cfg", "SubTaskConstraintCoordinationScheme"),
+    "SubTaskConstraintConfig": (".mimic_env_cfg", "SubTaskConstraintConfig"),
+    "multi_agent_to_single_agent": (".utils.marl", "multi_agent_to_single_agent"),
+    "multi_agent_with_one_agent": (".utils.marl", "multi_agent_with_one_agent"),
+}
+_ISAACSIM_ONLY_EXPORTS = {
+    "DirectMARLEnvCfg",
+    "DirectMARLEnv",
+    "DirectRLEnvCfg",
+    "DirectRLEnv",
+    "ManagerBasedEnvCfg",
+    "ManagerBasedEnv",
+    "ManagerBasedRLEnvCfg",
+    "ManagerBasedRLEnv",
+    "ManagerBasedRLMimicEnv",
+}
 
-**Single-Agent RL:**
+__all__ = ["mdp", "ui", *_MODULE_EXPORTS.keys()]
 
-* :class:`ManagerBasedEnv`: The manager-based workflow base environment which only provides the
-  agent with the current observations and executes the actions provided by the agent.
-* :class:`ManagerBasedRLEnv`: The manager-based workflow RL task environment which besides the
-  functionality of the base environment also provides additional Markov Decision Process (MDP)
-  related information such as the current reward, done flag, and information.
-* :class:`DirectRLEnv`: The direct workflow RL task environment which provides implementations for
-  implementing scene setup, computing dones, performing resets, and computing reward and observation.
 
-**Multi-Agent RL (MARL):**
+def __getattr__(name: str):
+    if name in {"mdp", "ui"}:
+        if current_runtime().sim_backend != "isaacsim":
+            raise UnsupportedBackendError(
+                f"`isaaclab.envs.{name}` currently requires `sim-backend=isaacsim`."
+                " The `mac-sim` path will expose separate environment modules."
+            )
+        module = importlib.import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
 
-* :class:`DirectMARLEnv`: The direct workflow MARL task environment which provides implementations for
-  implementing scene setup, computing dones, performing resets, and computing reward and observation.
+    target = _MODULE_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-For more information about the workflow design patterns, see the `Task Design Workflows`_ section.
+    if name in _ISAACSIM_ONLY_EXPORTS and current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.envs.{name}` currently requires `sim-backend=isaacsim`."
+            " Use configuration objects or the forthcoming macOS-native environment bases for `mac-sim`."
+        )
 
-.. _`Task Design Workflows`: https://docs.isaacsim.omniverse.nvidia.com/latest/introduction/workflows.html
-"""
-
-from . import mdp, ui
-from .common import VecEnvObs, VecEnvStepReturn, ViewerCfg
-from .direct_marl_env import DirectMARLEnv
-from .direct_marl_env_cfg import DirectMARLEnvCfg
-from .direct_rl_env import DirectRLEnv
-from .direct_rl_env_cfg import DirectRLEnvCfg
-from .manager_based_env import ManagerBasedEnv
-from .manager_based_env_cfg import ManagerBasedEnvCfg
-from .manager_based_rl_env import ManagerBasedRLEnv
-from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
-from .manager_based_rl_mimic_env import ManagerBasedRLMimicEnv
-from .mimic_env_cfg import *
-from .utils.marl import multi_agent_to_single_agent, multi_agent_with_one_agent
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

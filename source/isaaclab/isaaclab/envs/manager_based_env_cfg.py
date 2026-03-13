@@ -13,7 +13,7 @@ from dataclasses import MISSING, field
 
 import isaaclab.envs.mdp as mdp
 from isaaclab.devices.device_base import DevicesCfg
-from isaaclab.devices.openxr import XrCfg
+from isaaclab.devices.openxr.xr_cfg import XrCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import RecorderManagerBaseCfg as DefaultEmptyRecorderManagerCfg
 from isaaclab.scene import InteractiveSceneCfg

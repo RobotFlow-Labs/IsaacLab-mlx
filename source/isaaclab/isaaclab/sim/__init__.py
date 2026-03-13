@@ -3,33 +3,60 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package containing simulation-specific functionalities.
+"""Sub-package containing simulation-specific functionalities."""
 
-These include:
+from __future__ import annotations
 
-* Ability to spawn different objects and materials into Omniverse
-* Define and modify various schemas on USD prims
-* Converters to obtain USD file from other file formats (such as URDF, OBJ, STL, FBX)
-* Utility class to control the simulator
+import importlib
 
-.. note::
-    Currently, only a subset of all possible schemas and prims in Omniverse are supported.
-    We are expanding the these set of functions on a need basis. In case, there are
-    specific prims or schemas that you would like to include, please open an issue on GitHub
-    as a feature request elaborating on the required application.
+from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-To make it convenient to use the module, we recommend importing the module as follows:
+_SAFE_EXPORTS = {
+    "PhysxCfg": (".simulation_cfg", "PhysxCfg"),
+    "RenderCfg": (".simulation_cfg", "RenderCfg"),
+    "SimulationCfg": (".simulation_cfg", "SimulationCfg"),
+}
+_ISAACSIM_EXPORTS = {
+    "SimulationContext": (".simulation_context", "SimulationContext"),
+    "build_simulation_context": (".simulation_context", "build_simulation_context"),
+}
+_SEARCH_MODULES = (
+    ".converters",
+    ".schemas",
+    ".spawners",
+    ".utils",
+    ".views",
+)
 
-.. code-block:: python
+__all__ = [*_SAFE_EXPORTS.keys(), *_ISAACSIM_EXPORTS.keys()]
 
-    import isaaclab.sim as sim_utils
 
-"""
+def __getattr__(name: str):
+    target = _SAFE_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
 
-from .converters import *  # noqa: F401, F403
-from .schemas import *  # noqa: F401, F403
-from .simulation_cfg import PhysxCfg, RenderCfg, SimulationCfg  # noqa: F401, F403
-from .simulation_context import SimulationContext, build_simulation_context  # noqa: F401, F403
-from .spawners import *  # noqa: F401, F403
-from .utils import *  # noqa: F401, F403
-from .views import *  # noqa: F401, F403
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.sim.{name}` currently requires `sim-backend=isaacsim`."
+            " Only simulation configuration objects are available in the `mac-sim` bootstrap path today."
+        )
+
+    target = _ISAACSIM_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
+
+    for module_name in _SEARCH_MODULES:
+        module = importlib.import_module(module_name, __name__)
+        if hasattr(module, name):
+            value = getattr(module, name)
+            globals()[name] = value
+            return value
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
