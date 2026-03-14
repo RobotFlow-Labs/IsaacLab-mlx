@@ -19,6 +19,11 @@ from .cart_double_pendulum import (
     MacCartDoublePendulumEnvCfg,
     MacCartDoublePendulumSimBackend,
 )
+from .quadcopter import (
+    MacQuadcopterEnv,
+    MacQuadcopterEnvCfg,
+    MacQuadcopterSimBackend,
+)
 from .showcase import (
     SHOWCASE_CFGS,
     BoxBoxEnvCfg,

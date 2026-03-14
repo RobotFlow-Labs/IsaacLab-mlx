@@ -48,10 +48,17 @@ jobs:
           source/isaaclab/test/backends/test_runtime.py \
           source/isaaclab/test/backends/test_mac_cartpole.py \
           source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
-          source/isaaclab/test/backends/test_mac_cart_double_pendulum.py -q
+          source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+          source/isaaclab/test/backends/test_mac_quadcopter.py -q
 
     - name: Run MLX cart-double-pendulum smoke script
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
           scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py \
           --num-envs 8 --episodes 1 --max-steps 256 --random-actions
+
+    - name: Run MLX quadcopter smoke script
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/play_quadcopter.py \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --thrust-action 0.2 --no-random-actions

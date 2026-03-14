@@ -35,8 +35,9 @@ What works today:
 - a runnable `MLX + mac-sim` cartpole vertical slice
 - cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces
 - a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
+- a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
 - MLX training, checkpoint save/load, and replay scripts
-- smoke tests for the backend seam and mac-native cartpole flow
+- smoke tests for the backend seam and mac-native task slices
 
 What this does not claim yet:
 
@@ -82,7 +83,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It only implements the cartpole slice required to prove the full MLX training loop can run without CUDA.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, and quadcopter slices needed to prove the MLX training/inference path can run without CUDA.
 
 ## MLX Quick Start
 
@@ -135,7 +136,15 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --num-envs 64 --episodes 3 --max-steps 10000 --random-actions
 ```
 
-### 5. Run the focused backend test suite
+### 5. Run quadcopter smoke
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_quadcopter.py \
+  --num-envs 64 --episodes 3 --episode-length-s 0.5 --max-steps 10000 --thrust-action 0.2 --no-random-actions
+```
+
+### 6. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
@@ -143,7 +152,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
-  source/isaaclab/test/backends/test_mac_cart_double_pendulum.py -q
+  source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+  source/isaaclab/test/backends/test_mac_quadcopter.py -q
 ```
 
 ## Runtime Selection
@@ -176,9 +186,11 @@ Current implemented slices:
 - cartpole environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
 - cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
 - cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
+- quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
 - cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
 - cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
 - cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
+- quadcopter replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_quadcopter.py`](scripts/reinforcement_learning/mlx/play_quadcopter.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -188,6 +200,7 @@ The cartpole path preserves the important upstream task semantics:
 - reset sampling keeps the pole-angle randomization behavior
 - observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
 - cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
+- quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
 
 ## Bootstrapping Upstream Sources
 
@@ -228,8 +241,8 @@ The most important fork changes are:
 
 Near-term priorities:
 
-1. Expand `mac-sim` from cartpole-only logic into a more general articulation/scene layer.
-2. Add a second and third task with compatible observation/action structure.
+1. Expand `mac-sim` from the current task slices into a more general articulation/scene layer.
+2. Add additional locomotion/manipulation tasks with compatible observation/action structure.
 3. Push more task code through backend capability checks instead of import-time backend assumptions.
 4. Define a stable checkpoint/config story across multiple MLX tasks.
 5. Add Apple Silicon CI for the MLX backend slice.
@@ -303,7 +316,7 @@ Common current pitfalls:
 
 - If `mlx` is missing, install it into the active `uv` environment.
 - If imports fail on `omni.*` or `isaacsim.*`, you are probably invoking an upstream Isaac Sim path rather than the `mac-sim` path.
-- If you expect `AppLauncher` to boot the MLX cartpole slice, that is not wired yet. Use the dedicated MLX scripts instead.
+- If you expect `AppLauncher` to boot the MLX task slices, that is not wired yet. Use the dedicated MLX scripts instead.
 - If a task depends on cameras, Warp, cuRobo, or Omniverse-only features, it should currently be treated as unsupported on the macOS path.
 
 ## Support
