@@ -27,9 +27,9 @@ Or, equivalently, by directly calling the skrl library API as follows:
 # needed to import for type hinting: Agent | list[Agent]
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from isaaclab.envs import DirectMARLEnv, DirectRLEnv, ManagerBasedRLEnv
+from isaaclab.backends import UnsupportedBackendError
 
 """
 Vectorized environment wrapper.
@@ -37,7 +37,7 @@ Vectorized environment wrapper.
 
 
 def SkrlVecEnvWrapper(
-    env: ManagerBasedRLEnv | DirectRLEnv | DirectMARLEnv,
+    env: Any,
     ml_framework: Literal["torch", "jax", "jax-numpy"] = "torch",
     wrapper: Literal["auto", "isaaclab", "isaaclab-single-agent", "isaaclab-multi-agent"] = "isaaclab",
 ):
@@ -62,11 +62,8 @@ def SkrlVecEnvWrapper(
         https://skrl.readthedocs.io/en/latest/api/envs/wrapping.html
     """
     # check that input is valid
-    if (
-        not isinstance(env.unwrapped, ManagerBasedRLEnv)
-        and not isinstance(env.unwrapped, DirectRLEnv)
-        and not isinstance(env.unwrapped, DirectMARLEnv)
-    ):
+    supported_env_types = _get_supported_env_types()
+    if not isinstance(env.unwrapped, supported_env_types):
         raise ValueError(
             "The environment must be inherited from ManagerBasedRLEnv, DirectRLEnv or DirectMARLEnv. Environment type:"
             f" {type(env)}"
@@ -84,3 +81,15 @@ def SkrlVecEnvWrapper(
 
     # wrap and return the environment
     return wrap_env(env, wrapper)
+
+
+def _get_supported_env_types() -> tuple[type, ...]:
+    """Resolve Isaac Lab RL env base types lazily for mac-safe imports."""
+    try:
+        from isaaclab.envs import DirectMARLEnv, DirectRLEnv, ManagerBasedRLEnv
+    except Exception as exc:
+        raise UnsupportedBackendError(
+            "`isaaclab_rl.skrl` requires Isaac Lab RL environment base classes that are only available on the"
+            " upstream Isaac Sim path today."
+        ) from exc
+    return (ManagerBasedRLEnv, DirectRLEnv, DirectMARLEnv)

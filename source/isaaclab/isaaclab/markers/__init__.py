@@ -3,23 +3,47 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package for marker utilities to simplify creation of UI elements in the GUI.
+"""Sub-package for marker utilities, lazily loaded by backend capability."""
 
-Currently, the sub-package provides the following classes:
+from __future__ import annotations
 
-* :class:`VisualizationMarkers` for creating a group of markers using `UsdGeom.PointInstancer
-  <https://graphics.pixar.com/usd/dev/api/class_usd_geom_point_instancer.html>`_.
+import importlib
+
+from isaaclab.backends import UnsupportedBackendError, current_runtime
+
+_CORE_EXPORTS = {
+    "VisualizationMarkers": (".visualization_markers", "VisualizationMarkers"),
+    "VisualizationMarkersCfg": (".visualization_markers", "VisualizationMarkersCfg"),
+}
+_SEARCH_MODULES = (".config",)
+
+__all__ = [*_CORE_EXPORTS.keys()]
 
 
-.. note::
+def __getattr__(name: str):
+    target = _CORE_EXPORTS.get(name)
+    if target is not None:
+        if current_runtime().sim_backend != "isaacsim":
+            raise UnsupportedBackendError(
+                f"`isaaclab.markers.{name}` currently requires `sim-backend=isaacsim`."
+                " Marker interfaces for `mac-sim` are exposed progressively via backend capabilities."
+            )
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
 
-    For some simple use-cases, it may be sufficient to use the debug drawing utilities from Isaac Sim.
-    The debug drawing API is available in the `isaacsim.util.debug_drawing`_ module. It allows drawing of
-    points and splines efficiently on the UI.
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.markers.{name}` currently requires `sim-backend=isaacsim`."
+            " Marker interfaces for `mac-sim` are exposed progressively via backend capabilities."
+        )
 
-    .. _isaacsim.util.debug_drawing: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/ext_omni_isaac_debug_drawing.html
+    for module_name in _SEARCH_MODULES:
+        module = importlib.import_module(module_name, __name__)
+        if hasattr(module, name):
+            value = getattr(module, name)
+            globals()[name] = value
+            return value
 
-"""
-
-from .config import *  # noqa: F401, F403
-from .visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

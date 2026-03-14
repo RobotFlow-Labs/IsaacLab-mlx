@@ -30,11 +30,15 @@ This fork exists to close that gap:
 What works today:
 
 - runtime/backend selection seam for `torch-cuda|mlx` and `isaacsim|mac-sim`
-- lazy import boundaries so the macOS path fails explicitly instead of exploding on missing `omni.*`
+- lazy import boundaries in `envs`, `sim`, `assets`, `sensors`, `managers`, `controllers`, `devices`, `scene`, and `markers` so the macOS path fails explicitly instead of exploding on missing `omni.*`
 - reproducible source bootstrap script for upstream repositories
 - a runnable `MLX + mac-sim` cartpole vertical slice
+- cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces
+- a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
+- a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
 - MLX training, checkpoint save/load, and replay scripts
-- smoke tests for the backend seam and mac-native cartpole flow
+- portability guards for optional `torch`/`warp` utility imports on macOS
+- smoke tests for the backend seam and mac-native task slices
 
 What this does not claim yet:
 
@@ -80,7 +84,17 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It only implements the cartpole slice required to prove the full MLX training loop can run without CUDA.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, and quadcopter slices needed to prove the MLX training/inference path can run without CUDA.
+
+### Kernel backend
+
+The kernel backend isolates Warp and future Metal custom-kernel paths:
+
+- `warp`: upstream Isaac Sim + Warp path
+- `metal`: Apple Silicon path for MLX + Metal-backed kernel replacements
+- `cpu`: correctness fallback for bring-up and unsupported kernels
+
+Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selection seam exists now so future Metal kernels can land without rewriting task-facing APIs again.
 
 ## MLX Quick Start
 
@@ -91,7 +105,13 @@ This path is for Apple Silicon macOS.
 ```bash
 cd IsaacLab
 uv venv --python 3.11 .venv
-uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev]
+```
+
+If you want the upstream Isaac Sim runtime on Linux/NVIDIA instead, install the CUDA-side extra:
+
+```bash
+uv pip install --python .venv/bin/python -e source/isaaclab[cuda-isaacsim,dev]
 ```
 
 ### 2. Train the MLX cartpole baseline
@@ -115,13 +135,52 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --episodes 3
 ```
 
-### 4. Run the focused backend test suite
+Optional resume flow:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_cartpole.py \
+  --resume-from logs/mlx/cartpole_policy.npz \
+  --checkpoint logs/mlx/cartpole_policy_resumed.npz \
+  --updates 50
+```
+
+The torch-centric RL wrapper extension is now optional. If you need upstream SB3, rl-games, or RSL-RL wrappers, install them separately from the MLX path:
+
+```bash
+uv pip install --python .venv/bin/python -e source/isaaclab_rl[sb3]
+uv pip install --python .venv/bin/python -e source/isaaclab_rl[rsl-rl]
+```
+
+For the MLX/mac-sim task slices documented in this fork, `source/isaaclab_rl` is not required.
+
+### 4. Run cart-double-pendulum MARL smoke
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py \
+  --num-envs 64 --episodes 3 --max-steps 10000 --random-actions
+```
+
+### 5. Run quadcopter smoke
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_quadcopter.py \
+  --num-envs 64 --episodes 3 --episode-length-s 0.5 --max-steps 10000 --thrust-action 0.2 --no-random-actions
+```
+
+### 6. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
-  source/isaaclab/test/backends/test_mac_cartpole.py -q
+  source/isaaclab/test/backends/test_portability_utils.py \
+  source/isaaclab/test/backends/test_mac_cartpole.py \
+  source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
+  source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+  source/isaaclab/test/backends/test_mac_quadcopter.py -q
 ```
 
 ## Runtime Selection
@@ -129,6 +188,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
 The backend seam is exposed through the app/runtime layer:
 
 - `--compute-backend torch-cuda|mlx`
+- `--kernel-backend warp|metal|cpu`
 - `--sim-backend isaacsim|mac-sim`
 
 These flags are published through:
@@ -139,21 +199,50 @@ Examples:
 
 ```bash
 # Upstream path
-python some_script.py --compute-backend torch-cuda --sim-backend isaacsim
+python some_script.py --compute-backend torch-cuda --kernel-backend warp --sim-backend isaacsim
 
 # macOS port path
-python some_script.py --compute-backend mlx --sim-backend mac-sim
+python some_script.py --compute-backend mlx --kernel-backend metal --sim-backend mac-sim
 ```
 
-Important constraint: `AppLauncher` itself still only launches the upstream Isaac Sim runtime path. The MLX cartpole scripts run directly on the `mac-sim` backend and do not launch Isaac Sim.
+Important constraint: `AppLauncher` now accepts `--compute-backend mlx --sim-backend mac-sim` in bootstrap mode, but it does not launch Isaac Sim/Omniverse there. Use the dedicated MLX scripts for task execution.
+
+## M5 Benchmarking
+
+The fork now includes a dedicated MLX benchmark entrypoint for the current mac-native task set:
+
+- [`scripts/benchmarks/mlx/benchmark_mac_tasks.py`](scripts/benchmarks/mlx/benchmark_mac_tasks.py)
+
+Example:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+  --tasks cartpole cart-double-pendulum quadcopter train-cartpole \
+  --num-envs 256 \
+  --steps 512 \
+  --train-updates 20 \
+  --json-out logs/benchmarks/mlx/m5-baseline.json
+```
+
+The benchmark emits:
+
+- per-task `env_steps_per_s` for the current MLX/mac-sim env slices
+- cartpole `train_frames_per_s` for the first MLX training loop
+- runtime metadata including compute, kernel, sensor, and planner backend selection
 
 ## Implemented MLX Vertical Slice
 
-The current vertical slice is cartpole:
+Current implemented slices:
 
-- environment config: [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
-- trainer entrypoint: [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
-- replay entrypoint: [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- cartpole environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
+- cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
+- cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
+- quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
+- cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
+- cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
+- quadcopter replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_quadcopter.py`](scripts/reinforcement_learning/mlx/play_quadcopter.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -162,6 +251,8 @@ The cartpole path preserves the important upstream task semantics:
 - termination conditions remain cart out-of-bounds or pole angle exceeding `pi/2`
 - reset sampling keeps the pole-angle randomization behavior
 - observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
+- cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
+- quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
 
 ## Bootstrapping Upstream Sources
 
@@ -202,8 +293,8 @@ The most important fork changes are:
 
 Near-term priorities:
 
-1. Expand `mac-sim` from cartpole-only logic into a more general articulation/scene layer.
-2. Add a second and third task with compatible observation/action structure.
+1. Expand `mac-sim` from the current task slices into a more general articulation/scene layer.
+2. Add additional locomotion/manipulation tasks with compatible observation/action structure.
 3. Push more task code through backend capability checks instead of import-time backend assumptions.
 4. Define a stable checkpoint/config story across multiple MLX tasks.
 5. Add Apple Silicon CI for the MLX backend slice.
@@ -277,7 +368,7 @@ Common current pitfalls:
 
 - If `mlx` is missing, install it into the active `uv` environment.
 - If imports fail on `omni.*` or `isaacsim.*`, you are probably invoking an upstream Isaac Sim path rather than the `mac-sim` path.
-- If you expect `AppLauncher` to boot the MLX cartpole slice, that is not wired yet. Use the dedicated MLX scripts instead.
+- If you use `AppLauncher` with `--sim-backend mac-sim`, it runs in bootstrap mode and returns a placeholder app object. Use the dedicated MLX scripts for environment stepping/training.
 - If a task depends on cameras, Warp, cuRobo, or Omniverse-only features, it should currently be treated as unsupported on the macOS path.
 
 ## Support

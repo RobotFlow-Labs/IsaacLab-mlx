@@ -38,9 +38,9 @@ class MacCartpoleEnvCfg:
     episode_length_s: float = 5.0
 
     action_scale: float = 100.0
-    action_space: int = 1
-    observation_space: int = 4
-    state_space: int = 0
+    action_space: Any = 1
+    observation_space: Any = 4
+    state_space: Any = 0
 
     max_cart_pos: float = 3.0
     initial_pole_angle_range: tuple[float, float] = (-0.25 * math.pi, 0.25 * math.pi)
@@ -77,6 +77,7 @@ class MacCartpoleTrainCfg:
     entropy_coef: float = 0.01
     checkpoint_path: str = "logs/mlx/cartpole_policy.npz"
     eval_interval: int = 10
+    resume_from: str | None = None
 
 
 class MacCartpoleSimBackend(MacSimBackend):
@@ -231,6 +232,8 @@ class MacCartpoleEnv:
         self.physics_dt = self.cfg.sim_dt
         self.step_dt = self.cfg.sim_dt * self.cfg.decimation
         self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.single_action_space = self.cfg.action_space
+        self.single_observation_space = {"policy": self.cfg.observation_space}
 
         self.sim_backend = MacCartpoleSimBackend(self.cfg)
         self.actions = mx.zeros((self.num_envs, 1), dtype=mx.float32)
@@ -251,12 +254,10 @@ class MacCartpoleEnv:
         return self.obs_buf, {}
 
     def step(self, action: Any) -> tuple[dict[str, mx.array], mx.array, mx.array, mx.array, dict[str, Any]]:
-        action = mx.array(action, dtype=mx.float32).reshape((self.num_envs, self.cfg.action_space))
-        action = mx.clip(action, -1.0, 1.0)
-        self.actions = self.cfg.action_scale * action
+        self._pre_physics_step(action)
 
         for _ in range(self.cfg.decimation):
-            self.sim_backend.set_joint_effort_target(None, self.actions[:, 0], joint_ids=[0])
+            self._apply_action()
             self.sim_backend.step(render=False)
 
         self.episode_length_buf = self.episode_length_buf + 1
@@ -300,13 +301,24 @@ class MacCartpoleEnv:
         self.obs_buf = self._get_observations()
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, extras
 
+    def _pre_physics_step(self, action: Any) -> None:
+        action = mx.array(action, dtype=mx.float32).reshape((self.num_envs, 1))
+        self.actions = mx.clip(action, -1.0, 1.0)
+
+    def _apply_action(self) -> None:
+        target = self.cfg.action_scale * self.actions[:, 0]
+        self.sim_backend.set_joint_effort_target(None, target, joint_ids=[0])
+
     def _reset_idx(self, env_ids: list[int]) -> None:
         self.sim_backend.reset_envs(env_ids)
         self.episode_length_buf[mx.array(env_ids)] = 0
         self.episode_return_buf[mx.array(env_ids)] = 0.0
 
+    def _joint_state(self) -> tuple[mx.array, mx.array]:
+        return self.sim_backend.joint_state()
+
     def _get_observations(self) -> dict[str, mx.array]:
-        joint_pos, joint_vel = self.sim_backend.joint_state()
+        joint_pos, joint_vel = self._joint_state()
         obs = mx.stack(
             [
                 joint_pos[:, 1],
@@ -430,6 +442,13 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     model = MacCartpolePolicy(obs_dim=cfg.env.observation_space, hidden_dim=cfg.hidden_dim)
     optimizer = optim.Adam(learning_rate=cfg.learning_rate)
     loss_and_grad = nn.value_and_grad(model, _ppo_loss)
+    resumed_from = None
+    if cfg.resume_from:
+        resume_path = Path(cfg.resume_from)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Checkpoint to resume from does not exist: {resume_path}")
+        model.load_weights(str(resume_path))
+        resumed_from = str(resume_path)
     mx.eval(model.parameters())
 
     obs = env.reset()[0]["policy"]
@@ -518,6 +537,7 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     return {
         "checkpoint_path": str(checkpoint_path),
         "metadata_path": str(metadata_path),
+        "resumed_from": resumed_from,
         "train_cfg": asdict(cfg),
         "completed_episodes": len(completed_returns),
         "mean_recent_return": sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10)),

@@ -11,10 +11,18 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-import torch
-import warp as wp
 
-TensorData = Union[np.ndarray, torch.Tensor, wp.array]  # noqa: UP007
+try:
+    import torch
+except ModuleNotFoundError:  # pragma: no cover - exercised in mac-sim tests.
+    torch = None
+
+try:
+    import warp as wp
+except ModuleNotFoundError:  # pragma: no cover - exercised in mac-sim tests.
+    wp = None
+
+TensorData = Union[np.ndarray]  # noqa: UP007
 """Type definition for a tensor data.
 
 Union of numpy, torch, and warp arrays.
@@ -22,8 +30,6 @@ Union of numpy, torch, and warp arrays.
 
 TENSOR_TYPES = {
     "numpy": np.ndarray,
-    "torch": torch.Tensor,
-    "warp": wp.array,
 }
 """A dictionary containing the types for each backend.
 
@@ -32,9 +38,7 @@ The keys are the name of the backend ("numpy", "torch", "warp") and the values a
 """
 
 TENSOR_TYPE_CONVERSIONS = {
-    "numpy": {wp.array: lambda x: x.numpy(), torch.Tensor: lambda x: x.detach().cpu().numpy()},
-    "torch": {wp.array: lambda x: wp.torch.to_torch(x), np.ndarray: lambda x: torch.from_numpy(x)},
-    "warp": {np.array: lambda x: wp.array(x), torch.Tensor: lambda x: wp.torch.from_torch(x)},
+    "numpy": {},
 }
 """A nested dictionary containing the conversion functions for each backend.
 
@@ -42,10 +46,26 @@ The keys of the outer dictionary are the name of target backend ("numpy", "torch
 inner dictionary are the source backend (``np.ndarray``, ``torch.Tensor``, ``wp.array``).
 """
 
+if wp is not None:
+    TensorData = Union[np.ndarray, wp.array]  # noqa: UP007
+    TENSOR_TYPES["warp"] = wp.array
+    TENSOR_TYPE_CONVERSIONS["numpy"][wp.array] = lambda x: x.numpy()
+    TENSOR_TYPE_CONVERSIONS["warp"] = {np.ndarray: lambda x: wp.array(x)}
+
+if torch is not None:
+    TensorData = Union[np.ndarray, torch.Tensor]  # noqa: UP007
+    TENSOR_TYPES["torch"] = torch.Tensor
+    TENSOR_TYPE_CONVERSIONS["numpy"][torch.Tensor] = lambda x: x.detach().cpu().numpy()
+    TENSOR_TYPE_CONVERSIONS["torch"] = {np.ndarray: lambda x: torch.from_numpy(x)}
+    if wp is not None:
+        TensorData = Union[np.ndarray, torch.Tensor, wp.array]  # noqa: UP007
+        TENSOR_TYPE_CONVERSIONS["torch"][wp.array] = lambda x: wp.torch.to_torch(x)
+        TENSOR_TYPE_CONVERSIONS["warp"][torch.Tensor] = lambda x: wp.torch.from_torch(x)
+
 
 def convert_to_torch(
     array: TensorData,
-    dtype: torch.dtype = None,
+    dtype: torch.dtype | None = None,
     device: torch.device | str | None = None,
 ) -> torch.Tensor:
     """Converts a given array into a torch tensor.
@@ -69,6 +89,9 @@ def convert_to_torch(
     Returns:
         The converted array as torch tensor.
     """
+    if torch is None:
+        raise ModuleNotFoundError("PyTorch is required for `convert_to_torch`, but it is not installed.")
+
     # Convert array to tensor
     # if the datatype is not currently supported by torch we need to improvise
     # supported types are: https://pytorch.org/docs/stable/tensors.html
@@ -79,7 +102,7 @@ def convert_to_torch(
             array = array.astype(np.int32)
         # need to deal with object arrays (np.void) separately
         tensor = torch.from_numpy(array)
-    elif isinstance(array, wp.array):
+    elif wp is not None and isinstance(array, wp.array):
         if array.dtype == wp.uint32:
             array = array.view(wp.int32)
         tensor = wp.to_torch(array)

@@ -71,3 +71,42 @@ def test_train_and_play_cartpole_smoke(tmp_path: Path):
 
     assert len(episode_returns) == 1
     assert isinstance(episode_returns[0], float)
+
+
+def test_train_cartpole_resume_from_checkpoint(tmp_path: Path):
+    """Cartpole training should support warm-starting from a previous checkpoint."""
+    first_checkpoint = tmp_path / "cartpole_policy_first.npz"
+    resumed_checkpoint = tmp_path / "cartpole_policy_resumed.npz"
+
+    base_cfg = MacCartpoleTrainCfg(
+        env=MacCartpoleEnvCfg(num_envs=8, seed=29, episode_length_s=0.3),
+        hidden_dim=32,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint_path=str(first_checkpoint),
+    )
+    first_result = train_cartpole_policy(base_cfg)
+    assert first_result["resumed_from"] is None
+    assert first_checkpoint.exists()
+
+    resumed_cfg = MacCartpoleTrainCfg(
+        env=MacCartpoleEnvCfg(num_envs=8, seed=29, episode_length_s=0.3),
+        hidden_dim=32,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint_path=str(resumed_checkpoint),
+        resume_from=str(first_checkpoint),
+    )
+    resumed_result = train_cartpole_policy(resumed_cfg)
+
+    assert resumed_result["resumed_from"] == str(first_checkpoint)
+    assert resumed_checkpoint.exists()
+
+    episode_returns = play_cartpole_policy(
+        str(resumed_checkpoint),
+        env_cfg=MacCartpoleEnvCfg(num_envs=1, seed=29, episode_length_s=0.3),
+        episodes=1,
+    )
+    assert len(episode_returns) == 1

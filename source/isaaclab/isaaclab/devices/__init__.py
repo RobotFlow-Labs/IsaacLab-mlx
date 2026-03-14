@@ -3,28 +3,56 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package providing interfaces to different teleoperation devices.
+"""Sub-package for teleoperation device interfaces, lazily loaded by backend capability."""
 
-Currently, the following categories of devices are supported:
+from __future__ import annotations
 
-* **Keyboard**: Standard keyboard with WASD and arrow keys.
-* **Spacemouse**: 3D mouse with 6 degrees of freedom.
-* **Gamepad**: Gamepad with 2D two joysticks and buttons. Example: Xbox controller.
-* **OpenXR**: Uses hand tracking of index/thumb tip avg to drive the target pose. Gripping is done with pinching.
-* **Haply**: Haptic device (Inverse3 + VerseGrip) with position, orientation tracking and force feedback.
+import importlib
 
-All device interfaces inherit from the :class:`DeviceBase` class, which provides a
-common interface for all devices. The device interface reads the input data when
-the :meth:`DeviceBase.advance` method is called. It also provides the function :meth:`DeviceBase.add_callback`
-to add user-defined callback functions to be called when a particular input is pressed from
-the peripheral device.
-"""
+from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-from .device_base import DeviceBase, DeviceCfg, DevicesCfg
-from .gamepad import Se2Gamepad, Se2GamepadCfg, Se3Gamepad, Se3GamepadCfg
-from .haply import HaplyDevice, HaplyDeviceCfg
-from .keyboard import Se2Keyboard, Se2KeyboardCfg, Se3Keyboard, Se3KeyboardCfg
-from .openxr import ManusVive, ManusViveCfg, OpenXRDevice, OpenXRDeviceCfg
-from .retargeter_base import RetargeterBase, RetargeterCfg
-from .spacemouse import Se2SpaceMouse, Se2SpaceMouseCfg, Se3SpaceMouse, Se3SpaceMouseCfg
-from .teleop_device_factory import create_teleop_device
+_MODULE_EXPORTS = {
+    "DeviceBase": (".device_base", "DeviceBase"),
+    "DeviceCfg": (".device_base", "DeviceCfg"),
+    "DevicesCfg": (".device_base", "DevicesCfg"),
+    "Se2Gamepad": (".gamepad", "Se2Gamepad"),
+    "Se2GamepadCfg": (".gamepad", "Se2GamepadCfg"),
+    "Se3Gamepad": (".gamepad", "Se3Gamepad"),
+    "Se3GamepadCfg": (".gamepad", "Se3GamepadCfg"),
+    "HaplyDevice": (".haply", "HaplyDevice"),
+    "HaplyDeviceCfg": (".haply", "HaplyDeviceCfg"),
+    "Se2Keyboard": (".keyboard", "Se2Keyboard"),
+    "Se2KeyboardCfg": (".keyboard", "Se2KeyboardCfg"),
+    "Se3Keyboard": (".keyboard", "Se3Keyboard"),
+    "Se3KeyboardCfg": (".keyboard", "Se3KeyboardCfg"),
+    "ManusVive": (".openxr", "ManusVive"),
+    "ManusViveCfg": (".openxr", "ManusViveCfg"),
+    "OpenXRDevice": (".openxr", "OpenXRDevice"),
+    "OpenXRDeviceCfg": (".openxr", "OpenXRDeviceCfg"),
+    "RetargeterBase": (".retargeter_base", "RetargeterBase"),
+    "RetargeterCfg": (".retargeter_base", "RetargeterCfg"),
+    "Se2SpaceMouse": (".spacemouse", "Se2SpaceMouse"),
+    "Se2SpaceMouseCfg": (".spacemouse", "Se2SpaceMouseCfg"),
+    "Se3SpaceMouse": (".spacemouse", "Se3SpaceMouse"),
+    "Se3SpaceMouseCfg": (".spacemouse", "Se3SpaceMouseCfg"),
+    "create_teleop_device": (".teleop_device_factory", "create_teleop_device"),
+}
+
+__all__ = [*_MODULE_EXPORTS.keys()]
+
+
+def __getattr__(name: str):
+    target = _MODULE_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.devices.{name}` currently requires `sim-backend=isaacsim`."
+            " Device interfaces for `mac-sim` are exposed progressively via backend capabilities."
+        )
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

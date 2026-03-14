@@ -8,7 +8,7 @@
 import os
 
 import toml
-from setuptools import setup
+from setuptools import find_packages, setup
 
 # Obtain the extension data from the extension.toml file
 EXTENSION_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -33,19 +33,28 @@ INSTALL_REQUIRES = [
     # image processing
     "transformers==4.57.6",
     "einops",  # needed for transformers, doesn't always auto-install
-    "warp-lang",
     # make sure this is consistent with isaac sim version
     "pillow==11.3.0",
     # livestream
     "starlette==0.49.1",
-    # testing
-    "pytest",
-    "pytest-mock",
-    "junitparser",
-    "flatdict==4.0.0",
-    "flaky",
     "packaging",
 ]
+
+EXTRAS_REQUIRE = {
+    "cuda-isaacsim": [
+        "warp-lang ; platform_system != 'Darwin'",
+    ],
+    "macos-mlx": [
+        "mlx ; platform_system == 'Darwin' and platform_machine in 'arm64,aarch64'",
+    ],
+    "dev": [
+        "pytest",
+        "pytest-mock",
+        "junitparser",
+        "flatdict==4.0.0",
+        "flaky",
+    ],
+}
 
 # Append Linux x86_64 and ARM64 deps via PEP 508 markers
 SUPPORTED_ARCHS_ARM = "platform_machine in 'x86_64,AMD64,aarch64,arm64'"
@@ -74,7 +83,8 @@ setup(
     python_requires=">=3.10",
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
-    packages=["isaaclab"],
+    extras_require=EXTRAS_REQUIRE,
+    packages=find_packages(include=["isaaclab", "isaaclab.*"]),
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.10",

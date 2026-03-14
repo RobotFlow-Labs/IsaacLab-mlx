@@ -23,13 +23,24 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-import torch
-import torch.nn as nn  # noqa: F401
-from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
-from stable_baselines3.common.utils import constant_fn
-from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvObs, VecEnvStepReturn
 
-from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+from isaaclab.backends import UnsupportedBackendError
+
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
+
+try:
+    from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
+    from stable_baselines3.common.utils import constant_fn
+    from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvObs, VecEnvStepReturn
+    _SB3_IMPORT_ERROR = None
+except ModuleNotFoundError as exc:
+    VecEnv = object
+    VecEnvObs = Any
+    VecEnvStepReturn = Any
+    _SB3_IMPORT_ERROR = exc
 
 # remove SB3 warnings because PPO with bigger net actually benefits from GPU
 warnings.filterwarnings("ignore", message="You are trying to run PPO on the GPU")
@@ -53,13 +64,16 @@ def process_sb3_cfg(cfg: dict, num_envs: int) -> dict:
         https://github.com/DLR-RM/rl-baselines3-zoo/blob/0e5eb145faefa33e7d79c7f8c179788574b20da5/utils/exp_manager.py#L358
     """
 
+    _require_sb3()
+    torch_module = _require_torch()
+
     def update_dict(hyperparams: dict[str, Any], depth: int) -> dict[str, Any]:
         for key, value in hyperparams.items():
             if isinstance(value, dict):
                 update_dict(value, depth + 1)
             if isinstance(value, str):
                 if value.startswith("nn."):
-                    hyperparams[key] = getattr(nn, value[3:])
+                    hyperparams[key] = getattr(torch_module.nn, value[3:])
             if depth == 0:
                 if key in ["learning_rate", "clip_range", "clip_range_vf"]:
                     if isinstance(value, str):
@@ -135,7 +149,7 @@ class Sb3VecEnvWrapper(VecEnv):
 
     """
 
-    def __init__(self, env: ManagerBasedRLEnv | DirectRLEnv, fast_variant: bool = True):
+    def __init__(self, env: Any, fast_variant: bool = True):
         """Initialize the wrapper.
 
         Args:
@@ -145,8 +159,11 @@ class Sb3VecEnvWrapper(VecEnv):
         Raises:
             ValueError: When the environment is not an instance of :class:`ManagerBasedRLEnv` or :class:`DirectRLEnv`.
         """
+        _require_sb3()
+        _require_torch()
+        supported_env_types = _get_supported_env_types()
         # check that input is valid
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(env.unwrapped, DirectRLEnv):
+        if not isinstance(env.unwrapped, supported_env_types):
             raise ValueError(
                 "The environment must be inherited from ManagerBasedRLEnv or DirectRLEnv. Environment type:"
                 f" {type(env)}"
@@ -182,7 +199,7 @@ class Sb3VecEnvWrapper(VecEnv):
         return cls.__name__
 
     @property
-    def unwrapped(self) -> ManagerBasedRLEnv | DirectRLEnv:
+    def unwrapped(self) -> Any:
         """Returns the base environment of the wrapper.
 
         This will be the bare :class:`gymnasium.Env` environment, underneath all layers of wrappers.
@@ -217,12 +234,13 @@ class Sb3VecEnvWrapper(VecEnv):
         return self._process_obs(obs_dict)
 
     def step_async(self, actions):  # noqa: D102
+        torch_module = _require_torch()
         # convert input to numpy array
-        if not isinstance(actions, torch.Tensor):
+        if not isinstance(actions, torch_module.Tensor):
             actions = np.asarray(actions)
-            actions = torch.from_numpy(actions).to(device=self.sim_device, dtype=torch.float32)
+            actions = torch_module.from_numpy(actions).to(device=self.sim_device, dtype=torch_module.float32)
         else:
-            actions = actions.to(device=self.sim_device, dtype=torch.float32)
+            actions = actions.to(device=self.sim_device, dtype=torch_module.float32)
         # convert to tensor
         self._async_actions = actions
 
@@ -258,6 +276,7 @@ class Sb3VecEnvWrapper(VecEnv):
         self.env.close()
 
     def get_attr(self, attr_name, indices=None):  # noqa: D102
+        torch_module = _require_torch()
         # resolve indices
         if indices is None:
             indices = slice(None)
@@ -267,7 +286,7 @@ class Sb3VecEnvWrapper(VecEnv):
         # obtain attribute value
         attr_val = getattr(self.env, attr_name)
         # return the value
-        if not isinstance(attr_val, torch.Tensor):
+        if not isinstance(attr_val, torch_module.Tensor):
             return [attr_val] * num_indices
         else:
             return attr_val[indices].detach().cpu().numpy()
@@ -297,11 +316,13 @@ class Sb3VecEnvWrapper(VecEnv):
     """
 
     def _process_spaces(self):
+        _require_sb3()
+        torch_module = _require_torch()
         # process observation space
         observation_space = self.unwrapped.single_observation_space["policy"]
         if isinstance(observation_space, gym.spaces.Dict):
             for obs_key, obs_space in observation_space.spaces.items():
-                processors: list[callable[[torch.Tensor], Any]] = []
+                processors: list[callable[[Any], Any]] = []
                 # assume normalized, if not, it won't pass is_image_space, which check [0-255].
                 # for scale like image space that has right shape but not scaled, we will scale it later
                 if is_image_space(obs_space, check_channels=True, normalized_image=True):
@@ -314,7 +335,7 @@ class Sb3VecEnvWrapper(VecEnv):
                             )
                         # sb3 will handle normalization and transpose, but sb3 expects uint8 images
                         if obs_space.dtype != np.uint8:
-                            processors.append(lambda obs: obs.to(torch.uint8))
+                            processors.append(lambda obs: obs.to(torch_module.uint8))
                         observation_space.spaces[obs_key] = gym.spaces.Box(0, 255, obs_space.shape, np.uint8)
                     else:
                         # sb3 will NOT handle the normalization, while sb3 will transpose, its transpose applies to all
@@ -322,14 +343,14 @@ class Sb3VecEnvWrapper(VecEnv):
                         # sb3 transpose it in numpy with cpu.
                         if not is_image_space_channels_first(obs_space):
 
-                            def tranp(img: torch.Tensor) -> torch.Tensor:
+                            def tranp(img):
                                 return img.permute(2, 0, 1) if len(img.shape) == 3 else img.permute(0, 3, 1, 2)
 
                             processors.append(tranp)
                             h, w, c = obs_space.shape
                             observation_space.spaces[obs_key] = gym.spaces.Box(-1.0, 1.0, (c, h, w), obs_space.dtype)
 
-                    def chained_processor(obs: torch.Tensor, procs=processors) -> Any:
+                    def chained_processor(obs: Any, procs=processors) -> Any:
                         for proc in procs:
                             obs = proc(obs)
                         return obs
@@ -350,6 +371,7 @@ class Sb3VecEnvWrapper(VecEnv):
 
     def _process_obs(self, obs_dict: torch.Tensor | dict[str, torch.Tensor]) -> np.ndarray | dict[str, np.ndarray]:
         """Convert observations into NumPy data type."""
+        torch_module = _require_torch()
         # Sb3 doesn't support asymmetric observation spaces, so we only use "policy"
         obs = obs_dict["policy"]
         # note: ManagerBasedRLEnv uses torch backend (by default).
@@ -358,7 +380,7 @@ class Sb3VecEnvWrapper(VecEnv):
                 if key in self.observation_processors:
                     obs[key] = self.observation_processors[key](value)
                 obs[key] = obs[key].detach().cpu().numpy()
-        elif isinstance(obs, torch.Tensor):
+        elif isinstance(obs, torch_module.Tensor):
             obs = obs.detach().cpu().numpy()
         else:
             raise NotImplementedError(f"Unsupported data type: {type(obs)}")
@@ -431,3 +453,35 @@ class Sb3VecEnvWrapper(VecEnv):
                 infos[idx]["terminal_observation"] = None
         # return list of dictionaries
         return infos
+
+
+def _require_sb3() -> None:
+    """Raise a clear error when Stable-Baselines3 is unavailable."""
+    if _SB3_IMPORT_ERROR is None:
+        return
+    raise ModuleNotFoundError(
+        "`isaaclab_rl.sb3` requires Stable-Baselines3. Install the package with the `sb3` extra,"
+        " for example `uv pip install -e source/isaaclab_rl[sb3]`."
+    ) from _SB3_IMPORT_ERROR
+
+
+def _require_torch():
+    """Raise a clear error when PyTorch is unavailable."""
+    if torch is not None:
+        return torch
+    raise ModuleNotFoundError(
+        "`isaaclab_rl.sb3` requires PyTorch. Install the package with a torch-enabled extra,"
+        " for example `uv pip install -e source/isaaclab_rl[sb3]`."
+    )
+
+
+def _get_supported_env_types() -> tuple[type, ...]:
+    """Resolve Isaac Lab RL env base types lazily for mac-safe imports."""
+    try:
+        from isaaclab.envs import DirectRLEnv, ManagerBasedRLEnv
+    except Exception as exc:
+        raise UnsupportedBackendError(
+            "`isaaclab_rl.sb3` requires Isaac Lab RL environment base classes that are only available on the"
+            " upstream Isaac Sim path today."
+        ) from exc
+    return (ManagerBasedRLEnv, DirectRLEnv)

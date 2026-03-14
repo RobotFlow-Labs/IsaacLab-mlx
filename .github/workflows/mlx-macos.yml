@@ -39,11 +39,98 @@ jobs:
       run: uv venv --python 3.11 .venv
 
     - name: Install MLX smoke dependencies
-      run: uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+      run: |
+        uv pip install --python .venv/bin/python \
+          -e source/isaaclab[macos-mlx,dev] \
+          -e source/isaaclab_rl[dev]
+
+    - name: Prepare benchmark artifact directory
+      run: mkdir -p logs/benchmarks/mlx
+
+    - name: Run public install smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/python - <<'PY'
+        import json
+        from pathlib import Path
+
+        from isaaclab.backends import resolve_runtime_selection, set_runtime_selection
+
+        set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+        import isaaclab
+        import isaaclab.backends.mac_sim
+        import isaaclab.controllers
+        import isaaclab.envs.mdp.actions.actions_cfg
+        import isaaclab.envs.mdp.actions.rmpflow_actions_cfg
+        import isaaclab.sim
+        import isaaclab.sim.converters
+        import isaaclab.sim.schemas
+        import isaaclab.sim.spawners.from_files
+        import isaaclab_rl.sb3
+        import isaaclab_rl.skrl
+        from isaaclab.backends.mac_sim import MacCartpoleEnv
+
+        env = MacCartpoleEnv()
+        observations, _ = env.reset()
+        payload = {
+            "modules": [
+                "isaaclab",
+                "isaaclab.backends.mac_sim",
+                "isaaclab.controllers",
+                "isaaclab.envs.mdp.actions.actions_cfg",
+                "isaaclab.envs.mdp.actions.rmpflow_actions_cfg",
+                "isaaclab.sim",
+                "isaaclab.sim.converters",
+                "isaaclab.sim.schemas",
+                "isaaclab.sim.spawners.from_files",
+                "isaaclab_rl.sb3",
+                "isaaclab_rl.skrl",
+            ],
+            "policy_shape": list(observations["policy"].shape),
+            "package": isaaclab.__name__,
+        }
+        out_path = Path("logs/benchmarks/mlx/install_import_smoke.json")
+        out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(payload["policy_shape"])
+        PY
 
     - name: Run MLX backend smoke tests
       run: |
-        PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
+        PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
           scripts/tools/test/test_bootstrap_isaac_sources.py \
           source/isaaclab/test/backends/test_runtime.py \
-          source/isaaclab/test/backends/test_mac_cartpole.py -q
+          source/isaaclab_rl/test/test_import_safety.py \
+          source/isaaclab/test/backends/test_portability_utils.py \
+          source/isaaclab/test/backends/test_mac_cartpole.py \
+          source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
+          source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+          source/isaaclab/test/backends/test_mac_quadcopter.py -q
+
+    - name: Run MLX cart-double-pendulum smoke script
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py \
+          --num-envs 8 --episodes 1 --max-steps 256 --random-actions
+
+    - name: Run MLX quadcopter smoke script
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/play_quadcopter.py \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --thrust-action 0.2 --no-random-actions
+
+    - name: Run MLX benchmark smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+          --tasks cartpole cart-double-pendulum quadcopter \
+          --num-envs 64 \
+          --steps 128 \
+          --json-out logs/benchmarks/mlx/smoke.json
+
+    - name: Upload MLX smoke artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlx-macos-smoke-${{ github.run_id }}
+        path: logs/benchmarks/mlx
+        if-no-files-found: warn

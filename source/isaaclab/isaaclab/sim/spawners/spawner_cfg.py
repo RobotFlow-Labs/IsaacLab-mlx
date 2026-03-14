@@ -8,10 +8,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import MISSING
 
-from pxr import Usd
-
 from isaaclab.sim import schemas
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
@@ -28,7 +26,7 @@ class SpawnerCfg:
     parameter.
     """
 
-    func: Callable[..., Usd.Prim] = MISSING
+    func: Callable[..., object] = MISSING
     """Function to use for spawning the asset.
 
     The function takes in the prim path (or expression) to spawn the asset at, the configuration instance

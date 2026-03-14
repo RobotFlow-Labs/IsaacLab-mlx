@@ -3,42 +3,61 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package containing various sensor classes implementations.
+"""Sub-package containing sensor classes, lazily loaded by backend capability."""
 
-This subpackage contains the sensor classes that are compatible with Isaac Sim. We include both
-USD-based and custom sensors:
+from __future__ import annotations
 
-* **USD-prim sensors**: Available in Omniverse and require creating a USD prim for them.
-  For instance, RTX ray tracing camera and lidar sensors.
-* **USD-schema sensors**: Available in Omniverse and require creating a USD schema on an existing prim.
-  For instance, contact sensors and frame transformers.
-* **Custom sensors**: Implemented in Python and do not require creating any USD prim or schema.
-  For instance, warp-based ray-casters.
+import importlib
 
-Due to the above categorization, the prim paths passed to the sensor's configuration class
-are interpreted differently based on the sensor type. The following table summarizes the
-interpretation of the prim paths for different sensor types:
+from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-+---------------------+---------------------------+---------------------------------------------------------------+
-| Sensor Type         | Example Prim Path         | Pre-check                                                     |
-+=====================+===========================+===============================================================+
-| Camera              | /World/robot/base/camera  | Leaf is available, and it will spawn a USD camera             |
-+---------------------+---------------------------+---------------------------------------------------------------+
-| Contact Sensor      | /World/robot/feet_*       | Leaf is available and checks if the schema exists             |
-+---------------------+---------------------------+---------------------------------------------------------------+
-| Ray Caster          | /World/robot/base         | Leaf exists and is a physics body (Articulation / Rigid Body) |
-+---------------------+---------------------------+---------------------------------------------------------------+
-| Frame Transformer   | /World/robot/base         | Leaf exists and is a physics body (Articulation / Rigid Body) |
-+---------------------+---------------------------+---------------------------------------------------------------+
-| Imu                 | /World/robot/base         | Leaf exists and is a physics body (Rigid Body)                |
-+---------------------+---------------------------+---------------------------------------------------------------+
+_MODULE_EXPORTS = {
+    "SensorBase": (".sensor_base", "SensorBase"),
+    "SensorBaseCfg": (".sensor_base_cfg", "SensorBaseCfg"),
+    "Camera": (".camera", "Camera"),
+    "CameraCfg": (".camera", "CameraCfg"),
+    "CameraData": (".camera", "CameraData"),
+    "TiledCamera": (".camera", "TiledCamera"),
+    "TiledCameraCfg": (".camera", "TiledCameraCfg"),
+    "ContactSensor": (".contact_sensor", "ContactSensor"),
+    "ContactSensorCfg": (".contact_sensor", "ContactSensorCfg"),
+    "ContactSensorData": (".contact_sensor", "ContactSensorData"),
+    "FrameTransformer": (".frame_transformer", "FrameTransformer"),
+    "FrameTransformerCfg": (".frame_transformer", "FrameTransformerCfg"),
+    "FrameTransformerData": (".frame_transformer", "FrameTransformerData"),
+    "OffsetCfg": (".frame_transformer", "OffsetCfg"),
+    "Imu": (".imu", "Imu"),
+    "ImuCfg": (".imu", "ImuCfg"),
+    "ImuData": (".imu", "ImuData"),
+    "patterns": (".ray_caster", "patterns"),
+    "RayCaster": (".ray_caster", "RayCaster"),
+    "RayCasterCfg": (".ray_caster", "RayCasterCfg"),
+    "RayCasterData": (".ray_caster", "RayCasterData"),
+    "RayCasterCamera": (".ray_caster", "RayCasterCamera"),
+    "RayCasterCameraCfg": (".ray_caster", "RayCasterCameraCfg"),
+    "MultiMeshRayCaster": (".ray_caster", "MultiMeshRayCaster"),
+    "MultiMeshRayCasterCfg": (".ray_caster", "MultiMeshRayCasterCfg"),
+    "MultiMeshRayCasterData": (".ray_caster", "MultiMeshRayCasterData"),
+    "MultiMeshRayCasterCamera": (".ray_caster", "MultiMeshRayCasterCamera"),
+    "MultiMeshRayCasterCameraCfg": (".ray_caster", "MultiMeshRayCasterCameraCfg"),
+    "MultiMeshRayCasterCameraData": (".ray_caster", "MultiMeshRayCasterCameraData"),
+}
 
-"""
+__all__ = [*_MODULE_EXPORTS.keys()]
 
-from .camera import *  # noqa: F401, F403
-from .contact_sensor import *  # noqa: F401, F403
-from .frame_transformer import *  # noqa: F401
-from .imu import *  # noqa: F401, F403
-from .ray_caster import *  # noqa: F401, F403
-from .sensor_base import SensorBase  # noqa: F401
-from .sensor_base_cfg import SensorBaseCfg  # noqa: F401
+
+def __getattr__(name: str):
+    target = _MODULE_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.sensors.{name}` currently requires `sim-backend=isaacsim`."
+            " Sensor interfaces on `mac-sim` are exposed progressively via backend capabilities."
+        )
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

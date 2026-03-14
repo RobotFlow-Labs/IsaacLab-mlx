@@ -16,11 +16,47 @@ The following converters are currently supported:
 
 """
 
-from .asset_converter_base import AssetConverterBase
-from .asset_converter_base_cfg import AssetConverterBaseCfg
-from .mesh_converter import MeshConverter
-from .mesh_converter_cfg import MeshConverterCfg
-from .mjcf_converter import MjcfConverter
-from .mjcf_converter_cfg import MjcfConverterCfg
-from .urdf_converter import UrdfConverter
-from .urdf_converter_cfg import UrdfConverterCfg
+from __future__ import annotations
+
+import importlib
+
+from isaaclab.backends import UnsupportedBackendError, current_runtime
+
+_SAFE_EXPORTS = {
+    "AssetConverterBaseCfg": (".asset_converter_base_cfg", "AssetConverterBaseCfg"),
+    "MeshConverterCfg": (".mesh_converter_cfg", "MeshConverterCfg"),
+    "MjcfConverterCfg": (".mjcf_converter_cfg", "MjcfConverterCfg"),
+    "UrdfConverterCfg": (".urdf_converter_cfg", "UrdfConverterCfg"),
+}
+_ISAACSIM_EXPORTS = {
+    "AssetConverterBase": (".asset_converter_base", "AssetConverterBase"),
+    "MeshConverter": (".mesh_converter", "MeshConverter"),
+    "MjcfConverter": (".mjcf_converter", "MjcfConverter"),
+    "UrdfConverter": (".urdf_converter", "UrdfConverter"),
+}
+
+__all__ = [*_SAFE_EXPORTS.keys(), *_ISAACSIM_EXPORTS.keys()]
+
+
+def __getattr__(name: str):
+    target = _SAFE_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.sim.converters.{name}` currently requires `sim-backend=isaacsim`."
+            " Converter configuration objects remain import-safe in the `mac-sim` bootstrap path."
+        )
+
+    target = _ISAACSIM_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

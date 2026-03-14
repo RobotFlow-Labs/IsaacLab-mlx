@@ -3,27 +3,34 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Sub-package containing an interactive scene definition.
+"""Sub-package for interactive scene definitions, lazily loaded by backend capability."""
 
-A scene is a collection of entities (e.g., terrain, articulations, sensors, lights, etc.) that can be added to the
-simulation. However, only a subset of these entities are of direct interest for the user to interact with.
-For example, the user may want to interact with a robot in the scene, but not with the terrain or the lights.
-For this reason, we integrate the different entities into a single class called :class:`InteractiveScene`.
+from __future__ import annotations
 
-The interactive scene performs the following tasks:
+import importlib
 
-1. It parses the configuration class :class:`InteractiveSceneCfg` to create the scene. This configuration class is
-   inherited by the user to add entities to the scene.
-2. It clones the entities based on the number of environments specified by the user.
-3. It clubs the entities into different groups based on their type (e.g., articulations, sensors, etc.).
-4. It provides a set of methods to unify the common operations on the entities in the scene (e.g., resetting internal
-   buffers, writing buffers to simulation and updating buffers from simulation).
+from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-The interactive scene can be passed around to different modules in the framework to perform different tasks.
-For instance, computing the observations based on the state of the scene, or randomizing the scene, or applying
-actions to the scene. All these are handled by different "managers" in the framework. Please refer to the
-:mod:`isaaclab.managers` sub-package for more details.
-"""
+_MODULE_EXPORTS = {
+    "InteractiveScene": (".interactive_scene", "InteractiveScene"),
+    "InteractiveSceneCfg": (".interactive_scene_cfg", "InteractiveSceneCfg"),
+}
 
-from .interactive_scene import InteractiveScene
-from .interactive_scene_cfg import InteractiveSceneCfg
+__all__ = [*_MODULE_EXPORTS.keys()]
+
+
+def __getattr__(name: str):
+    target = _MODULE_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.scene.{name}` currently requires `sim-backend=isaacsim`."
+            " Scene interfaces for `mac-sim` are exposed progressively via backend capabilities."
+        )
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value
