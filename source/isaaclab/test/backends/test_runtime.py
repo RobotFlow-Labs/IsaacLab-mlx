@@ -241,6 +241,7 @@ def test_mac_runtime_entrypoints_import_without_isaacsim():
     importlib.import_module("isaaclab")
     importlib.import_module("isaaclab.backends.runtime")
     importlib.import_module("isaaclab.backends.mac_sim")
+    importlib.import_module("isaaclab.utils.nucleus")
     importlib.import_module("isaaclab.controllers.rmp_flow_cfg")
     importlib.import_module("isaaclab.controllers.config.rmp_flow")
 

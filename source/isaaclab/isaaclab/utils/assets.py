@@ -24,20 +24,10 @@ from typing import Literal
 import carb
 import omni.client
 
+from .nucleus import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR, NVIDIA_NUCLEUS_DIR, NUCLEUS_ASSET_ROOT_DIR
+
 # import logger
 logger = logging.getLogger(__name__)
-
-NUCLEUS_ASSET_ROOT_DIR = carb.settings.get_settings().get("/persistent/isaac/asset_root/cloud")
-"""Path to the root directory on the Nucleus Server."""
-
-NVIDIA_NUCLEUS_DIR = f"{NUCLEUS_ASSET_ROOT_DIR}/NVIDIA"
-"""Path to the root directory on the NVIDIA Nucleus Server."""
-
-ISAAC_NUCLEUS_DIR = f"{NUCLEUS_ASSET_ROOT_DIR}/Isaac"
-"""Path to the ``Isaac`` directory on the NVIDIA Nucleus Server."""
-
-ISAACLAB_NUCLEUS_DIR = f"{ISAAC_NUCLEUS_DIR}/IsaacLab"
-"""Path to the ``Isaac/IsaacLab`` directory on the NVIDIA Nucleus Server."""
 
 
 def check_file_path(path: str) -> Literal[0, 1, 2]:

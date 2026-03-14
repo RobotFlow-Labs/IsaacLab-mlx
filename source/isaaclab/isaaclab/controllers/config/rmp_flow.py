@@ -6,16 +6,12 @@
 import os
 
 from isaaclab.controllers.rmp_flow_cfg import RmpFlowControllerCfg
+from isaaclab.utils.nucleus import ISAACLAB_NUCLEUS_DIR
 
 try:
     from isaacsim.core.utils.extensions import get_extension_path_from_name
 except Exception:
     get_extension_path_from_name = None
-
-try:
-    from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
-except Exception:
-    ISAACLAB_NUCLEUS_DIR = ""
 
 # Directory on Nucleus Server for RMP-Flow assets (URDFs, collision models, etc.)
 ISAACLAB_NUCLEUS_RMPFLOW_DIR = os.path.join(ISAACLAB_NUCLEUS_DIR, "Controllers", "RmpFlowAssets")
