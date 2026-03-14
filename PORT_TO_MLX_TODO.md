@@ -70,6 +70,7 @@ without pausing for replanning after every small success.
 - `DONE` First mac-native manipulation slices landed for `Isaac-Reach-Franka-v0` and `Isaac-Lift-Cube-Franka-v0` with lazy registry wiring, public MLX wrapper support, benchmark coverage, and focused backend tests
 - `DONE` First trainable manipulation slice landed for `Isaac-Reach-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
 - `DONE` Second trainable manipulation slice landed for `Isaac-Lift-Cube-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
+- `DONE` Third trainable manipulation slice landed for `Isaac-Stack-Cube-Franka-v0` with compiled stack hotpath helpers, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
 - `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
 - `DONE` Franka manipulation hotpaths now use compiled MLX helpers for analytic end-effector kinematics and lift object/grasp updates, and benchmark/semantic reports surface `hotpath: "mlx-compiled"` on the mac-native path
@@ -724,7 +725,7 @@ without pausing for replanning after every small success.
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
-- Port the next manipulation milestone beyond the first two Franka slices, likely `franka-stack` or a richer arm/object interaction task.
+- Port the next manipulation milestone beyond the first three Franka slices, likely a richer arm/object interaction task or the first drawer/cabinet workflow.
 - Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
 - Grow the planner/ROS prototypes carefully: world-state richer obstacles first, then optional process/message interoperability layers that still avoid CUDA/NITROS assumptions.
 
@@ -756,6 +757,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
   source/isaaclab/test/backends/test_mac_franka_reach.py \
   source/isaaclab/test/backends/test_mac_franka_lift.py \
+  source/isaaclab/test/backends/test_mac_franka_stack.py \
   source/isaaclab/test/backends/test_mac_h1.py -q
 ```
 
