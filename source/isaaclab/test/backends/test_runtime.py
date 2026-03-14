@@ -273,3 +273,12 @@ def test_mac_sim_asset_exports_fail_with_clear_backend_error():
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         _ = assets.Articulation
+
+
+def test_mac_sim_sensor_exports_fail_with_clear_backend_error():
+    """Import-time sensor access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    sensors = importlib.import_module("isaaclab.sensors")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = sensors.Camera
