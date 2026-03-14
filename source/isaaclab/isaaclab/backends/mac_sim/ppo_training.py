@@ -148,7 +148,8 @@ def play_gaussian_policy_checkpoint(
     metadata = read_checkpoint_metadata(checkpoint)
     policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", default_hidden_dim))
     env = env_factory(env_cfg)
-    model = model_factory(env_cfg.observation_space, policy_hidden_dim, env_cfg.action_space)
+    model_obs_dim = int(metadata.get("observation_space", getattr(env, "observation_space", env_cfg.observation_space)))
+    model = model_factory(model_obs_dim, policy_hidden_dim, env_cfg.action_space)
     model.load_weights(str(checkpoint))
     obs = env.reset()[0]["policy"]
 
@@ -181,9 +182,10 @@ def play_categorical_policy_checkpoint(
     checkpoint = Path(checkpoint_path)
     metadata = read_checkpoint_metadata(checkpoint)
     policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", default_hidden_dim))
-    model = model_factory(env_cfg.observation_space, policy_hidden_dim)
-    model.load_weights(str(checkpoint))
     env = env_factory(env_cfg)
+    model_obs_dim = int(metadata.get("observation_space", getattr(env, "observation_space", env_cfg.observation_space)))
+    model = model_factory(model_obs_dim, policy_hidden_dim)
+    model.load_weights(str(checkpoint))
     obs = env.reset()[0]["policy"]
 
     episode_returns: list[float] = []

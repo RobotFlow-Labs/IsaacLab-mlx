@@ -39,8 +39,10 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
-- a trainable `MLX + mac-sim` Franka reach slice plus an eval-ready Franka cube-lift slice with deterministic analytic kinematics and lightweight grasp logic
+- a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
+- trainable `MLX + mac-sim` Franka reach and cube-lift slices with deterministic analytic kinematics, lightweight grasp logic, and benchmark diagnostics that report `hotpath: "mlx-compiled"`
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
+- eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i
 - a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
 - MLX training, checkpoint save/load, and replay scripts
@@ -97,7 +99,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift, with the task capability matrix below serving as the authoritative public support surface.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, and synthetic cartpole RGB/depth camera variants, with the task capability matrix below serving as the authoritative public support surface.
 
 ### Kernel backend
 
@@ -109,7 +111,7 @@ The kernel backend isolates Warp and future Metal custom-kernel paths:
 
 Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selection seam exists now so future Metal kernels can land without rewriting task-facing APIs again.
 
-For the current locomotion slices, the hottest shared batched paths now run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`.
+For the current locomotion and Franka manipulation slices, the hottest shared batched paths now run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`.
 
 ## MLX Quick Start
 
@@ -141,7 +143,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -307,6 +309,8 @@ Additional task slices exposed through the same API:
 ```python
 rough_payload = evaluate_mlx_task("anymal-c-rough", num_envs=32, episodes=2)
 h1_rough_payload = evaluate_mlx_task("h1-rough", num_envs=32, episodes=2)
+rgb_payload = evaluate_mlx_task("cartpole-rgb-camera", num_envs=32, episodes=2)
+depth_payload = evaluate_mlx_task("cartpole-depth-camera", num_envs=32, episodes=2)
 reach_train_payload = train_mlx_task("franka-reach", num_envs=64, updates=5)
 reach_payload = evaluate_mlx_task("franka-reach", checkpoint=reach_train_payload["checkpoint_path"], episodes=2)
 lift_train_payload = train_mlx_task("franka-lift", num_envs=64, updates=5)
@@ -386,6 +390,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_kernel_inventory.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
   source/isaaclab/test/backends/test_mac_camera_capture.py \
+  source/isaaclab/test/backends/test_mac_cartpole_camera.py \
   source/isaaclab/test/backends/test_mac_hotpath.py \
   source/isaaclab/test/backends/test_mac_sensor_raycast.py \
   source/isaaclab/test/backends/test_mac_stereo_depth.py \
@@ -455,6 +460,7 @@ The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, and Franka lift
+- a stable `sensor-mac-native` task group for `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`
 - a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
@@ -466,14 +472,14 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
 ### Benchmark Expectations
 
 - `current-mac-native` is the stable public regression suite for the current MLX/mac task set.
-- `sensor-mac-native` is the stable regression suite for the first analytic height-scan/raycast slices: `anymal-c-flat-height-scan` and `h1-flat-height-scan`.
+- `sensor-mac-native` is the stable regression suite for the first analytic sensor slices: `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`.
 - `full` is the normalized dashboard/trend suite used by CI when one artifact needs to cover rollout plus training health together.
 - CI benchmark smokes are regression signals, not public performance claims.
 - A benchmark run is only considered healthy when `cpu_fallback.detected == false`.
 - Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons and `logs/benchmarks/mlx/m5-baseline-trend.json` when you want a compact comparison payload across M-series machines. Do not compare against CI smoke numbers.
 - CI stores immutable `*-trend.json` artifacts per run; those are the retained history source for M-series regression review, not the raw smoke JSON.
 - Nightly semantic drift checks compare the deterministic rollout contracts in the committed baseline against a fresh `full` benchmark run. Throughput is intentionally excluded from that drift gate.
-- Backend-local camera validation currently lives in synthetic stereo smoke tests and optional host-specific hardware probes, not in the task benchmark suite.
+- Backend-local external stereo validation still lives in synthetic stereo smoke tests and optional host-specific hardware probes; the benchmark suite only covers the synthetic cartpole camera task slices and the analytic terrain/raycast slices.
 
 ## Planner And ROS Compatibility
 
@@ -530,6 +536,8 @@ Current task capability matrix:
 | Task | Train | Replay / Eval | Benchmarked | Checkpoint / Resume | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `Isaac-Cartpole-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Discrete cartpole PPO slice |
+| `Isaac-Cartpole-RGB-Camera-Direct-v0` | No | Yes | `sensor-mac-native` | No | Synthetic analytic RGB camera observations on cartpole control/reward semantics |
+| `Isaac-Cartpole-Depth-Camera-Direct-v0` | No | Yes | `sensor-mac-native` | No | Synthetic analytic depth camera observations on cartpole control/reward semantics |
 | `Isaac-Cart-Double-Pendulum-Direct-v0` | No | Yes | `current-mac-native` | No | MARL dict observations/actions |
 | `Isaac-Quadcopter-Direct-v0` | No | Yes | `current-mac-native` | No | Root-state thrust/moment control |
 | `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
@@ -542,6 +550,7 @@ Current task capability matrix:
 Implementation entrypoints:
 
 - cartpole environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
+- synthetic cartpole RGB/depth camera environment and analytic camera helper in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole_camera.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole_camera.py)
 - cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
 - cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
@@ -564,15 +573,18 @@ The cartpole path preserves the important upstream task semantics:
 - termination conditions remain cart out-of-bounds or pole angle exceeding `pi/2`
 - reset sampling keeps the pole-angle randomization behavior
 - observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
+- synthetic cartpole camera tasks preserve the cartpole control/reward/reset semantics while swapping vector observations for deterministic image tensors with upstream-aligned `100x100` shapes
 - cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
 - quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
 - ANYmal-C preserves a command-tracking locomotion observation layout with flat-terrain contacts, base-contact termination, and MLX PPO smoke coverage
 - ANYmal-C rough preserves the same command-tracking layout while swapping in procedural wave terrain and analytic terrain raycasts for deterministic rough-terrain evaluation
 - H1 flat preserves a 19-DOF command-driven locomotion observation layout with contact-aware reward terms, base-contact termination, and MLX PPO smoke coverage
+- H1 rough preserves the same H1 policy layout while fixing the configured observation width to include the nine default height-scan channels used by the rough task
 - Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics and now exposes checkpointed MLX PPO training/replay
-- Franka lift preserves deterministic cube placement, lightweight grasp state, and explicit lift-success semantics suitable for eval/manual bring-up
+- Franka lift preserves deterministic cube placement, lightweight grasp state, explicit lift-success semantics, and multi-step replay coverage
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
-- the `sensor-mac-native` benchmark rows correspond to `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
+- the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
+- benchmark and semantic drift reports now surface `hotpath: "mlx-compiled"` for the Franka reach/lift slices alongside the locomotion tasks
 - the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 
 ## Bootstrapping Upstream Sources

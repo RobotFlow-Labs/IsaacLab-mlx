@@ -87,6 +87,8 @@ def _task_contract_excerpt(benchmark: dict[str, Any]) -> dict[str, Any]:
     for field in (
         "observation_dim",
         "action_dim",
+        "image_shape",
+        "camera_mode",
         "sensor_scan_dim",
         "cart_observation_dim",
         "pendulum_observation_dim",

@@ -24,6 +24,8 @@ ROUGH_HEIGHT_SCAN_OFFSETS: tuple[tuple[float, float], ...] = (
     (0.35, 0.35),
 )
 
+H1_FLAT_OBSERVATION_SPACE = 69
+
 
 @configclass
 class MacCartpoleEnvCfg:
@@ -55,6 +57,28 @@ class MacCartpoleEnvCfg:
     force_mag: float = 1.0
 
     seed: int = 42
+
+
+@configclass
+class MacCartpoleRGBCameraEnvCfg(MacCartpoleEnvCfg):
+    """Synthetic RGB camera cartpole configuration for the mac-native sensor path."""
+
+    camera_mode: str = "rgb"
+    image_height: int = 100
+    image_width: int = 100
+    camera_channels: int = 3
+    observation_space: Any = [100, 100, 3]
+    camera_max_depth_m: float = 6.0
+    initial_pole_angle_range: tuple[float, float] = (-0.125 * math.pi, 0.125 * math.pi)
+
+
+@configclass
+class MacCartpoleDepthCameraEnvCfg(MacCartpoleRGBCameraEnvCfg):
+    """Synthetic depth camera cartpole configuration for the mac-native sensor path."""
+
+    camera_mode: str = "depth"
+    camera_channels: int = 1
+    observation_space: Any = [100, 100, 1]
 
 
 @configclass
@@ -237,7 +261,7 @@ class MacH1FlatEnvCfg:
     decimation: int = 4
     episode_length_s: float = 20.0
     action_space: int = 19
-    observation_space: int = 69
+    observation_space: int = H1_FLAT_OBSERVATION_SPACE
     state_space: int = 0
 
     env_spacing: float = 4.0
@@ -334,6 +358,7 @@ class MacH1RoughEnvCfg(MacH1FlatEnvCfg):
     terrain_wavelength: tuple[float, float] = (1.5, 1.15)
     default_root_height: float = 1.08
     min_root_height: float = 0.62
+    observation_space: int = H1_FLAT_OBSERVATION_SPACE + len(ROUGH_HEIGHT_SCAN_OFFSETS)
     height_scan_enabled: bool = True
     height_scan_offsets: tuple[tuple[float, float], ...] = ROUGH_HEIGHT_SCAN_OFFSETS
     height_scan_max_distance: float = 2.5

@@ -27,6 +27,8 @@ def test_public_mlx_task_lists_are_stable():
     """The MLX wrapper should publish the supported task ids clearly."""
     assert list_mlx_tasks() == (
         "cartpole",
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
         "cart-double-pendulum",
         "quadcopter",
         "anymal-c-flat",
@@ -134,6 +136,36 @@ def test_evaluate_h1_rough_manual_via_public_mlx_wrapper():
     assert payload["mode"] == "manual"
     assert payload["episodes_completed"] == 1
     assert payload["completed"][0]["length"] > 0
+
+
+def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
+    """The public wrapper should expose the synthetic camera cartpole slices."""
+
+    rgb_payload = evaluate_mlx_task(
+        "cartpole-rgb-camera",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+        seed=35,
+    )
+    depth_payload = evaluate_mlx_task(
+        "cartpole-depth-camera",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+        seed=37,
+    )
+
+    assert rgb_payload["task"] == "cartpole-rgb-camera"
+    assert rgb_payload["mode"] == "manual"
+    assert rgb_payload["episodes_completed"] == 1
+    assert depth_payload["task"] == "cartpole-depth-camera"
+    assert depth_payload["mode"] == "manual"
+    assert depth_payload["episodes_completed"] == 1
 
 
 def test_evaluate_franka_reach_and_lift_manual_via_public_mlx_wrapper():

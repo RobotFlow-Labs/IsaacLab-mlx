@@ -21,6 +21,8 @@ from isaaclab_rl.mlx import (
 
 TASK_PREFIXES = {
     "cartpole": "mlx-cartpole",
+    "cartpole-rgb-camera": "mlx-cartpole-rgb-camera",
+    "cartpole-depth-camera": "mlx-cartpole-depth-camera",
     "cart-double-pendulum": "mlx-cart-double-pendulum",
     "quadcopter": "mlx-quadcopter",
     "anymal-c-flat": "mlx-anymal-c-flat",

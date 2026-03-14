@@ -223,6 +223,7 @@ class MacFrankaReachSimBackend(MacSimBackend):
                 "analytic_kinematics": True,
                 "object_tracking": False,
                 "grasp_logic": False,
+                "hotpath": "mlx-compiled",
             },
             "joint_state_shape": list(self.state.joint_pos.shape),
         }
@@ -286,6 +287,7 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
             "analytic_kinematics": True,
             "object_tracking": True,
             "grasp_logic": True,
+            "hotpath": "mlx-compiled",
         }
         return payload
 

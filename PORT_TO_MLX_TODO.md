@@ -66,12 +66,13 @@ without pausing for replanning after every small success.
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 - `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
 - `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
-- `DONE` Second humanoid locomotion slice landed for `Isaac-Velocity-Rough-H1-v0` with wave terrain, analytic height scans, shared H1 substrate reuse, benchmark coverage, and deterministic replay tests
+- `DONE` Second humanoid locomotion slice landed for `Isaac-Velocity-Rough-H1-v0` with wave terrain, analytic height scans, shared H1 substrate reuse, corrected rough observation-space sizing, benchmark coverage, and deterministic replay tests
 - `DONE` First mac-native manipulation slices landed for `Isaac-Reach-Franka-v0` and `Isaac-Lift-Cube-Franka-v0` with lazy registry wiring, public MLX wrapper support, benchmark coverage, and focused backend tests
 - `DONE` First trainable manipulation slice landed for `Isaac-Reach-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
 - `DONE` Second trainable manipulation slice landed for `Isaac-Lift-Cube-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
-- `DONE` Franka manipulation hotpaths now use compiled MLX helpers for analytic end-effector kinematics and lift object/grasp updates on the benchmarked mac-native path
+- `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
+- `DONE` Franka manipulation hotpaths now use compiled MLX helpers for analytic end-effector kinematics and lift object/grasp updates, and benchmark/semantic reports surface `hotpath: "mlx-compiled"` on the mac-native path
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
@@ -578,6 +579,8 @@ without pausing for replanning after every small success.
 
 - Status: `DONE`
 - Title: Add benchmark coverage for sensor-heavy mac-native tasks
+- Progress:
+  - `sensor-mac-native` now covers `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`
 - Validation:
   - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
   - `.github/workflows/mlx-macos.yml`
@@ -745,6 +748,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_state_primitives.py \
   source/isaaclab/test/backends/test_mac_phase_b_support.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
+  source/isaaclab/test/backends/test_mac_cartpole_camera.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
   source/isaaclab/test/backends/test_mac_quadcopter.py \

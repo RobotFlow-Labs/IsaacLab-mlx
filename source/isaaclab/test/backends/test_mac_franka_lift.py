@@ -19,6 +19,8 @@ from isaaclab.backends.mac_sim import (  # noqa: E402
     MacFrankaLiftEnvCfg,
     MacFrankaLiftTrainCfg,
     play_franka_lift_policy,
+    replay_actions,
+    rollout_env,
     train_franka_lift_policy,
 )
 
@@ -57,6 +59,22 @@ def test_mac_franka_lift_can_grasp_and_raise_cube():
 
     assert bool(mx.any(env.sim_backend.grasped).item())
     assert float(mx.max(env.sim_backend.cube_pos_w[:, 2]).item()) > cfg.table_height
+
+
+def test_mac_franka_lift_rollout_replay_is_deterministic():
+    """Rollout/replay helpers should preserve Franka lift trajectories for fixed actions."""
+
+    cfg = MacFrankaLiftEnvCfg(num_envs=4, seed=41, episode_length_s=0.5)
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+
+    env_a = MacFrankaLiftEnv(cfg)
+    trace_a = rollout_env(env_a, actions, steps=6)
+
+    env_b = MacFrankaLiftEnv(cfg)
+    trace_b = replay_actions(env_b, trace_a.actions)
+
+    assert trace_a.summary() == trace_b.summary()
+    assert mx.allclose(trace_a.observations[-1]["policy"], trace_b.observations[-1]["policy"]).item()
 
 
 def test_train_and_play_franka_lift_smoke(tmp_path: Path):

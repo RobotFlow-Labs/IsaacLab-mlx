@@ -27,7 +27,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .contacts import BatchedContactSensorState
-from .env_cfgs import MacH1FlatEnvCfg, MacH1RoughEnvCfg
+from .env_cfgs import H1_FLAT_OBSERVATION_SPACE, MacH1FlatEnvCfg, MacH1RoughEnvCfg
 from .hotpath import (
     HOTPATH_BACKEND,
     biped_support_metrics_hotpath,
@@ -50,6 +50,7 @@ from .ppo_training import (
     mean_recent_return,
     normalize_advantages,
     play_gaussian_policy_checkpoint,
+    read_checkpoint_metadata,
     resolve_resume_hidden_dim,
     save_policy_checkpoint,
 )
@@ -77,13 +78,15 @@ ARM_IDS = tuple(range(11, 19))
 HIP_DEVIATION_IDS = (0, 1, 5, 6)
 ANKLE_IDS = (4, 9)
 LOG_2_PI = math.log(2.0 * math.pi)
+DEFAULT_H1_FLAT_CHECKPOINT = "logs/mlx/h1_flat_policy.npz"
+DEFAULT_H1_ROUGH_CHECKPOINT = "logs/mlx/h1_rough_policy.npz"
 
 
 @configclass
 class MacH1TrainCfg:
-    """Training configuration for the MLX H1 flat locomotion smoke path."""
+    """Training configuration for the MLX H1 locomotion smoke path."""
 
-    env: MacH1FlatEnvCfg = MacH1FlatEnvCfg()
+    env: MacH1FlatEnvCfg | MacH1RoughEnvCfg = MacH1FlatEnvCfg()
     hidden_dim: int = 192
     updates: int = 10
     rollout_steps: int = 24
@@ -95,7 +98,7 @@ class MacH1TrainCfg:
     value_loss_coef: float = 0.5
     entropy_coef: float = 0.001
     action_std: float = 0.28
-    checkpoint_path: str = "logs/mlx/h1_flat_policy.npz"
+    checkpoint_path: str = DEFAULT_H1_FLAT_CHECKPOINT
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -434,7 +437,10 @@ class MacH1FlatEnv:
             else None
         )
         self.height_scan_dim = 0 if self.height_scan_sensor is None else self.height_scan_sensor.scan_dim
-        self.observation_space = self.cfg.observation_space + self.height_scan_dim
+        if self.cfg.observation_space == H1_FLAT_OBSERVATION_SPACE:
+            self.observation_space = self.cfg.observation_space + self.height_scan_dim
+        else:
+            self.observation_space = self.cfg.observation_space
 
         self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
         self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
@@ -601,6 +607,37 @@ class MacH1RoughEnv(MacH1FlatEnv):
         super().__init__(cfg or MacH1RoughEnvCfg())
 
 
+def _make_h1_env(cfg: MacH1FlatEnvCfg | MacH1RoughEnvCfg) -> MacH1FlatEnv | MacH1RoughEnv:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return MacH1RoughEnv(cfg)
+    return MacH1FlatEnv(cfg)
+
+
+def _h1_task_id(cfg: MacH1FlatEnvCfg | MacH1RoughEnvCfg) -> str:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return "Isaac-Velocity-Rough-H1-v0"
+    return "Isaac-Velocity-Flat-H1-v0"
+
+
+def _h1_log_prefix(cfg: MacH1FlatEnvCfg | MacH1RoughEnvCfg) -> str:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return "mlx-h1-rough"
+    return "mlx-h1-flat"
+
+
+def _default_h1_eval_cfg(checkpoint_path: str | Path) -> MacH1FlatEnvCfg | MacH1RoughEnvCfg:
+    metadata = read_checkpoint_metadata(checkpoint_path)
+    if metadata.get("task_id") == "Isaac-Velocity-Rough-H1-v0":
+        return MacH1RoughEnvCfg(num_envs=1)
+    return MacH1FlatEnvCfg(num_envs=1)
+
+
+def _resolve_h1_checkpoint_path(checkpoint_path: str, task_id: str) -> str:
+    if task_id == "Isaac-Velocity-Rough-H1-v0" and checkpoint_path == DEFAULT_H1_FLAT_CHECKPOINT:
+        return DEFAULT_H1_ROUGH_CHECKPOINT
+    return checkpoint_path
+
+
 class MacH1Policy(nn.Module):
     """Continuous policy/value MLP for the mac-native H1 slice."""
 
@@ -653,13 +690,16 @@ def _ppo_loss(
 
 
 def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control policy on the mac-native H1 flat slice."""
+    """Train a lightweight continuous-control policy on a mac-native H1 slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
-    env = MacH1FlatEnv(cfg.env)
+    env = _make_h1_env(cfg.env)
+    obs_dim = env.observation_space
+    task_id = _h1_task_id(cfg.env)
+    log_prefix = _h1_log_prefix(cfg.env)
     model = MacH1Policy(
-        obs_dim=cfg.env.observation_space,
+        obs_dim=obs_dim,
         hidden_dim=cfg.hidden_dim,
         action_dim=cfg.env.action_space,
     )
@@ -712,7 +752,7 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
         rewards_t = mx.stack(rewards_rollout)
         terminated_t = mx.stack(terminated_rollout)
         values_t = mx.stack(values_rollout)
-        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, cfg.env.observation_space))
+        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, obs_dim))
         _, flat_next_values = model(flat_bootstrap_obs)
         next_values_t = mx.reshape(flat_next_values, (cfg.rollout_steps, cfg.env.num_envs))
         advantages, returns = compute_gae(
@@ -724,7 +764,7 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
             gae_lambda=cfg.gae_lambda,
         )
 
-        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
+        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, obs_dim))
         flat_actions = mx.reshape(mx.stack(actions_rollout), (-1, cfg.env.action_space))
         flat_log_probs = mx.reshape(mx.stack(log_probs_rollout), (-1,))
         flat_advantages = mx.reshape(advantages, (-1,))
@@ -752,18 +792,18 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = mean_recent_return(completed_returns)
             print(
-                f"[mlx-h1-flat] update={update + 1}/{cfg.updates} "
+                f"[{log_prefix}] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
     checkpoint_path, metadata_path = save_policy_checkpoint(
         model,
-        cfg.checkpoint_path,
+        _resolve_h1_checkpoint_path(cfg.checkpoint_path, task_id),
         build_checkpoint_metadata(
             hidden_dim=cfg.hidden_dim,
-            observation_space=cfg.env.observation_space,
+            observation_space=obs_dim,
             action_space=cfg.env.action_space,
-            task_id="Isaac-Velocity-Flat-H1-v0",
+            task_id=task_id,
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
@@ -782,15 +822,15 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
 def play_h1_policy(
     checkpoint_path: str,
     *,
-    env_cfg: MacH1FlatEnvCfg | None = None,
+    env_cfg: MacH1FlatEnvCfg | MacH1RoughEnvCfg | None = None,
     episodes: int = 3,
     hidden_dim: int | None = None,
 ) -> list[float]:
     """Run a trained H1 locomotion policy greedily and return episode returns."""
-    cfg = env_cfg or MacH1FlatEnvCfg(num_envs=1)
+    cfg = env_cfg or _default_h1_eval_cfg(checkpoint_path)
     return play_gaussian_policy_checkpoint(
         checkpoint_path,
-        env_factory=MacH1FlatEnv,
+        env_factory=_make_h1_env,
         env_cfg=cfg,
         model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacH1Policy(
             obs_dim=obs_dim,

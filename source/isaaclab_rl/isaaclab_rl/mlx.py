@@ -19,9 +19,12 @@ from isaaclab.backends.mac_sim import (
     MacAnymalCRoughEnv,
     MacAnymalCRoughEnvCfg,
     MacAnymalCTrainCfg,
+    MacCartpoleCameraEnv,
+    MacCartpoleDepthCameraEnvCfg,
     MacCartDoublePendulumEnv,
     MacCartDoublePendulumEnvCfg,
     MacCartpoleEnvCfg,
+    MacCartpoleRGBCameraEnvCfg,
     MacCartpoleTrainCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
@@ -50,6 +53,7 @@ from isaaclab.backends.mac_sim import (
 )
 
 TRAINABLE_MLX_TASKS = ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach", "franka-lift")
+PUBLIC_MLX_TASKS = ("cartpole", "cartpole-rgb-camera", "cartpole-depth-camera") + CURRENT_MAC_NATIVE_TASKS[1:]
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,8 @@ class MlxTaskSpec:
 
 MLX_TASK_SPECS = {
     "cartpole": MlxTaskSpec("cartpole", True, "logs/mlx/cartpole_policy.npz", 128),
+    "cartpole-rgb-camera": MlxTaskSpec("cartpole-rgb-camera", False, None, None),
+    "cartpole-depth-camera": MlxTaskSpec("cartpole-depth-camera", False, None, None),
     "cart-double-pendulum": MlxTaskSpec("cart-double-pendulum", False, None, None),
     "quadcopter": MlxTaskSpec("quadcopter", False, None, None),
     "anymal-c-flat": MlxTaskSpec("anymal-c-flat", True, "logs/mlx/anymal_c_flat_policy.npz", 128, 0.35),
@@ -85,7 +91,7 @@ def _serialize_task_spec(spec: MlxTaskSpec) -> dict[str, Any]:
 def list_mlx_tasks() -> tuple[str, ...]:
     """Return the currently supported MLX/mac-sim task ids."""
 
-    return CURRENT_MAC_NATIVE_TASKS
+    return PUBLIC_MLX_TASKS
 
 
 def list_trainable_mlx_tasks() -> tuple[str, ...]:
@@ -252,6 +258,68 @@ def evaluate_mlx_task(
             "episodes_completed": len(returns),
             "completed": [{"return": float(value)} for value in returns],
             "checkpoint": checkpoint,
+        }
+
+    if task == "cartpole-rgb-camera":
+        if checkpoint is not None:
+            raise ValueError("Cartpole RGB camera does not expose checkpoint replay on the public MLX wrapper.")
+        env = MacCartpoleCameraEnv(
+            MacCartpoleRGBCameraEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        )
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(num_envs, 1))
+                if random_actions
+                else mx.full((num_envs, 1), cart_action, dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "cartpole-depth-camera":
+        if checkpoint is not None:
+            raise ValueError("Cartpole depth camera does not expose checkpoint replay on the public MLX wrapper.")
+        env = MacCartpoleCameraEnv(
+            MacCartpoleDepthCameraEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        )
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(num_envs, 1))
+                if random_actions
+                else mx.full((num_envs, 1), cart_action, dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
         }
 
     if task == "anymal-c-flat":

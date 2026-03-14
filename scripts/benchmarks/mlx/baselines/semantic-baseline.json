@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T20:24:24Z",
+  "generated_at": "2026-03-14T21:00:17Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 11,
+  "task_count": 13,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -149,9 +149,62 @@
         "sim_backend": "mac-sim"
       }
     },
+    "cartpole-depth-camera": {
+      "contract": {
+        "action_dim": 1,
+        "camera_mode": "depth",
+        "image_shape": [
+          100,
+          100,
+          1
+        ],
+        "output_signature": {
+          "final_cart_pos_abs_mean": 0.001084722112864256,
+          "final_frame_energy": 0.1987544447183609,
+          "final_pole_angle_abs_mean": 0.21176020801067352,
+          "final_policy_mean": 0.07311481237411499,
+          "final_policy_std": 0.4397825002670288,
+          "final_reward_mean": 0.9424142837524414
+        },
+        "sensor_implementation": "analytic-cartpole-camera"
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "cartpole-rgb-camera": {
+      "contract": {
+        "action_dim": 1,
+        "camera_mode": "rgb",
+        "image_shape": [
+          100,
+          100,
+          3
+        ],
+        "output_signature": {
+          "final_cart_pos_abs_mean": 0.001084722112864256,
+          "final_frame_energy": 0.008978662081062794,
+          "final_pole_angle_abs_mean": 0.21176020801067352,
+          "final_policy_mean": 2.5431315386903464e-10,
+          "final_policy_std": 0.09475580602884293,
+          "final_reward_mean": 0.9424142837524414
+        },
+        "sensor_implementation": "analytic-cartpole-camera"
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "franka-lift": {
       "contract": {
         "action_dim": 8,
+        "hotpath": "mlx-compiled",
         "observation_dim": 27,
         "output_signature": {
           "final_cube_distance_mean": 0.48122885823249817,
@@ -175,6 +228,7 @@
     "franka-reach": {
       "contract": {
         "action_dim": 7,
+        "hotpath": "mlx-compiled",
         "observation_dim": 23,
         "output_signature": {
           "final_ee_height_mean": 0.5111044049263,

@@ -46,6 +46,8 @@ def test_current_mac_native_benchmark_group_is_stable():
     )
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
     assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
         "anymal-c-flat-height-scan",
         "h1-flat-height-scan",
     )
@@ -124,6 +126,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 expected |= {"height_scan_hit_ratio", "height_scan_mean", "height_scan_std"}
             assert benchmark["output_signature"].keys() == expected
         elif benchmark["task"] == "franka-reach":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -134,6 +137,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_target_distance_mean",
             }
         elif benchmark["task"] == "franka-lift":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -166,14 +170,25 @@ def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
 
     assert results["task_group"] == "sensor-mac-native"
     assert results["cpu_fallback_detected"] is False
-    assert [benchmark["task"] for benchmark in results["benchmarks"]] == ["anymal-c-flat-height-scan", "h1-flat-height-scan"]
+    assert [benchmark["task"] for benchmark in results["benchmarks"]] == [
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
+        "anymal-c-flat-height-scan",
+        "h1-flat-height-scan",
+    ]
 
     for benchmark in results["benchmarks"]:
-        assert benchmark["sensor_scan_dim"] == 9
-        assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-terrain-raycast"
-        assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
-        assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
-        assert benchmark["output_signature"]["height_scan_mean"] > 0.0
+        if benchmark["task"] in {"cartpole-rgb-camera", "cartpole-depth-camera"}:
+            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-cartpole-camera"
+            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is True
+            assert benchmark["image_shape"][:2] == [100, 100]
+            assert benchmark["output_signature"]["final_frame_energy"] > 0.0
+        else:
+            assert benchmark["sensor_scan_dim"] == 9
+            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-terrain-raycast"
+            assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
+            assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
+            assert benchmark["output_signature"]["height_scan_mean"] > 0.0
 
 
 def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
@@ -233,7 +248,7 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     trend = build_benchmark_trend(results, hardware_label="m5-max")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 11
+    assert dashboard["summary"]["rollout_task_count"] == 13
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None

@@ -87,6 +87,20 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Cartpole-RGB-Camera-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacCartpoleCameraEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacCartpoleRGBCameraEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Cartpole-Depth-Camera-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacCartpoleCameraEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacCartpoleDepthCameraEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Cart-Double-Pendulum-Direct-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacCartDoublePendulumEnv",
         "kwargs": {

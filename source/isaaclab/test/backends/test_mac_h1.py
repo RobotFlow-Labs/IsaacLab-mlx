@@ -206,3 +206,65 @@ def test_train_h1_resume_uses_checkpoint_hidden_dim(tmp_path: Path):
     assert resumed_result["resumed_from"] == initial_result["checkpoint_path"]
     assert metadata["metadata_version"] == 2
     assert metadata["hidden_dim"] == 64
+
+
+def test_train_h1_accepts_rough_env_cfg(tmp_path: Path):
+    """The shared H1 trainer should size itself from the rough runtime observation width."""
+    checkpoint_path = tmp_path / "h1_rough_policy.npz"
+    train_cfg = MacH1TrainCfg(
+        env=MacH1RoughEnvCfg(num_envs=8, seed=41, episode_length_s=0.5),
+        hidden_dim=64,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint_path=str(checkpoint_path),
+        eval_interval=1,
+    )
+
+    result = train_h1_policy(train_cfg)
+    metadata = json.loads(Path(result["metadata_path"]).read_text(encoding="utf-8"))
+
+    assert checkpoint_path.exists()
+    assert metadata["task_id"] == "Isaac-Velocity-Rough-H1-v0"
+    assert metadata["observation_space"] == 78
+
+
+def test_play_h1_infers_rough_env_cfg_from_checkpoint_metadata(tmp_path: Path):
+    """H1 replay without an explicit env cfg should recover the rough task shape from checkpoint metadata."""
+
+    checkpoint_path = tmp_path / "h1_rough_policy.npz"
+    train_h1_policy(
+        MacH1TrainCfg(
+            env=MacH1RoughEnvCfg(num_envs=8, seed=43, episode_length_s=0.5),
+            hidden_dim=64,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            checkpoint_path=str(checkpoint_path),
+            eval_interval=1,
+        )
+    )
+
+    episode_returns = play_h1_policy(str(checkpoint_path), episodes=1)
+
+    assert len(episode_returns) == 1
+    assert isinstance(episode_returns[0], float)
+
+
+def test_train_h1_rough_uses_rough_default_checkpoint_path(tmp_path: Path, monkeypatch):
+    """Rough H1 training should not clobber the flat default checkpoint path when no override is provided."""
+
+    monkeypatch.chdir(tmp_path)
+    result = train_h1_policy(
+        MacH1TrainCfg(
+            env=MacH1RoughEnvCfg(num_envs=8, seed=47, episode_length_s=0.5),
+            hidden_dim=64,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            eval_interval=1,
+        )
+    )
+
+    assert result["checkpoint_path"].endswith("logs/mlx/h1_rough_policy.npz")
+    assert Path(result["checkpoint_path"]).exists()

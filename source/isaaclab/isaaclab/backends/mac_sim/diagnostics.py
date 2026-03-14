@@ -29,6 +29,9 @@ def mac_env_diagnostics(env: Any, *, rollout_summary: dict[str, Any] | None = No
     height_scan_sensor = getattr(env, "height_scan_sensor", None)
     if height_scan_sensor is not None and hasattr(height_scan_sensor, "state_dict"):
         payload["sensor"] = height_scan_sensor.state_dict()
+    camera_sensor = getattr(env, "camera_sensor", None)
+    if camera_sensor is not None and hasattr(camera_sensor, "state_dict"):
+        payload["sensor"] = camera_sensor.state_dict()
 
     reset_streams: dict[str, Any] = {}
     reset_sampler = getattr(env, "reset_sampler", None)

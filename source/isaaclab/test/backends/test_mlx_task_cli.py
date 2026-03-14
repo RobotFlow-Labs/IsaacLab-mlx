@@ -16,7 +16,7 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
 
-from isaaclab_rl.mlx import evaluate_mlx_task, list_trainable_mlx_tasks, train_mlx_task  # noqa: E402
+from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task  # noqa: E402
 
 
 def _load_task_support_module():
@@ -32,7 +32,7 @@ def _load_task_support_module():
 def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
     module = _load_task_support_module()
 
-    assert tuple(module.TASK_PREFIXES) == CURRENT_MAC_NATIVE_TASKS
+    assert tuple(module.TASK_PREFIXES) == list_mlx_tasks()
     assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach", "franka-lift")
 
 
@@ -93,6 +93,34 @@ def test_shared_task_cli_evaluates_h1_rough_manual_slice():
     assert payload["episodes_requested"] == 1
     assert payload["episodes_completed"] == 1
     assert payload["completed"][0]["length"] > 0
+
+
+def test_shared_task_cli_evaluates_cartpole_camera_manual_slices():
+    rgb_payload = evaluate_mlx_task(
+        "cartpole-rgb-camera",
+        num_envs=8,
+        episodes=1,
+        seed=35,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+    )
+    depth_payload = evaluate_mlx_task(
+        "cartpole-depth-camera",
+        num_envs=8,
+        episodes=1,
+        seed=39,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+    )
+
+    assert rgb_payload["task"] == "cartpole-rgb-camera"
+    assert rgb_payload["mode"] == "manual"
+    assert rgb_payload["episodes_completed"] == 1
+    assert depth_payload["task"] == "cartpole-depth-camera"
+    assert depth_payload["mode"] == "manual"
+    assert depth_payload["episodes_completed"] == 1
 
 
 def test_shared_task_cli_evaluates_franka_reach_manual_slice():

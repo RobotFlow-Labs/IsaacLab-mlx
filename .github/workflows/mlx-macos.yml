@@ -248,6 +248,7 @@ jobs:
           source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
           source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
           source/isaaclab/test/backends/test_mac_quadcopter.py \
+          source/isaaclab/test/backends/test_mac_cartpole_camera.py \
           source/isaaclab/test/backends/test_mac_anymal_c.py \
           source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
           source/isaaclab/test/backends/test_mac_franka_reach.py \
@@ -289,6 +290,20 @@ jobs:
           --task anymal-c-flat \
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/anymal_c_flat_policy.npz --eval-interval 1
+
+    - name: Run MLX cartpole RGB camera smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task cartpole-rgb-camera \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
+
+    - name: Run MLX cartpole depth camera smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task cartpole-depth-camera \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
 
     - name: Run MLX H1 flat smoke
       run: |
@@ -349,6 +364,8 @@ jobs:
 
         assert "h1-flat" in list_mlx_tasks()
         assert "h1-rough" in list_mlx_tasks()
+        assert "cartpole-rgb-camera" in list_mlx_tasks()
+        assert "cartpole-depth-camera" in list_mlx_tasks()
         assert "franka-reach" in list_mlx_tasks()
         assert "franka-lift" in list_mlx_tasks()
         train_payload = train_mlx_task(
@@ -505,8 +522,14 @@ jobs:
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
-        assert len(sensor_payload["benchmarks"]) == 2
+        assert len(sensor_payload["benchmarks"]) == 4
         benchmark_by_task = {benchmark["task"]: benchmark for benchmark in sensor_payload["benchmarks"]}
+        for task in ("cartpole-rgb-camera", "cartpole-depth-camera"):
+            benchmark = benchmark_by_task[task]
+            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-cartpole-camera"
+            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is True
+            assert benchmark["image_shape"][:2] == [100, 100]
+            assert benchmark["output_signature"]["final_frame_energy"] > 0.0
         for task in ("anymal-c-flat-height-scan", "h1-flat-height-scan"):
             benchmark = benchmark_by_task[task]
             assert benchmark["sensor_scan_dim"] == 9
@@ -517,7 +540,7 @@ jobs:
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert full_dashboard["summary"]["rollout_task_count"] == 11
+        assert full_dashboard["summary"]["rollout_task_count"] == 13
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])

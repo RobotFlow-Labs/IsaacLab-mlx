@@ -31,10 +31,13 @@ from isaaclab.backends.mac_sim import (
     MacAnymalCFlatEnvCfg,
     MacAnymalCRoughEnv,
     MacAnymalCRoughEnvCfg,
+    MacCartpoleCameraEnv,
+    MacCartpoleDepthCameraEnvCfg,
     MacCartDoublePendulumEnv,
     MacCartDoublePendulumEnvCfg,
     MacCartpoleEnv,
     MacCartpoleEnvCfg,
+    MacCartpoleRGBCameraEnvCfg,
     MacCartpoleTrainCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
@@ -52,7 +55,12 @@ from isaaclab.backends.mac_sim import (
 )
 
 TRAINING_BENCHMARK_TASKS = ("train-cartpole",)
-SENSOR_BENCHMARK_TASKS = ("anymal-c-flat-height-scan", "h1-flat-height-scan")
+SENSOR_BENCHMARK_TASKS = (
+    "cartpole-rgb-camera",
+    "cartpole-depth-camera",
+    "anymal-c-flat-height-scan",
+    "h1-flat-height-scan",
+)
 TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + SENSOR_BENCHMARK_TASKS + TRAINING_BENCHMARK_TASKS
 TASK_GROUPS = {
     "current-mac-native": CURRENT_MAC_NATIVE_TASKS,
@@ -247,6 +255,69 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
     return payload
 
 
+def _cartpole_camera_output_signature(env: Any, reward: mx.array, image: mx.array) -> dict[str, float]:
+    """Capture a compact semantic signature for the synthetic cartpole camera slices."""
+
+    joint_pos, _ = env.sim_backend.joint_state()
+    return {
+        "final_policy_mean": float(mx.mean(image).item()),
+        "final_policy_std": float(mx.std(image).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_cart_pos_abs_mean": float(mx.mean(mx.abs(joint_pos[:, 0])).item()),
+        "final_pole_angle_abs_mean": float(mx.mean(mx.abs(joint_pos[:, 1])).item()),
+        "final_frame_energy": float(mx.mean(mx.square(image)).item()),
+    }
+
+
+def _benchmark_cartpole_camera_env(name: str, env: Any, *, num_envs: int, steps: int) -> dict[str, Any]:
+    """Benchmark a synthetic cartpole camera env without retaining the full image rollout trace."""
+
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    reward_total = 0.0
+    terminated_total = 0
+    truncated_total = 0
+    last_obs = observations["policy"]
+    last_reward = mx.zeros((num_envs,), dtype=mx.float32)
+
+    start = time.perf_counter()
+    for _ in range(steps):
+        next_obs, reward, terminated, truncated, _ = env.step(actions)
+        _sync([next_obs["policy"], reward, terminated, truncated])
+        reward_total += float(mx.mean(reward).item())
+        terminated_total += int(mx.sum(terminated.astype(mx.int32)).item())
+        truncated_total += int(mx.sum(truncated.astype(mx.int32)).item())
+        last_obs = next_obs["policy"]
+        last_reward = reward
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        name,
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "image_shape": list(last_obs.shape[1:]),
+            "camera_mode": env.camera_mode,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _cartpole_camera_output_signature(env, last_reward, last_obs),
+            "diagnostics": mac_env_diagnostics(
+                env,
+                rollout_summary={
+                    "steps": steps,
+                    "reward_total": reward_total,
+                    "terminated_total": terminated_total,
+                    "truncated_total": truncated_total,
+                    "final_observation_shapes": {"policy": list(last_obs.shape)},
+                },
+            ),
+        },
+    )
+
+
 def resolve_requested_tasks(tasks: list[str] | None, task_group: str) -> tuple[str, ...]:
     """Resolve CLI benchmark selection to an ordered task tuple."""
     if tasks:
@@ -277,6 +348,20 @@ def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
+
+
+def benchmark_cartpole_rgb_camera(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the synthetic RGB cartpole camera env step loop."""
+
+    env = MacCartpoleCameraEnv(MacCartpoleRGBCameraEnvCfg(num_envs=num_envs, seed=seed))
+    return _benchmark_cartpole_camera_env("cartpole-rgb-camera", env, num_envs=num_envs, steps=steps)
+
+
+def benchmark_cartpole_depth_camera(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the synthetic depth cartpole camera env step loop."""
+
+    env = MacCartpoleCameraEnv(MacCartpoleDepthCameraEnvCfg(num_envs=num_envs, seed=seed))
+    return _benchmark_cartpole_camera_env("cartpole-depth-camera", env, num_envs=num_envs, steps=steps)
 
 
 def benchmark_cart_double_pendulum(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
@@ -647,6 +732,10 @@ def run_benchmarks(
     for task in tasks:
         if task == "cartpole":
             benchmark = benchmark_cartpole(num_envs, steps, seed)
+        elif task == "cartpole-rgb-camera":
+            benchmark = benchmark_cartpole_rgb_camera(num_envs, steps, seed)
+        elif task == "cartpole-depth-camera":
+            benchmark = benchmark_cartpole_depth_camera(num_envs, steps, seed)
         elif task == "cart-double-pendulum":
             benchmark = benchmark_cart_double_pendulum(num_envs, steps, seed)
         elif task == "quadcopter":

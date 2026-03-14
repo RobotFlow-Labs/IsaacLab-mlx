@@ -18,6 +18,8 @@ import pytest
 from isaaclab.backends import UnsupportedBackendError, resolve_runtime_selection, set_runtime_selection
 
 SAFE_TASK_IDS = (
+    "Isaac-Cartpole-RGB-Camera-Direct-v0",
+    "Isaac-Cartpole-Depth-Camera-Direct-v0",
     "Isaac-Reach-Franka-v0",
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Velocity-Flat-H1-v0",
@@ -162,6 +164,7 @@ def test_parse_env_cfg_supports_h1_rough_task_cfg(monkeypatch):
 
     assert type(cfg).__name__ == "MacH1RoughEnvCfg"
     assert parsed_cfg.num_envs == 9
+    assert parsed_cfg.observation_space == 78
     assert parsed_cfg.height_scan_enabled is True
     assert parsed_cfg.terrain_type == "wave"
 
@@ -186,6 +189,30 @@ def test_parse_env_cfg_supports_franka_reach_and_lift_task_cfgs(monkeypatch):
     assert type(lift_cfg).__name__ == "MacFrankaLiftEnvCfg"
     assert lift_cfg.num_envs == 5
     assert lift_cfg.action_space == 8
+
+
+def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):
+    """parse_env_cfg should resolve the synthetic camera cartpole configs without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Cartpole-RGB-Camera-Direct-v0", device="cpu", num_envs=4)
+    depth_cfg = parse_cfg.parse_env_cfg("Isaac-Cartpole-Depth-Camera-Direct-v0", device="cpu", num_envs=3)
+
+    assert type(rgb_cfg).__name__ == "MacCartpoleRGBCameraEnvCfg"
+    assert rgb_cfg.num_envs == 4
+    assert rgb_cfg.camera_mode == "rgb"
+    assert rgb_cfg.observation_space == [100, 100, 3]
+    assert type(depth_cfg).__name__ == "MacCartpoleDepthCameraEnvCfg"
+    assert depth_cfg.num_envs == 3
+    assert depth_cfg.camera_mode == "depth"
+    assert depth_cfg.observation_space == [100, 100, 1]
 
 
 def test_parse_env_cfg_reasserts_mac_safe_h1_registration_after_runtime_switch(monkeypatch):
