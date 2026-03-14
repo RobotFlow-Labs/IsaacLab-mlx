@@ -57,10 +57,14 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
 
     assert results["task_group"] == "current-mac-native"
     assert results["tasks"] == list(benchmark_module.CURRENT_MAC_NATIVE_TASKS)
+    assert results["cpu_fallback_detected"] is False
+    assert results["cpu_fallback_tasks"] == []
     assert [benchmark["task"] for benchmark in results["benchmarks"]] == list(benchmark_module.CURRENT_MAC_NATIVE_TASKS)
 
     for benchmark in results["benchmarks"]:
         assert benchmark["runtime"]["compute_backend"] == "mlx"
         assert benchmark["runtime"]["sim_backend"] == "mac-sim"
+        assert benchmark["cpu_fallback"]["detected"] is False
+        assert benchmark["cpu_fallback"]["active_kernel_backend"] == "metal"
         assert "diagnostics" in benchmark
         assert benchmark["diagnostics"]["sim_backend"]["backend"] == "mac-sim"

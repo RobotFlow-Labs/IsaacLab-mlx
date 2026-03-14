@@ -5,6 +5,12 @@
 
 """Runtime backend selection and capability helpers."""
 
+from .kernel_compat import (
+    add_forces_and_torques_at_position_mlx,
+    detect_cpu_fallback,
+    reshape_tiled_image_mlx,
+    set_forces_and_torques_at_position_mlx,
+)
 from .runtime import (
     ArticulationCapabilities,
     ENV_COMPUTE_BACKEND,

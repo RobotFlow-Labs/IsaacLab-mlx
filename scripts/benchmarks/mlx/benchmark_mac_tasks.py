@@ -18,7 +18,7 @@ from typing import Any
 import mlx.core as mx
 
 from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
-from isaaclab.backends import get_runtime_state
+from isaaclab.backends import detect_cpu_fallback, get_runtime_state
 from isaaclab.backends.mac_sim import (
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
@@ -77,6 +77,7 @@ def _make_benchmark_result(
 ) -> dict[str, Any]:
     """Build a normalized benchmark payload."""
     env_steps = num_envs * steps
+    cpu_fallback = detect_cpu_fallback(runtime_state)
     result = {
         "task": name,
         "num_envs": num_envs,
@@ -85,6 +86,7 @@ def _make_benchmark_result(
         "env_steps_per_s": env_steps / elapsed_s,
         "mean_step_ms": (elapsed_s / steps) * 1000.0,
         "runtime": runtime_state,
+        "cpu_fallback": cpu_fallback,
     }
     if extra:
         result.update(extra)
@@ -275,6 +277,7 @@ def benchmark_train_cartpole(
         "mean_recent_return": result["mean_recent_return"],
     }
     benchmark["runtime"] = get_runtime_state()
+    benchmark["cpu_fallback"] = detect_cpu_fallback(benchmark["runtime"])
     return benchmark
 
 
@@ -325,6 +328,9 @@ def run_benchmarks(
             )
         results["benchmarks"].append(benchmark)
 
+    cpu_fallback_tasks = [benchmark["task"] for benchmark in results["benchmarks"] if benchmark["cpu_fallback"]["detected"]]
+    results["cpu_fallback_detected"] = bool(cpu_fallback_tasks)
+    results["cpu_fallback_tasks"] = cpu_fallback_tasks
     return results
 
 

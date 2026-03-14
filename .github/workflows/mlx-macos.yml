@@ -162,6 +162,7 @@ jobs:
           source/isaaclab/test/backends/test_runtime.py \
           source/isaaclab/test/backends/test_task_registry.py \
           source/isaaclab/test/backends/test_kernel_inventory.py \
+          source/isaaclab/test/backends/test_kernel_compat.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab/test/backends/test_portability_utils.py \
           source/isaaclab/test/backends/test_mac_benchmark_suite.py \

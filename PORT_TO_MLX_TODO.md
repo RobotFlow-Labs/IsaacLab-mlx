@@ -431,9 +431,13 @@ without pausing for replanning after every small success.
 
 ### MLX-KERNEL-002
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-KERNEL-001`
 - Title: Implement MLX-op replacements for non-hot helper kernels
+- Validation:
+  - `source/isaaclab/isaaclab/backends/kernel_compat.py`
+  - `source/isaaclab/test/backends/test_kernel_compat.py`
+  - `source/isaaclab/isaaclab/backends/kernel_inventory.py`
 
 ### MLX-KERNEL-003
 
@@ -443,14 +447,21 @@ without pausing for replanning after every small success.
 
 ### MLX-KERNEL-004
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-KERNEL-001`
 - Title: Add per-kernel parity tests against upstream outputs where feasible
+- Validation:
+  - `source/isaaclab/test/backends/test_kernel_compat.py`
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
 
 ### MLX-KERNEL-005
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Add benchmark reporting that detects accidental CPU fallback
+- Validation:
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
+  - `source/isaaclab/test/backends/test_kernel_compat.py`
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
 
 ### MLX-KERNEL-006
 
@@ -600,15 +611,19 @@ This queue exists so work can continue without waiting for a new plan:
 PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab_rl/test/test_import_safety.py \
   source/isaaclab/test/backends/test_runtime.py \
+  source/isaaclab/test/backends/test_kernel_compat.py \
   source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
-  source/isaaclab/test/backends/test_mac_quadcopter.py -q
+  source/isaaclab/test/backends/test_mac_quadcopter.py \
+  source/isaaclab/test/backends/test_mac_anymal_c.py \
+  source/isaaclab/test/backends/test_mac_h1.py -q
 ```
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-  --tasks cartpole cart-double-pendulum quadcopter train-cartpole
+  --task-group current-mac-native \
+  --json-out logs/benchmarks/mlx/smoke.json
 ```

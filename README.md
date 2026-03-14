@@ -309,6 +309,7 @@ The benchmark emits:
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
 - runtime metadata including compute, kernel, sensor, and planner backend selection
+- per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
 
 ## Kernel Inventory
 
@@ -319,9 +320,9 @@ The next Warp/CUDA kernel families blocking broader parity are tracked in:
 That inventory is test-backed and currently covers:
 
 - mesh raycast kernels used by ray-caster sensors and terrain sampling
-- wrench composer kernels relevant to manipulation
+- wrench composer kernels relevant to manipulation, now with helper-level MLX parity coverage
 - Fabric transform kernels for future engine-parity work
-- tiled-camera reshape kernels for future camera parity
+- tiled-camera reshape kernels for future camera parity, now with helper-level MLX parity coverage
 
 ## Implemented MLX Vertical Slice
 

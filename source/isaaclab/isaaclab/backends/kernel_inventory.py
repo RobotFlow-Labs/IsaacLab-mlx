@@ -57,15 +57,15 @@ KERNEL_PORT_INVENTORY = (
     KernelInventoryItem(
         key="wrench-composer",
         family="Warp wrench composition kernels",
-        status="next-manipulation",
+        status="mlx-helper-ready",
         target_tasks=("manipulation-reach", "manipulation-lift", "external-wrench-controls"),
         upstream_modules=(
             "source/isaaclab/isaaclab/utils/warp/kernels.py",
             "source/isaaclab/isaaclab/utils/wrench_composer.py",
         ),
         symbols=("add_forces_and_torques_at_position", "set_forces_and_torques_at_position"),
-        replacement_strategy="Replace with pure MLX vector math first; only drop to Metal if manipulation benchmarks make it hot.",
-        notes="This is the first non-raycast kernel family likely to matter once manipulation tasks start landing on mac-sim.",
+        replacement_strategy="Pure MLX helper parity now exists for add/set wrench composition; only drop to Metal if manipulation benchmarks make it hot.",
+        notes="The first helper-level MLX replacement is implemented and parity-tested, but no mac-native manipulation env uses it yet.",
     ),
     KernelInventoryItem(
         key="fabric-transform-kernels",
@@ -88,14 +88,14 @@ KERNEL_PORT_INVENTORY = (
     KernelInventoryItem(
         key="tiled-camera-reshape",
         family="Warp tiled-camera reshape kernel",
-        status="later-camera",
+        status="mlx-helper-ready",
         target_tasks=("rgb-camera", "depth-camera", "segmentation-camera"),
         upstream_modules=(
             "source/isaaclab/isaaclab/utils/warp/kernels.py",
             "source/isaaclab/isaaclab/sensors/camera/tiled_camera.py",
         ),
         symbols=("reshape_tiled_image",),
-        replacement_strategy="Start with MLX reshape/transposes; add a Metal kernel only if camera ingestion becomes a measured hotspot.",
-        notes="This is the key reshape path behind tiled camera parity, but it is deferred until sensor work starts.",
+        replacement_strategy="A pure MLX reshape/transpose helper now covers the semantic path; add a Metal kernel only if camera ingestion becomes a measured hotspot.",
+        notes="The helper-level MLX replacement is implemented and parity-tested, but it is not wired into a mac-native camera sensor yet.",
     ),
 )
