@@ -44,7 +44,9 @@ def test_public_mlx_task_lists_are_stable():
     assert list_trainable_mlx_tasks() == (
         "cartpole",
         "anymal-c-flat",
+        "anymal-c-rough",
         "h1-flat",
+        "h1-rough",
         "franka-reach",
         "franka-lift",
         "franka-stack",
@@ -84,6 +86,38 @@ def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
 
     assert train_payload["task"] == "anymal-c-flat"
     assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_anymal_rough_via_public_mlx_wrapper(tmp_path: Path):
+    """The MLX wrapper should expose checkpoint replay for the rough ANYmal-C slice."""
+
+    checkpoint_path = tmp_path / "anymal_rough_wrapper_policy.npz"
+
+    train_payload = train_mlx_task(
+        "anymal-c-rough",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=23,
+    )
+    eval_payload = evaluate_mlx_task(
+        "anymal-c-rough",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=23,
+    )
+
+    assert train_payload["task"] == "anymal-c-rough"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "anymal-c-rough"
+    assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)
 
@@ -151,6 +185,38 @@ def test_evaluate_h1_rough_manual_via_public_mlx_wrapper():
     assert payload["mode"] == "manual"
     assert payload["episodes_completed"] == 1
     assert payload["completed"][0]["length"] > 0
+
+
+def test_train_and_evaluate_h1_rough_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose checkpoint replay for the rough H1 slice."""
+
+    checkpoint_path = tmp_path / "h1_rough_wrapper_policy.npz"
+
+    train_payload = train_mlx_task(
+        "h1-rough",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=41,
+    )
+    eval_payload = evaluate_mlx_task(
+        "h1-rough",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=41,
+    )
+
+    assert train_payload["task"] == "h1-rough"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "h1-rough"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
 
 
 def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
@@ -431,9 +497,6 @@ def test_public_mlx_wrapper_rejects_checkpoint_for_eval_only_tasks():
 
     with pytest.raises(ValueError, match="does not expose checkpoint replay"):
         evaluate_mlx_task("cart-double-pendulum", checkpoint="logs/mlx/cart_double_policy.npz")
-
-    with pytest.raises(ValueError, match="does not expose checkpoint replay"):
-        evaluate_mlx_task("h1-rough", checkpoint="logs/mlx/h1_rough_policy.npz")
 
 def test_public_mlx_wrapper_honors_short_episode_length_for_cart_double_pendulum():
     """The shared wrapper should pass episode_length_s through to eval-only task configs."""

@@ -39,7 +39,9 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
     assert list_trainable_mlx_tasks() == (
         "cartpole",
         "anymal-c-flat",
+        "anymal-c-rough",
         "h1-flat",
+        "h1-rough",
         "franka-reach",
         "franka-lift",
         "franka-stack",
@@ -69,6 +71,45 @@ def test_shared_task_cli_trains_first_locomotion_task(tmp_path: Path):
     assert Path(payload["checkpoint_path"]).exists()
     assert Path(payload["metadata_path"]).exists()
     assert payload["completed_episodes"] >= 0
+
+
+def test_shared_task_cli_trains_rough_locomotion_slices(tmp_path: Path):
+    anymal_checkpoint = tmp_path / "anymal_c_rough_policy.npz"
+    h1_checkpoint = tmp_path / "h1_rough_policy.npz"
+
+    anymal_payload = train_mlx_task(
+        "anymal-c-rough",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        learning_rate=3e-4,
+        hidden_dim=32,
+        checkpoint=str(anymal_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=15,
+    )
+    h1_payload = train_mlx_task(
+        "h1-rough",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        learning_rate=3e-4,
+        hidden_dim=64,
+        checkpoint=str(h1_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=17,
+    )
+
+    assert anymal_payload["task"] == "anymal-c-rough"
+    assert Path(anymal_payload["checkpoint_path"]).exists()
+    assert Path(anymal_payload["metadata_path"]).exists()
+    assert h1_payload["task"] == "h1-rough"
+    assert Path(h1_payload["checkpoint_path"]).exists()
+    assert Path(h1_payload["metadata_path"]).exists()
 
 
 def test_shared_task_cli_evaluates_h1_manual_slice():
@@ -360,6 +401,29 @@ def test_franka_stack_rgb_thin_wrappers_are_directly_runnable():
             capture_output=True,
             text=True,
             check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage:" in result.stdout.lower()
+
+
+def test_rough_locomotion_thin_wrappers_are_directly_runnable():
+    repo_root = Path(__file__).resolve().parents[4]
+    scripts = (
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "train_anymal_c_rough.py",
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "play_anymal_c_rough.py",
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "train_h1_rough.py",
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "play_h1_rough.py",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
+
+    for script in scripts:
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
         assert "usage:" in result.stdout.lower()

@@ -222,6 +222,49 @@ jobs:
         print(payload["policy_shape"])
         PY
 
+    - name: Run release-surface MLX install smoke
+      run: |
+        release_root="$(mktemp -d)"
+        uv venv --python 3.11 "$release_root/.venv-release"
+        uv pip install --python "$release_root/.venv-release/bin/python" \
+          -e source/isaaclab[macos-mlx] \
+          -e source/isaaclab_tasks \
+          -e source/isaaclab_rl
+        RELEASE_ROOT="$release_root" GITHUB_WORKSPACE="$GITHUB_WORKSPACE" "$release_root/.venv-release/bin/python" - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+
+        from isaaclab.backends import resolve_runtime_selection, set_runtime_selection
+        from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
+        from isaaclab_rl.mlx import evaluate_mlx_task, list_trainable_mlx_tasks
+
+        set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+        rough_cfg = parse_env_cfg("Isaac-Velocity-Rough-H1-v0", device="cpu", num_envs=4)
+        stack_cfg = parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=4)
+        payload = evaluate_mlx_task(
+            "h1-rough",
+            num_envs=4,
+            episodes=1,
+            episode_length_s=0.25,
+            max_steps=128,
+            random_actions=False,
+            seed=11,
+        )
+        artifact = {
+            "rough_cfg_type": type(rough_cfg).__name__,
+            "stack_cfg_type": type(stack_cfg).__name__,
+            "trainable_tasks": list(list_trainable_mlx_tasks()),
+            "eval_task": payload["task"],
+            "episodes_completed": payload["episodes_completed"],
+            "release_root": os.environ["RELEASE_ROOT"],
+        }
+        out_path = Path(os.environ["GITHUB_WORKSPACE"]) / "logs" / "benchmarks" / "mlx" / "release_install_smoke.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(artifact)
+        PY
+
     - name: Run MLX backend smoke tests
       run: |
         PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
@@ -293,6 +336,14 @@ jobs:
           --task anymal-c-flat \
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/anymal_c_flat_policy.npz --eval-interval 1
+
+    - name: Run MLX ANYmal-C rough training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task anymal-c-rough \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/anymal_c_rough_policy.npz --eval-interval 1
 
     - name: Run MLX cartpole RGB camera smoke
       run: |
@@ -405,13 +456,23 @@ jobs:
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/h1_flat_policy.npz --eval-interval 1
 
+    - name: Run MLX H1 rough training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task h1-rough \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/h1_rough_policy.npz --eval-interval 1
+
     - name: Run public MLX wrapper smoke
       run: |
         PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/python - <<'PY'
-        from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks, train_mlx_task
+        from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
 
         assert "h1-flat" in list_mlx_tasks()
         assert "h1-rough" in list_mlx_tasks()
+        assert "anymal-c-rough" in list_trainable_mlx_tasks()
+        assert "h1-rough" in list_trainable_mlx_tasks()
         assert "cartpole-rgb-camera" in list_mlx_tasks()
         assert "cartpole-depth-camera" in list_mlx_tasks()
         assert "franka-reach" in list_mlx_tasks()
@@ -542,6 +603,7 @@ jobs:
         test -f logs/benchmarks/mlx/smoke.json
         test -f logs/benchmarks/mlx/smoke-dashboard.json
         test -f logs/benchmarks/mlx/smoke-trend.json
+        test -f logs/benchmarks/mlx/release_install_smoke.json
         test -f logs/benchmarks/mlx/sensor-smoke.json
         test -f logs/benchmarks/mlx/sensor-smoke-dashboard.json
         test -f logs/benchmarks/mlx/sensor-smoke-trend.json
@@ -588,6 +650,13 @@ jobs:
             assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-terrain-raycast"
             assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
         print(sensor_payload["tasks"])
+        release_payload = json.loads(Path("logs/benchmarks/mlx/release_install_smoke.json").read_text(encoding="utf-8"))
+        assert release_payload["rough_cfg_type"] == "MacH1RoughEnvCfg"
+        assert release_payload["stack_cfg_type"] == "MacFrankaStackRgbEnvCfg"
+        assert "anymal-c-rough" in release_payload["trainable_tasks"]
+        assert "h1-rough" in release_payload["trainable_tasks"]
+        assert release_payload["eval_task"] == "h1-rough"
+        assert release_payload["episodes_completed"] == 1
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))

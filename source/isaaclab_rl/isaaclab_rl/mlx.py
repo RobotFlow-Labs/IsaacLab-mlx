@@ -70,7 +70,9 @@ from isaaclab.backends.mac_sim import (
 TRAINABLE_MLX_TASKS = (
     "cartpole",
     "anymal-c-flat",
+    "anymal-c-rough",
     "h1-flat",
+    "h1-rough",
     "franka-reach",
     "franka-lift",
     "franka-stack",
@@ -98,14 +100,14 @@ MLX_TASK_SPECS = {
     "cart-double-pendulum": MlxTaskSpec("cart-double-pendulum", False, None, None),
     "quadcopter": MlxTaskSpec("quadcopter", False, None, None),
     "anymal-c-flat": MlxTaskSpec("anymal-c-flat", True, "logs/mlx/anymal_c_flat_policy.npz", 128, 0.35),
-    "anymal-c-rough": MlxTaskSpec("anymal-c-rough", False, None, None),
+    "anymal-c-rough": MlxTaskSpec("anymal-c-rough", True, "logs/mlx/anymal_c_rough_policy.npz", 128, 0.35),
     "franka-reach": MlxTaskSpec("franka-reach", True, "logs/mlx/franka_reach_policy.npz", 128, 0.25),
     "franka-lift": MlxTaskSpec("franka-lift", True, "logs/mlx/franka_lift_policy.npz", 128, 0.25),
     "franka-stack": MlxTaskSpec("franka-stack", True, "logs/mlx/franka_stack_policy.npz", 128, 0.25),
     "franka-stack-rgb": MlxTaskSpec("franka-stack-rgb", True, "logs/mlx/franka_stack_rgb_policy.npz", 128, 0.25),
     "franka-cabinet": MlxTaskSpec("franka-cabinet", True, "logs/mlx/franka_cabinet_policy.npz", 128, 0.25),
     "h1-flat": MlxTaskSpec("h1-flat", True, "logs/mlx/h1_flat_policy.npz", 192, 0.28),
-    "h1-rough": MlxTaskSpec("h1-rough", False, None, None),
+    "h1-rough": MlxTaskSpec("h1-rough", True, "logs/mlx/h1_rough_policy.npz", 192, 0.28),
 }
 
 
@@ -187,6 +189,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_anymal_c_policy(cfg)
+    elif task == "anymal-c-rough":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacAnymalCTrainCfg(
+            env=MacAnymalCRoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/anymal_c_rough_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_anymal_c_policy(cfg)
     elif task == "h1-flat":
         resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(resume_from, spec.default_hidden_dim or 192)
         cfg = MacH1TrainCfg(
@@ -198,6 +217,23 @@ def train_mlx_task(
             learning_rate=learning_rate,
             action_std=spec.default_action_std if action_std is None else action_std,
             checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/h1_flat_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_h1_policy(cfg)
+    elif task == "h1-rough":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 192
+        )
+        cfg = MacH1TrainCfg(
+            env=MacH1RoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/h1_rough_policy.npz",
             resume_from=resume_from,
             eval_interval=eval_interval,
         )
@@ -488,7 +524,20 @@ def evaluate_mlx_task(
 
     if task == "h1-rough":
         if checkpoint is not None:
-            raise ValueError("Task 'h1-rough' does not expose checkpoint replay on the public MLX wrapper.")
+            returns = play_h1_policy(
+                checkpoint,
+                env_cfg=MacH1RoughEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
         cfg = MacH1RoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacH1RoughEnv(cfg)
         mx.random.seed(seed)
@@ -518,7 +567,20 @@ def evaluate_mlx_task(
 
     if task == "anymal-c-rough":
         if checkpoint is not None:
-            raise ValueError("Task 'anymal-c-rough' does not expose checkpoint replay on the public MLX wrapper.")
+            returns = play_anymal_c_policy(
+                checkpoint,
+                env_cfg=MacAnymalCRoughEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
         cfg = MacAnymalCRoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacAnymalCRoughEnv(cfg)
         mx.random.seed(seed)

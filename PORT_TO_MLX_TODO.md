@@ -74,6 +74,7 @@ without pausing for replanning after every small success.
 - `DONE` Fourth trainable stack variant landed for `Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0` with a reduced three-cube sequential stack backend, staged terminal benchmark metrics, shared PPO/checkpoint contracts, public MLX wrapper training, direct thin CLI wrappers, semantic baseline refresh, and CI smoke coverage
 - `DONE` Fourth trainable manipulation slice landed for `Isaac-Franka-Cabinet-Direct-v0` with a reduced drawer workflow, compiled cabinet hotpath helper, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
+- `DONE` Rough locomotion slices for ANYmal-C and H1 now expose full MLX PPO train/replay surfaces with rough-task checkpoint metadata, wrapper coverage, and CI smoke coverage
 - `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
 - `DONE` Locomotion hotpaths now combine a true Metal-backed root-step kernel with compiled MLX contact/support helpers, and benchmark/semantic reports surface `hotpath: "mlx-metal-root-step"` for the ANYmal-C and H1 slices while Franka keeps its own family-specific hotpath label
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
@@ -83,6 +84,7 @@ without pausing for replanning after every small success.
 - `DONE` CI now has a dedicated import-safety lane plus benchmark artifact validation for the MLX/mac path
 - `DONE` Planner and ROS compatibility prototypes now exist as explicit backend seams with software smokes, backend tests, and capability-gated docs
 - `DONE` Planner and ROS compatibility now carry richer planner world-state obstacles plus ROS-friendly world-state / timed joint-trajectory envelopes without requiring ROS Python bindings
+- `DONE` CI now proves a release-style MLX install path without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and exercises the public wrapper
 
 ## Phase A: Import And Packaging Safety
 

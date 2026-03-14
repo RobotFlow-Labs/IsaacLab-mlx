@@ -40,6 +40,7 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
+- trainable rough locomotion slices for ANYmal-C and H1 with shared PPO/checkpoint contracts, replay support, and CI smoke coverage
 - a Metal-backed locomotion root-step helper for the ANYmal-C and H1 slices, with benchmark and semantic-drift diagnostics that report `hotpath: "mlx-metal-root-step"` when that narrow kernel is active
 - trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, and cabinet-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
@@ -49,7 +50,7 @@ What works today:
 - MLX training, checkpoint save/load, and replay scripts
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
-- a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, and explicit env-vs-policy action-space fields
+- a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, explicit env-vs-policy action-space fields, and rough-task replay config inference
 - a planner compatibility seam for `mac-planners` with deterministic joint-space interpolation, timed waypoint payloads, richer obstacle metadata, and world-state updates
 - a plain ROS 2 compatibility bridge for JSONL message transport, planner-world envelopes, joint-trajectory envelopes, and optional `ros2 topic pub/echo` command construction without CUDA assumptions
 - portability guards for optional `torch`/`warp` utility imports on macOS
@@ -536,6 +537,12 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
 - Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons and `logs/benchmarks/mlx/m5-baseline-trend.json` when you want a compact comparison payload across M-series machines. Do not compare against CI smoke numbers.
 - CI stores immutable `*-trend.json` artifacts per run; those are the retained history source for M-series regression review, not the raw smoke JSON.
 - Nightly semantic drift checks compare the deterministic rollout contracts in the committed baseline against a fresh `full` benchmark run. Throughput is intentionally excluded from that drift gate.
+- When a benchmarked task contract changes intentionally, refresh the baseline with:
+  `PYTHONPATH=.:source/isaaclab .venv/bin/python scripts/benchmarks/mlx/benchmark_mac_tasks.py --task-group full --num-envs 8 --steps 8 --train-updates 1 --rollout-steps 4 --epochs-per-update 1 --json-out logs/benchmarks/mlx/full-smoke.json`
+  then:
+  `PYTHONPATH=.:source/isaaclab .venv/bin/python scripts/benchmarks/mlx/check_semantic_drift.py --results logs/benchmarks/mlx/full-smoke.json --baseline scripts/benchmarks/mlx/baselines/semantic-baseline.json --snapshot-out logs/benchmarks/mlx/full-smoke-semantic-snapshot.json --write-baseline`
+  and rerun the compare command to confirm the refreshed baseline passes.
+- CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and evaluates `h1-rough` through the public wrapper.
 - Backend-local external stereo validation still lives in synthetic stereo smoke tests and optional host-specific hardware probes; the benchmark suite only covers the synthetic cartpole camera task slices and the analytic terrain/raycast slices.
 
 ## Planner And ROS Compatibility
@@ -598,9 +605,9 @@ Current task capability matrix:
 | `Isaac-Cart-Double-Pendulum-Direct-v0` | No | Yes | `current-mac-native` | No | MARL dict observations/actions |
 | `Isaac-Quadcopter-Direct-v0` | No | Yes | `current-mac-native` | No | Root-state thrust/moment control |
 | `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
-| `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain plus analytic terrain raycasts |
+| `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain plus analytic terrain raycasts with MLX PPO train/replay support |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
-| `Isaac-Velocity-Rough-H1-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain, analytic terrain raycasts, and H1 rough-terrain semantics |
+| `Isaac-Velocity-Rough-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain, analytic terrain raycasts, rough-task checkpoint inference, and MLX PPO train/replay support |
 | `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support |
 | `Isaac-Stack-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic two-cube stack slice with lightweight grasp/release logic and MLX PPO train/replay support |

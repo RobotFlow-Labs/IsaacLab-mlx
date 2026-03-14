@@ -51,6 +51,7 @@ from .ppo_training import (
     mean_recent_return,
     normalize_advantages,
     play_gaussian_policy_checkpoint,
+    read_checkpoint_metadata,
     resolve_resume_hidden_dim,
     save_policy_checkpoint,
 )
@@ -84,13 +85,15 @@ HIP_OFFSETS = mx.array(
 )
 GAIT_PHASE_OFFSETS = mx.array([0.0, math.pi, math.pi, 0.0], dtype=mx.float32)
 LOG_2_PI = math.log(2.0 * math.pi)
+DEFAULT_ANYMAL_C_FLAT_CHECKPOINT = "logs/mlx/anymal_c_flat_policy.npz"
+DEFAULT_ANYMAL_C_ROUGH_CHECKPOINT = "logs/mlx/anymal_c_rough_policy.npz"
 
 
 @configclass
 class MacAnymalCTrainCfg:
-    """Training configuration for the MLX ANYmal-C flat locomotion smoke path."""
+    """Training configuration for the MLX ANYmal-C locomotion smoke path."""
 
-    env: MacAnymalCFlatEnvCfg = MacAnymalCFlatEnvCfg()
+    env: MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg = MacAnymalCFlatEnvCfg()
     hidden_dim: int = 128
     updates: int = 10
     rollout_steps: int = 24
@@ -102,7 +105,7 @@ class MacAnymalCTrainCfg:
     value_loss_coef: float = 0.5
     entropy_coef: float = 0.001
     action_std: float = 0.35
-    checkpoint_path: str = "logs/mlx/anymal_c_flat_policy.npz"
+    checkpoint_path: str = DEFAULT_ANYMAL_C_FLAT_CHECKPOINT
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -593,6 +596,37 @@ class MacAnymalCRoughEnv(MacAnymalCFlatEnv):
         super().__init__(cfg or MacAnymalCRoughEnvCfg())
 
 
+def _make_anymal_env(cfg: MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg) -> MacAnymalCFlatEnv | MacAnymalCRoughEnv:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return MacAnymalCRoughEnv(cfg)
+    return MacAnymalCFlatEnv(cfg)
+
+
+def _anymal_task_id(cfg: MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg) -> str:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return "Isaac-Velocity-Rough-Anymal-C-Direct-v0"
+    return "Isaac-Velocity-Flat-Anymal-C-Direct-v0"
+
+
+def _anymal_log_prefix(cfg: MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg) -> str:
+    if getattr(cfg, "terrain_type", "plane") == "wave":
+        return "mlx-anymal-c-rough"
+    return "mlx-anymal-c-flat"
+
+
+def _default_anymal_eval_cfg(checkpoint_path: str | Path) -> MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg:
+    metadata = read_checkpoint_metadata(checkpoint_path)
+    if metadata.get("task_id") == "Isaac-Velocity-Rough-Anymal-C-Direct-v0":
+        return MacAnymalCRoughEnvCfg(num_envs=1)
+    return MacAnymalCFlatEnvCfg(num_envs=1)
+
+
+def _resolve_anymal_checkpoint_path(checkpoint_path: str, task_id: str) -> str:
+    if task_id == "Isaac-Velocity-Rough-Anymal-C-Direct-v0" and checkpoint_path == DEFAULT_ANYMAL_C_FLAT_CHECKPOINT:
+        return DEFAULT_ANYMAL_C_ROUGH_CHECKPOINT
+    return checkpoint_path
+
+
 class MacAnymalCPolicy(nn.Module):
     """Continuous policy/value MLP for the mac-native ANYmal-C slice."""
 
@@ -645,13 +679,16 @@ def _ppo_loss(
 
 
 def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control locomotion policy on the mac-native ANYmal-C slice."""
+    """Train a lightweight continuous-control policy on a mac-native ANYmal-C slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
-    env = MacAnymalCFlatEnv(cfg.env)
+    env = _make_anymal_env(cfg.env)
+    obs_dim = env.observation_space
+    task_id = _anymal_task_id(cfg.env)
+    log_prefix = _anymal_log_prefix(cfg.env)
     model = MacAnymalCPolicy(
-        obs_dim=cfg.env.observation_space,
+        obs_dim=obs_dim,
         hidden_dim=cfg.hidden_dim,
         action_dim=cfg.env.action_space,
     )
@@ -704,7 +741,7 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
         rewards_t = mx.stack(rewards_rollout)
         terminated_t = mx.stack(terminated_rollout)
         values_t = mx.stack(values_rollout)
-        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, cfg.env.observation_space))
+        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, obs_dim))
         _, flat_next_values = model(flat_bootstrap_obs)
         next_values_t = mx.reshape(flat_next_values, (cfg.rollout_steps, cfg.env.num_envs))
         advantages, returns = compute_gae(
@@ -716,7 +753,7 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
             gae_lambda=cfg.gae_lambda,
         )
 
-        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
+        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, obs_dim))
         flat_actions = mx.reshape(mx.stack(actions_rollout), (-1, cfg.env.action_space))
         flat_log_probs = mx.reshape(mx.stack(log_probs_rollout), (-1,))
         flat_advantages = mx.reshape(advantages, (-1,))
@@ -744,18 +781,18 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = mean_recent_return(completed_returns)
             print(
-                f"[mlx-anymal-c-flat] update={update + 1}/{cfg.updates} "
+                f"[{log_prefix}] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
     checkpoint_path, metadata_path = save_policy_checkpoint(
         model,
-        cfg.checkpoint_path,
+        _resolve_anymal_checkpoint_path(cfg.checkpoint_path, task_id),
         build_checkpoint_metadata(
             hidden_dim=cfg.hidden_dim,
-            observation_space=cfg.env.observation_space,
+            observation_space=obs_dim,
             action_space=cfg.env.action_space,
-            task_id="Isaac-Velocity-Flat-Anymal-C-Direct-v0",
+            task_id=task_id,
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
@@ -774,15 +811,15 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
 def play_anymal_c_policy(
     checkpoint_path: str,
     *,
-    env_cfg: MacAnymalCFlatEnvCfg | None = None,
+    env_cfg: MacAnymalCFlatEnvCfg | MacAnymalCRoughEnvCfg | None = None,
     episodes: int = 3,
     hidden_dim: int | None = None,
 ) -> list[float]:
     """Run a trained ANYmal-C locomotion policy greedily and return episode returns."""
-    cfg = env_cfg or MacAnymalCFlatEnvCfg(num_envs=1)
+    cfg = env_cfg or _default_anymal_eval_cfg(checkpoint_path)
     return play_gaussian_policy_checkpoint(
         checkpoint_path,
-        env_factory=MacAnymalCFlatEnv,
+        env_factory=_make_anymal_env,
         env_cfg=cfg,
         model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacAnymalCPolicy(
             obs_dim=obs_dim,

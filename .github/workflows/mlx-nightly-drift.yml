@@ -63,6 +63,42 @@ jobs:
           --snapshot-out logs/benchmarks/mlx/nightly-semantic-snapshot.json \
           --report-out logs/benchmarks/mlx/nightly-semantic-report.json
 
+    - name: Verify nightly artifact contract
+      run: |
+        test -f logs/benchmarks/mlx/nightly-full.json
+        test -f logs/benchmarks/mlx/nightly-full-dashboard.json
+        test -f logs/benchmarks/mlx/nightly-full-trend.json
+        test -f logs/benchmarks/mlx/nightly-semantic-snapshot.json
+        test -f logs/benchmarks/mlx/nightly-semantic-report.json
+        PYTHONPATH=.:source/isaaclab .venv/bin/python - <<'PY'
+        import json
+        from pathlib import Path
+
+        from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
+
+        full_payload = json.loads(Path("logs/benchmarks/mlx/nightly-full.json").read_text(encoding="utf-8"))
+        assert full_payload["task_group"] == "full"
+        assert full_payload["cpu_fallback_detected"] is False
+        expected_rollout = list(CURRENT_MAC_NATIVE_TASKS) + [
+            "cartpole-rgb-camera",
+            "cartpole-depth-camera",
+            "anymal-c-flat-height-scan",
+            "h1-flat-height-scan",
+        ]
+        expected_full = expected_rollout + ["train-cartpole"]
+        assert full_payload["tasks"] == expected_full
+
+        dashboard = json.loads(Path("logs/benchmarks/mlx/nightly-full-dashboard.json").read_text(encoding="utf-8"))
+        assert dashboard["summary"]["rollout_task_count"] == len(expected_rollout)
+        assert dashboard["summary"]["training_task_count"] == 1
+
+        trend = json.loads(Path("logs/benchmarks/mlx/nightly-full-trend.json").read_text(encoding="utf-8"))
+        assert {entry["task"] for entry in trend["tasks"]} == set(expected_full)
+
+        semantic_report = json.loads(Path("logs/benchmarks/mlx/nightly-semantic-report.json").read_text(encoding="utf-8"))
+        assert semantic_report["passed"] is True
+        PY
+
     - name: Upload nightly drift artifacts
       if: always()
       uses: actions/upload-artifact@v4
