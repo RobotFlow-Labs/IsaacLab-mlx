@@ -1,0 +1,49 @@
+# Copyright (c) 2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: MLX macOS smoke
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mlx-cartpole:
+    name: MLX cartpole backend smoke
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install uv
+      run: python -m pip install --upgrade uv
+
+    - name: Create virtual environment
+      run: uv venv --python 3.11 .venv
+
+    - name: Install MLX smoke dependencies
+      run: uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+
+    - name: Run MLX backend smoke tests
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
+          scripts/tools/test/test_bootstrap_isaac_sources.py \
+          source/isaaclab/test/backends/test_runtime.py \
+          source/isaaclab/test/backends/test_mac_cartpole.py -q
