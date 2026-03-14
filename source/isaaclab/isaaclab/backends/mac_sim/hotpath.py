@@ -373,9 +373,9 @@ def _franka_stack_object_step_impl(
 
     resting_cube = mx.stack(
         (
-            cube_pos_w[:, 0],
-            cube_pos_w[:, 1],
-            mx.maximum(table_height, cube_pos_w[:, 2] - physics_dt * 0.35),
+            release_cube[:, 0],
+            release_cube[:, 1],
+            mx.maximum(table_height, release_cube[:, 2] - physics_dt * 0.35),
         ),
         axis=-1,
     )

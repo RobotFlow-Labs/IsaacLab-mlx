@@ -59,6 +59,8 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-stack"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == "mlx-compiled"
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
+    assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stack_distance_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stacked_ratio"] <= 1.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0
 

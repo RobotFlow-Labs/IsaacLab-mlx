@@ -238,6 +238,16 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
     policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
     reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
     joint_pos, joint_vel = env.sim_backend.get_joint_state(None)
+
+    terminal_policy_observations: list[mx.array] = []
+    for extras in trace.extras:
+        final_obs = extras.get("final_policy_observations")
+        terminated_env_ids = extras.get("terminated_env_ids", [])
+        if final_obs is None or not terminated_env_ids:
+            continue
+        final_obs_array = mx.array(final_obs)
+        terminal_policy_observations.append(final_obs_array[: len(terminated_env_ids)])
+
     payload = {
         "final_policy_mean": float(mx.mean(policy).item()),
         "final_policy_std": float(mx.std(policy).item()),
@@ -253,11 +263,17 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         payload["final_cube_height_mean"] = float(mx.mean(env.sim_backend.cube_pos_w[:, 2]).item())
         payload["final_grasp_ratio"] = float(mx.mean(env.sim_backend.grasped.astype(mx.float32)).item())
         if hasattr(env.sim_backend, "support_cube_pos_w"):
-            payload["final_support_cube_height_mean"] = float(mx.mean(env.sim_backend.support_cube_pos_w[:, 2]).item())
-            payload["final_stack_distance_mean"] = float(
-                mx.mean(mx.linalg.norm(env.sim_backend.stack_error(), axis=1)).item()
-            )
-            payload["final_stacked_ratio"] = float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item())
+            if terminal_policy_observations:
+                terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
+                payload["final_support_cube_height_mean"] = float(mx.mean(terminal_policy[:, 24]).item())
+                payload["final_stack_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 28:31], axis=1)).item())
+                payload["final_stacked_ratio"] = float(mx.mean(terminal_policy[:, 32]).item())
+            else:
+                payload["final_support_cube_height_mean"] = float(mx.mean(env.sim_backend.support_cube_pos_w[:, 2]).item())
+                payload["final_stack_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(env.sim_backend.stack_error(), axis=1)).item()
+                )
+                payload["final_stacked_ratio"] = float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item())
     elif hasattr(env.sim_backend, "target_pos_w"):
         payload["final_target_distance_mean"] = float(mx.mean(env.sim_backend.goal_distance()).item())
     return payload

@@ -47,3 +47,5 @@ def test_kernel_inventory_items_reference_real_upstream_modules():
         assert item.notes
         for module_path in item.upstream_modules:
             assert (repo_root / module_path).exists(), f"Missing inventory path: {module_path}"
+
+    assert any("manipulation-stack" in item.target_tasks for item in KERNEL_PORT_INVENTORY)

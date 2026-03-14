@@ -11,12 +11,15 @@ import importlib.util
 import json
 import math
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 from isaaclab.backends import build_benchmark_dashboard, build_benchmark_trend
 from isaaclab.backends.test_utils import require_mlx_runtime
 
-require_mlx_runtime()
+mx = require_mlx_runtime()
+
+from isaaclab.backends.mac_sim import MacFrankaStackEnv, MacFrankaStackEnvCfg  # noqa: E402
 
 
 def _load_benchmark_module():
@@ -167,6 +170,40 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_stacked_ratio",
             }
         assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
+
+
+def test_franka_stack_benchmark_signature_uses_terminal_stack_snapshots():
+    """Stack benchmark metrics should use terminal pre-reset observations when successes auto-reset in-step."""
+
+    benchmark_module = _load_benchmark_module()
+    cfg = MacFrankaStackEnvCfg(num_envs=2, seed=59, episode_length_s=0.5)
+    env = MacFrankaStackEnv(cfg)
+    env.sim_backend.cube_pos_w[:, :] = env.sim_backend.ee_pos_w + mx.array([0.0, 0.0, -cfg.grasp_offset_z], dtype=mx.float32)
+    env.sim_backend.support_cube_pos_w[:, :] = env.sim_backend.ee_pos_w + mx.array(
+        [0.0, 0.0, -(cfg.grasp_offset_z + cfg.stack_offset_z)],
+        dtype=mx.float32,
+    )
+    env.sim_backend.grasped[:] = True
+    env.sim_backend.stacked[:] = False
+    env.sim_backend.state.joint_pos[:, 7] = 0.0
+
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+    actions[:, -1] = 1.0
+    next_obs, reward, terminated, truncated, extras = env.step(actions)
+    trace = SimpleNamespace(
+        initial_observations={"policy": mx.zeros((cfg.num_envs, cfg.observation_space), dtype=mx.float32)},
+        observations=[next_obs],
+        rewards=[reward],
+        terminated=[terminated],
+        truncated=[truncated],
+        extras=[extras],
+    )
+
+    signature = benchmark_module._franka_output_signature(env, trace)
+
+    assert float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item()) == 0.0
+    assert math.isclose(signature["final_stacked_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
+    assert math.isclose(signature["final_stack_distance_mean"], 0.0, rel_tol=0.0, abs_tol=1e-6)
 
 
 def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):

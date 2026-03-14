@@ -288,9 +288,9 @@ def test_franka_stack_object_hotpath_matches_reference_math():
     next_grasped_np = (np.array(grasped) | (can_grasp_np & gripper_closed_np)) & gripper_closed_np & ~np.array(stacked)
     resting_np = np.stack(
         (
-            cube_np[:, 0],
-            cube_np[:, 1],
-            np.maximum(0.04, cube_np[:, 2] - 0.02 * 0.35),
+            release_np[:, 0],
+            release_np[:, 1],
+            np.maximum(0.04, release_np[:, 2] - 0.02 * 0.35),
         ),
         axis=-1,
     ).astype(np.float32)
@@ -306,6 +306,46 @@ def test_franka_stack_object_hotpath_matches_reference_math():
     assert np.array_equal(np.array(next_grasped), next_grasped_np)
     assert np.array_equal(np.array(next_stacked), next_stacked_np)
     assert np.allclose(np.array(next_cube_pos), next_cube_np)
+
+
+def test_franka_stack_release_miss_keeps_current_release_pose():
+    cube_pos_w = mx.array([[0.35, -0.10, 0.04]], dtype=mx.float32)
+    support_cube_pos_w = mx.array([[0.45, 0.00, 0.04]], dtype=mx.float32)
+    ee_pos_w = mx.array([[0.52, 0.08, 0.18]], dtype=mx.float32)
+    gripper_joint_pos = mx.array([0.0], dtype=mx.float32)
+    gripper_action = mx.array([1.0], dtype=mx.float32)
+    grasped = mx.array([True], dtype=mx.bool_)
+    stacked = mx.array([False], dtype=mx.bool_)
+
+    _, _, next_grasped, next_stacked, next_cube_pos = franka_stack_object_step_hotpath(
+        cube_pos_w,
+        support_cube_pos_w,
+        ee_pos_w,
+        gripper_joint_pos,
+        gripper_action,
+        grasped,
+        stacked,
+        0.1,
+        0.0,
+        0.08,
+        0.03,
+        0.05,
+        0.07,
+        0.055,
+        0.04,
+        0.04,
+        0.04,
+        0.03,
+    )
+    mx.eval(next_grasped, next_stacked, next_cube_pos)
+
+    expected_release_pose = np.array([[0.52, 0.08, 0.125]], dtype=np.float32)
+    expected_resting_pose = np.array([[0.52, 0.08, 0.09]], dtype=np.float32)
+
+    assert np.array_equal(np.array(next_grasped), np.array([False]))
+    assert np.array_equal(np.array(next_stacked), np.array([False]))
+    assert np.allclose(np.array(next_cube_pos), expected_resting_pose)
+    assert np.allclose(np.array(next_cube_pos)[:, :2], expected_release_pose[:, :2])
 
 
 def test_locomotion_root_step_hotpath_matches_reference_math():
