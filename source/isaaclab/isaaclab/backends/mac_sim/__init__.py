@@ -14,6 +14,11 @@ from .cartpole import (
     play_cartpole_policy,
     train_cartpole_policy,
 )
+from .cart_double_pendulum import (
+    MacCartDoublePendulumEnv,
+    MacCartDoublePendulumEnvCfg,
+    MacCartDoublePendulumSimBackend,
+)
 from .showcase import (
     SHOWCASE_CFGS,
     BoxBoxEnvCfg,

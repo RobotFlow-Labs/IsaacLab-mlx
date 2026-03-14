@@ -34,6 +34,7 @@ What works today:
 - reproducible source bootstrap script for upstream repositories
 - a runnable `MLX + mac-sim` cartpole vertical slice
 - cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces
+- a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
 - MLX training, checkpoint save/load, and replay scripts
 - smoke tests for the backend seam and mac-native cartpole flow
 
@@ -123,7 +124,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
-  source/isaaclab/test/backends/test_mac_cartpole_showcase.py -q
+  source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
+  source/isaaclab/test/backends/test_mac_cart_double_pendulum.py -q
 ```
 
 ## Runtime Selection

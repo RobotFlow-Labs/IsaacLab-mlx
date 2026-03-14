@@ -47,4 +47,5 @@ jobs:
           scripts/tools/test/test_bootstrap_isaac_sources.py \
           source/isaaclab/test/backends/test_runtime.py \
           source/isaaclab/test/backends/test_mac_cartpole.py \
-          source/isaaclab/test/backends/test_mac_cartpole_showcase.py -q
+          source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
+          source/isaaclab/test/backends/test_mac_cart_double_pendulum.py -q
