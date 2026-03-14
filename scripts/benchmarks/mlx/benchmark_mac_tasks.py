@@ -26,6 +26,8 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleEnv,
     MacCartpoleEnvCfg,
     MacCartpoleTrainCfg,
+    MacH1FlatEnv,
+    MacH1FlatEnvCfg,
     MacQuadcopterEnv,
     MacQuadcopterEnvCfg,
     mac_env_diagnostics,
@@ -33,7 +35,7 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
 )
 
-TASK_CHOICES = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "train-cartpole")
+TASK_CHOICES = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "h1-flat", "train-cartpole")
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,6 +84,16 @@ def _make_benchmark_result(
     return result
 
 
+def _env_runtime_state(env: Any) -> dict[str, Any]:
+    """Capture runtime metadata while preserving env-specific sim capabilities."""
+    runtime_state = get_runtime_state(env.runtime)
+    sim_backend = getattr(env, "sim_backend", None)
+    if sim_backend is not None:
+        runtime_state["sim_backend"] = getattr(sim_backend, "name", runtime_state["sim_backend"])
+        runtime_state["capabilities"]["sim"] = sim_backend.capabilities.__dict__.copy()
+    return runtime_state
+
+
 def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the cartpole MLX env step loop."""
     env = MacCartpoleEnv(MacCartpoleEnvCfg(num_envs=num_envs, seed=seed))
@@ -98,7 +110,7 @@ def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
-        runtime_state=get_runtime_state(env.runtime),
+        runtime_state=_env_runtime_state(env),
         extra={
             "observation_dim": env.cfg.observation_space,
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
@@ -125,7 +137,7 @@ def benchmark_cart_double_pendulum(num_envs: int, steps: int, seed: int) -> dict
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
-        runtime_state=get_runtime_state(env.runtime),
+        runtime_state=_env_runtime_state(env),
         extra={
             "cart_observation_dim": env.cfg.observation_spaces["cart"],
             "pendulum_observation_dim": env.cfg.observation_spaces["pendulum"],
@@ -151,7 +163,7 @@ def benchmark_quadcopter(num_envs: int, steps: int, seed: int, thrust_action: fl
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
-        runtime_state=get_runtime_state(env.runtime),
+        runtime_state=_env_runtime_state(env),
         extra={
             "observation_dim": env.cfg.observation_space,
             "thrust_action": thrust_action,
@@ -176,7 +188,32 @@ def benchmark_anymal_c_flat(num_envs: int, steps: int, seed: int) -> dict[str, A
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
-        runtime_state=get_runtime_state(env.runtime),
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_h1_flat(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the H1 flat locomotion MLX env step loop."""
+    env = MacH1FlatEnv(MacH1FlatEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "h1-flat",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
         extra={
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
@@ -252,6 +289,8 @@ def main() -> int:
             benchmark = benchmark_quadcopter(args.num_envs, args.steps, args.seed, args.quadcopter_thrust_action)
         elif task == "anymal-c-flat":
             benchmark = benchmark_anymal_c_flat(args.num_envs, args.steps, args.seed)
+        elif task == "h1-flat":
+            benchmark = benchmark_h1_flat(args.num_envs, args.steps, args.seed)
         else:
             benchmark = benchmark_train_cartpole(
                 args.num_envs,

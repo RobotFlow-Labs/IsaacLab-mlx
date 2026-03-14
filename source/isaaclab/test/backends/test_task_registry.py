@@ -18,6 +18,7 @@ import pytest
 from isaaclab.backends import UnsupportedBackendError, resolve_runtime_selection, set_runtime_selection
 
 SAFE_TASK_IDS = (
+    "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
     "Isaac-Cartpole-Direct-v0",
     "Isaac-Cart-Double-Pendulum-Direct-v0",
@@ -99,6 +100,45 @@ def test_parse_env_cfg_supports_anymal_task_cfg(monkeypatch):
     assert parsed_cfg.num_envs == 24
     assert parsed_cfg.action_space == 12
     assert parsed_cfg.observation_space == 48
+
+
+def test_parse_env_cfg_supports_h1_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the mac-native H1 config without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Velocity-Flat-H1-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Velocity-Flat-H1-v0", device="cpu", num_envs=12)
+
+    assert type(cfg).__name__ == "MacH1FlatEnvCfg"
+    assert parsed_cfg.num_envs == 12
+    assert parsed_cfg.action_space == 19
+    assert parsed_cfg.observation_space == 69
+
+
+def test_parse_env_cfg_reasserts_mac_safe_h1_registration_after_runtime_switch(monkeypatch):
+    """H1 mac config loading should recover from package import before runtime selection."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+
+    set_runtime_selection(resolve_runtime_selection(compute_backend="torch-cuda", sim_backend="isaacsim", device="cuda:0"))
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Velocity-Flat-H1-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Velocity-Flat-H1-v0", device="cpu", num_envs=20)
+
+    assert type(cfg).__name__ == "MacH1FlatEnvCfg"
+    assert parsed_cfg.num_envs == 20
+    assert parsed_cfg.action_space == 19
 
 
 def test_parse_env_cfg_keeps_mac_config_loading_free_of_mlx_runtime(monkeypatch):

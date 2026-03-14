@@ -17,6 +17,13 @@ def _isaacsim_only_kwargs(**kwargs):
 
 MAC_SAFE_TASK_SPECS = (
     {
+        "id": "Isaac-Velocity-Flat-H1-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacH1FlatEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacH1FlatEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacAnymalCFlatEnv",
         "kwargs": {

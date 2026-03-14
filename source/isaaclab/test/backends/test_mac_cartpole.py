@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("mlx.core")
+from isaaclab.backends.test_utils import require_mlx_runtime
+
+require_mlx_runtime()
 
 from isaaclab.backends.mac_sim import (  # noqa: E402
     MacCartpoleEnv,

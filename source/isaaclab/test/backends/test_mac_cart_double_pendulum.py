@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-mx = pytest.importorskip("mlx.core")
+from isaaclab.backends.test_utils import require_mlx_runtime
+
+mx = require_mlx_runtime()
 
 from isaaclab.backends.mac_sim import MacCartDoublePendulumEnv, MacCartDoublePendulumEnvCfg  # noqa: E402
 

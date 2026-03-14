@@ -169,7 +169,8 @@ jobs:
           source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
           source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
           source/isaaclab/test/backends/test_mac_quadcopter.py \
-          source/isaaclab/test/backends/test_mac_anymal_c.py -q
+          source/isaaclab/test/backends/test_mac_anymal_c.py \
+          source/isaaclab/test/backends/test_mac_h1.py -q
 
     - name: Run MLX cart-double-pendulum smoke script
       run: |
@@ -196,11 +197,24 @@ jobs:
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/anymal_c_flat_policy.npz --eval-interval 1
 
+    - name: Run MLX H1 flat smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/play_h1.py \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
+
+    - name: Run MLX H1 flat training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_h1.py \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/h1_flat_policy.npz --eval-interval 1
+
     - name: Run MLX benchmark smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
           scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-          --tasks cartpole cart-double-pendulum quadcopter anymal-c-flat \
+          --tasks cartpole cart-double-pendulum quadcopter anymal-c-flat h1-flat \
           --num-envs 64 \
           --steps 128 \
           --json-out logs/benchmarks/mlx/smoke.json

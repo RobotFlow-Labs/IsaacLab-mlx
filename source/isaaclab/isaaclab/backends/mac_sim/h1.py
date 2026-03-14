@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Mac-native ANYmal-C flat locomotion task and MLX training helpers."""
+"""Mac-native H1 flat locomotion task and MLX training helpers."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .contacts import BatchedContactSensorState
-from .env_cfgs import MacAnymalCFlatEnvCfg
+from .env_cfgs import MacH1FlatEnvCfg
 from .locomotion import (
     action_rate_l2,
     base_contact_termination,
@@ -36,7 +36,6 @@ from .locomotion import (
     flat_orientation_l2,
     track_linear_velocity_xy_exp,
     track_yaw_rate_z_exp,
-    undesired_contacts,
 )
 from .quadcopter import _quat_conjugate, _quat_from_angular_velocity, _quat_multiply, _quat_normalize, _quat_rotate
 from .reset_primitives import DeterministicResetSampler
@@ -44,38 +43,32 @@ from .state_primitives import BatchedArticulationState, BatchedRootState
 from .terrain import MacPlaneTerrain
 
 BODY_NAMES = (
-    "base",
-    "LF_FOOT",
-    "RF_FOOT",
-    "LH_FOOT",
-    "RH_FOOT",
-    "LF_THIGH",
-    "RF_THIGH",
-    "LH_THIGH",
-    "RH_THIGH",
+    "torso_link",
+    "left_ankle_link",
+    "right_ankle_link",
+    "left_knee_link",
+    "right_knee_link",
 )
-FOOT_BODY_NAMES = ("LF_FOOT", "RF_FOOT", "LH_FOOT", "RH_FOOT")
-THIGH_BODY_NAMES = ("LF_THIGH", "RF_THIGH", "LH_THIGH", "RH_THIGH")
-BASE_BODY_NAMES = ("base",)
-HIP_OFFSETS = mx.array(
-    [
-        [0.32, 0.20],
-        [0.32, -0.20],
-        [-0.32, 0.20],
-        [-0.32, -0.20],
-    ],
-    dtype=mx.float32,
-)
-GAIT_PHASE_OFFSETS = mx.array([0.0, math.pi, math.pi, 0.0], dtype=mx.float32)
+FOOT_BODY_NAMES = ("left_ankle_link", "right_ankle_link")
+KNEE_BODY_NAMES = ("left_knee_link", "right_knee_link")
+BASE_BODY_NAMES = ("torso_link",)
+HIP_OFFSETS = mx.array([[0.0, 0.11], [0.0, -0.11]], dtype=mx.float32)
+GAIT_PHASE_OFFSETS = mx.array([0.0, math.pi], dtype=mx.float32)
+LEFT_LEG_IDS = tuple(range(0, 5))
+RIGHT_LEG_IDS = tuple(range(5, 10))
+TORSO_IDS = (10,)
+ARM_IDS = tuple(range(11, 19))
+HIP_DEVIATION_IDS = (0, 1, 5, 6)
+ANKLE_IDS = (4, 9)
 LOG_2_PI = math.log(2.0 * math.pi)
 
 
 @configclass
-class MacAnymalCTrainCfg:
-    """Training configuration for the MLX ANYmal-C flat locomotion smoke path."""
+class MacH1TrainCfg:
+    """Training configuration for the MLX H1 flat locomotion smoke path."""
 
-    env: MacAnymalCFlatEnvCfg = MacAnymalCFlatEnvCfg()
-    hidden_dim: int = 128
+    env: MacH1FlatEnvCfg = MacH1FlatEnvCfg()
+    hidden_dim: int = 192
     updates: int = 10
     rollout_steps: int = 24
     epochs_per_update: int = 2
@@ -85,8 +78,8 @@ class MacAnymalCTrainCfg:
     clip_epsilon: float = 0.2
     value_loss_coef: float = 0.5
     entropy_coef: float = 0.001
-    action_std: float = 0.35
-    checkpoint_path: str = "logs/mlx/anymal_c_flat_policy.npz"
+    action_std: float = 0.28
+    checkpoint_path: str = "logs/mlx/h1_flat_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -97,7 +90,7 @@ def _checkpoint_metadata_path(checkpoint_path: Path) -> Path:
     return checkpoint_path.with_suffix(".json")
 
 
-def _write_checkpoint_metadata(checkpoint_path: Path, cfg: MacAnymalCTrainCfg) -> Path:
+def _write_checkpoint_metadata(checkpoint_path: Path, cfg: MacH1TrainCfg) -> Path:
     metadata_path = _checkpoint_metadata_path(checkpoint_path)
     metadata = {
         "hidden_dim": cfg.hidden_dim,
@@ -117,15 +110,32 @@ def _read_checkpoint_metadata(checkpoint_path: Path) -> dict[str, Any]:
     return json.loads(metadata_path.read_text(encoding="utf-8"))
 
 
-def _resolve_resume_hidden_dim(cfg: MacAnymalCTrainCfg) -> int:
+def _resolve_resume_hidden_dim(cfg: MacH1TrainCfg) -> int:
     if cfg.resume_from is None:
         return cfg.hidden_dim
     metadata = _read_checkpoint_metadata(Path(cfg.resume_from))
     return int(metadata.get("hidden_dim", cfg.hidden_dim))
 
 
-class MacAnymalCFlatSimBackend(MacSimBackend):
-    """A flat-terrain quadruped locomotion simulator for MLX/mac-sim."""
+def _feet_slide_penalty(contact_state: BatchedContactSensorState, body_vel_w: mx.array) -> mx.array:
+    foot_ids = list(contact_state.foot_body_ids)
+    foot_contact = contact_state.contact_mask[:, foot_ids].astype(mx.float32)
+    foot_speed = mx.linalg.norm(body_vel_w[:, foot_ids, :2], axis=2)
+    return mx.sum(foot_contact * foot_speed, axis=1)
+
+
+def _joint_pos_limit_penalty(joint_pos: mx.array, joint_ids: tuple[int, ...], soft_limit: float) -> mx.array:
+    selected = joint_pos[:, list(joint_ids)]
+    return mx.sum(mx.maximum(mx.abs(selected) - soft_limit, 0.0), axis=1)
+
+
+def _joint_deviation_l1(joint_pos: mx.array, default_joint_pos: mx.array, joint_ids: tuple[int, ...]) -> mx.array:
+    joint_ids_list = list(joint_ids)
+    return mx.sum(mx.abs(joint_pos[:, joint_ids_list] - default_joint_pos[:, joint_ids_list]), axis=1)
+
+
+class MacH1FlatSimBackend(MacSimBackend):
+    """A flat-terrain humanoid locomotion simulator for MLX/mac-sim."""
 
     capabilities = SimCapabilities(
         batched_stepping=True,
@@ -146,7 +156,7 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         ),
     )
 
-    def __init__(self, cfg: MacAnymalCFlatEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
+    def __init__(self, cfg: MacH1FlatEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
         self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
@@ -175,6 +185,19 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
             force_threshold=cfg.contact_force_threshold,
         )
         self._last_body_pos_w = mx.zeros((cfg.num_envs, len(BODY_NAMES), 3), dtype=mx.float32)
+        self.body_vel_w = mx.zeros((cfg.num_envs, len(BODY_NAMES), 3), dtype=mx.float32)
+        self._joint_stiffness = mx.array(
+            [cfg.leg_joint_stiffness] * 10 + [cfg.torso_joint_stiffness] + [cfg.arm_joint_stiffness] * 8,
+            dtype=mx.float32,
+        ).reshape((1, cfg.action_space))
+        self._joint_damping = mx.array(
+            [cfg.leg_joint_damping] * 10 + [cfg.torso_joint_damping] + [cfg.arm_joint_damping] * 8,
+            dtype=mx.float32,
+        ).reshape((1, cfg.action_space))
+        self._joint_inertia = mx.array(
+            [cfg.leg_joint_inertia] * 10 + [cfg.torso_joint_inertia] + [cfg.arm_joint_inertia] * 8,
+            dtype=mx.float32,
+        ).reshape((1, cfg.action_space))
         self.reset()
 
     @property
@@ -205,9 +228,6 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
     def projected_gravity_b(self) -> mx.array:
         return self.root_state.projected_gravity_b
 
-    def joint_state_view(self) -> tuple[mx.array, mx.array]:
-        return self.get_joint_state(None)
-
     def set_commands(self, commands: Any) -> None:
         self.commands = mx.array(commands, dtype=mx.float32).reshape((self.num_envs, 3))
 
@@ -233,6 +253,10 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         )
         joint_vel = mx.zeros((rows, self.cfg.action_space), dtype=mx.float32)
 
+        commands = mx.zeros((rows, 3), dtype=mx.float32)
+        commands[:, 0] = self.reset_sampler.uniform((rows,), *self.cfg.command_x_range)
+        commands[:, 2] = self.reset_sampler.uniform((rows,), -self.cfg.yaw_command_scale, self.cfg.yaw_command_scale)
+
         self.root_state.reset_envs(
             env_ids,
             root_pos_w=root_pos,
@@ -245,55 +269,58 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         self._action_targets[ids] = 0.0
         self.joint_acc[ids] = 0.0
         self.applied_torque[ids] = 0.0
-        self.commands[ids] = self.reset_sampler.uniform(
-            (rows, 3),
-            -self.cfg.command_scale,
-            self.cfg.command_scale,
-        )
+        self.commands[ids] = commands
         self._gait_phase[ids] = self.reset_sampler.uniform((rows,), 0.0, 2.0 * math.pi)
         self.contact_model.reset_envs(env_ids)
         body_pos_w = self._body_positions()[ids]
         self._last_body_pos_w[ids] = body_pos_w
+        self.body_vel_w[ids] = 0.0
         self.contact_model.update(body_pos_w, mx.zeros_like(body_pos_w), self.terrain, env_ids=env_ids)
 
     def _leg_extension(self, joint_pos: mx.array) -> mx.array:
-        joint_pos = joint_pos.reshape((self.num_envs, 4, 3))
-        hip_pitch = joint_pos[:, :, 1]
-        knee = joint_pos[:, :, 2]
+        leg_pos = joint_pos[:, :10].reshape((self.num_envs, 2, 5))
+        hip_pitch = leg_pos[:, :, 2]
+        knee = leg_pos[:, :, 3]
+        ankle = leg_pos[:, :, 4]
         extension = (
-            0.20
-            + 0.16 * mx.cos(hip_pitch)
-            + 0.18 * mx.cos(hip_pitch + knee)
+            0.40
+            + 0.20 * mx.cos(hip_pitch + 0.20)
+            + 0.26 * mx.cos(hip_pitch + knee - 0.10)
+            + 0.08 * mx.cos(hip_pitch + knee + ankle)
         )
-        return mx.clip(extension, 0.22, 0.62)
+        return mx.clip(extension, 0.58, 0.98)
 
     def _body_positions(self) -> mx.array:
-        joint_pos = self.joint_state.joint_pos.reshape((self.num_envs, 4, 3))
-        hip_abduction = joint_pos[:, :, 0]
-        hip_pitch = joint_pos[:, :, 1]
-        knee = joint_pos[:, :, 2]
+        leg_pos = self.joint_state.joint_pos[:, :10].reshape((self.num_envs, 2, 5))
+        hip_yaw = leg_pos[:, :, 0]
+        hip_roll = leg_pos[:, :, 1]
+        hip_pitch = leg_pos[:, :, 2]
+        knee = leg_pos[:, :, 3]
+        ankle = leg_pos[:, :, 4]
         extension = self._leg_extension(self.joint_state.joint_pos)
         command_speed = mx.linalg.norm(self.commands[:, :2], axis=1, keepdims=True)
-        phase = self._gait_phase.reshape((self.num_envs, 1)) + GAIT_PHASE_OFFSETS.reshape((1, 4))
-        swing = mx.maximum(mx.sin(phase), 0.0) * (0.25 + command_speed)
+        phase = self._gait_phase.reshape((self.num_envs, 1)) + GAIT_PHASE_OFFSETS.reshape((1, 2))
+        swing = mx.maximum(mx.sin(phase), 0.0) * (0.18 + 0.65 * command_speed)
 
         root_xy = self.root_state.root_pos_w[:, None, :2]
         root_z = self.root_state.root_pos_w[:, 2:3]
-        step_x = 0.10 * self.commands[:, 0:1] * mx.cos(phase)
+        step_x = 0.18 * self.commands[:, 0:1] * mx.cos(phase)
         step_y = 0.06 * self.commands[:, 1:2] * mx.sin(phase)
-        foot_xy = root_xy + HIP_OFFSETS.reshape((1, 4, 2))
+
+        foot_xy = root_xy + HIP_OFFSETS.reshape((1, 2, 2))
         foot_xy[:, :, 0] = foot_xy[:, :, 0] + step_x - 0.04 * mx.sin(hip_pitch)
-        foot_xy[:, :, 1] = foot_xy[:, :, 1] + step_y + 0.04 * hip_abduction
-        foot_z = root_z - extension + self.cfg.foot_clearance * swing - 0.02 * mx.tanh(knee)
+        foot_xy[:, :, 1] = foot_xy[:, :, 1] + step_y + 0.03 * hip_roll + 0.02 * hip_yaw
+        foot_z = root_z - extension + self.cfg.foot_clearance * swing - 0.03 * mx.tanh(ankle)
         foot_pos = mx.concatenate([foot_xy, foot_z[:, :, None]], axis=-1)
 
-        thigh_xy = root_xy + 0.55 * HIP_OFFSETS.reshape((1, 4, 2))
-        thigh_xy[:, :, 1] = thigh_xy[:, :, 1] + 0.02 * hip_abduction
-        thigh_z = root_z - 0.24 - 0.05 * mx.tanh(hip_pitch)
-        thigh_pos = mx.concatenate([thigh_xy, thigh_z[:, :, None]], axis=-1)
+        knee_xy = root_xy + 0.5 * HIP_OFFSETS.reshape((1, 2, 2))
+        knee_xy[:, :, 0] = knee_xy[:, :, 0] + 0.5 * step_x - 0.02 * mx.sin(hip_pitch)
+        knee_xy[:, :, 1] = knee_xy[:, :, 1] + 0.015 * hip_roll
+        knee_z = root_z - 0.42 - 0.18 * mx.tanh(hip_pitch) - 0.08 * mx.tanh(knee)
+        knee_pos = mx.concatenate([knee_xy, knee_z[:, :, None]], axis=-1)
 
-        base_pos = self.root_state.root_pos_w[:, None, :]
-        return mx.concatenate([base_pos, foot_pos, thigh_pos], axis=1)
+        torso_pos = self.root_state.root_pos_w[:, None, :]
+        return mx.concatenate([torso_pos, foot_pos, knee_pos], axis=1)
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         del render, update_fabric
@@ -301,49 +328,40 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
 
         desired_joint_pos = self.default_joint_pos + self.cfg.action_scale * self._action_targets
         joint_error = desired_joint_pos - self.joint_state.joint_pos
-        self.applied_torque = self.cfg.joint_stiffness * joint_error - self.cfg.joint_damping * self.joint_state.joint_vel
-        self.joint_acc = self.applied_torque / self.cfg.joint_inertia
+        self.applied_torque = self._joint_stiffness * joint_error - self._joint_damping * self.joint_state.joint_vel
+        self.joint_acc = self.applied_torque / self._joint_inertia
         self.joint_state.joint_vel = mx.clip(self.joint_state.joint_vel + dt * self.joint_acc, -10.0, 10.0)
-        self.joint_state.joint_pos = mx.clip(
-            self.joint_state.joint_pos + dt * self.joint_state.joint_vel,
-            mx.broadcast_to(self.default_joint_pos - 1.2, (self.num_envs, self.cfg.action_space)),
-            mx.broadcast_to(self.default_joint_pos + 1.2, (self.num_envs, self.cfg.action_space)),
-        )
+        joint_lower = mx.broadcast_to(self.default_joint_pos - self.cfg.joint_position_limit, (self.num_envs, self.cfg.action_space))
+        joint_upper = mx.broadcast_to(self.default_joint_pos + self.cfg.joint_position_limit, (self.num_envs, self.cfg.action_space))
+        self.joint_state.joint_pos = mx.clip(self.joint_state.joint_pos + dt * self.joint_state.joint_vel, joint_lower, joint_upper)
 
-        phase_speed = self.cfg.gait_frequency * (1.0 + 0.5 * mx.linalg.norm(self.commands[:, :2], axis=1))
+        phase_speed = self.cfg.gait_frequency * (1.0 + 0.5 * self.commands[:, 0])
         self._gait_phase = (self._gait_phase + dt * phase_speed * 2.0 * math.pi) % (2.0 * math.pi)
 
         body_pos_w = self._body_positions()
-        body_vel_w = (body_pos_w - self._last_body_pos_w) / dt
+        self.body_vel_w = (body_pos_w - self._last_body_pos_w) / dt
         self._last_body_pos_w = body_pos_w
-        self.contact_model.update(body_pos_w, body_vel_w, self.terrain)
+        self.contact_model.update(body_pos_w, self.body_vel_w, self.terrain)
 
         foot_ids = list(self.contact_model.foot_body_ids)
         support = self.contact_model.contact_mask[:, foot_ids].astype(mx.float32)
         support_ratio = mx.mean(support, axis=1)
-        left_support = mx.mean(support[:, [0, 2]], axis=1)
-        right_support = mx.mean(support[:, [1, 3]], axis=1)
-        front_support = mx.mean(support[:, [0, 1]], axis=1)
-        rear_support = mx.mean(support[:, [2, 3]], axis=1)
+        left_support = support[:, 0]
+        right_support = support[:, 1]
 
-        grouped_actions = self._action_targets.reshape((self.num_envs, 4, 3))
-        left_actions = mx.mean(grouped_actions[:, [0, 2], :], axis=(1, 2))
-        right_actions = mx.mean(grouped_actions[:, [1, 3], :], axis=(1, 2))
-        front_actions = mx.mean(grouped_actions[:, [0, 1], :], axis=(1, 2))
-        rear_actions = mx.mean(grouped_actions[:, [2, 3], :], axis=(1, 2))
+        left_actions = mx.mean(self._action_targets[:, list(LEFT_LEG_IDS)], axis=1)
+        right_actions = mx.mean(self._action_targets[:, list(RIGHT_LEG_IDS)], axis=1)
 
-        lin_gain = self.cfg.command_tracking_gain * (0.35 + 0.65 * support_ratio)
+        lin_gain = self.cfg.command_tracking_gain * (0.25 + 0.75 * support_ratio)
         lin_xy = self.root_state.root_lin_vel_b[:, :2]
         lin_xy = lin_xy + dt * (
             lin_gain[:, None] * (self.commands[:, :2] - lin_xy) - self.cfg.root_lin_damping * lin_xy
         )
         self.root_state.root_lin_vel_b[:, :2] = lin_xy
 
-        roll_acc = self.cfg.balance_gain * ((right_support - left_support) + 0.1 * (right_actions - left_actions))
-        pitch_acc = self.cfg.balance_gain * ((rear_support - front_support) + 0.1 * (rear_actions - front_actions))
-        yaw_acc = self.cfg.yaw_tracking_gain * (
-            self.commands[:, 2] - self.root_state.root_ang_vel_b[:, 2]
-        )
+        roll_acc = self.cfg.balance_gain * ((right_support - left_support) + 0.12 * (right_actions - left_actions))
+        pitch_acc = self.cfg.balance_gain * (0.2 * (support_ratio - 0.5))
+        yaw_acc = self.cfg.yaw_tracking_gain * (self.commands[:, 2] - self.root_state.root_ang_vel_b[:, 2])
 
         self.root_state.root_ang_vel_b[:, 0] = self.root_state.root_ang_vel_b[:, 0] + dt * (
             roll_acc - self.cfg.root_ang_damping * self.root_state.root_ang_vel_b[:, 0]
@@ -358,8 +376,8 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         extension = self._leg_extension(self.joint_state.joint_pos)
         target_height = (
             self.cfg.default_root_height
-            + 0.15 * (mx.mean(extension, axis=1) - self.cfg.nominal_leg_extension)
-            + 0.03 * (support_ratio - 1.0)
+            + 0.16 * (mx.mean(extension, axis=1) - self.cfg.nominal_leg_extension)
+            + 0.04 * (support_ratio - 0.5)
         )
         orientation_penalty = mx.sum(mx.square(self.root_state.projected_gravity_b[:, :2]), axis=1)
         z_acc = (
@@ -407,13 +425,7 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         del articulation
         self.root_state.write_root_pose(root_pose, env_ids=env_ids)
 
-    def write_root_velocity(
-        self,
-        articulation: Any,
-        root_velocity: Any,
-        *,
-        env_ids: Any | None = None,
-    ) -> None:
+    def write_root_velocity(self, articulation: Any, root_velocity: Any, *, env_ids: Any | None = None) -> None:
         del articulation
         self.root_state.write_root_velocity(root_velocity, env_ids=env_ids)
 
@@ -440,11 +452,11 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         }
 
 
-class MacAnymalCFlatEnv:
-    """A vectorized flat ANYmal-C locomotion environment on MLX/mac-sim."""
+class MacH1FlatEnv:
+    """A vectorized flat H1 locomotion environment on MLX/mac-sim."""
 
-    def __init__(self, cfg: MacAnymalCFlatEnvCfg | None = None):
-        self.cfg = cfg or MacAnymalCFlatEnvCfg()
+    def __init__(self, cfg: MacH1FlatEnvCfg | None = None):
+        self.cfg = cfg or MacH1FlatEnvCfg()
         mx.random.seed(self.cfg.seed)
         self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
         runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
@@ -454,7 +466,7 @@ class MacAnymalCFlatEnv:
         self.step_dt = self.cfg.sim_dt * self.cfg.decimation
         self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
 
-        self.sim_backend = MacAnymalCFlatSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self.sim_backend = MacH1FlatSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
         self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
         self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
         self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
@@ -468,14 +480,15 @@ class MacAnymalCFlatEnv:
             for key in (
                 "track_lin_vel_xy_exp",
                 "track_ang_vel_z_exp",
-                "lin_vel_z_l2",
-                "ang_vel_xy_l2",
-                "dof_torques_l2",
-                "dof_acc_l2",
-                "action_rate_l2",
                 "feet_air_time",
-                "undesired_contacts",
+                "feet_slide",
+                "dof_pos_limits",
+                "joint_deviation_hip",
+                "joint_deviation_arms",
+                "joint_deviation_torso",
                 "flat_orientation_l2",
+                "action_rate_l2",
+                "dof_acc_l2",
             )
         }
         self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
@@ -548,42 +561,41 @@ class MacAnymalCFlatEnv:
         return {"policy": obs}
 
     def _get_rewards(self) -> mx.array:
+        joint_pos, _ = self.sim_backend.get_joint_state(None)
+        default_joint_pos = mx.broadcast_to(self.sim_backend.default_joint_pos, joint_pos.shape)
         rewards = {
-            "track_lin_vel_xy_exp": track_linear_velocity_xy_exp(
-                self.sim_backend.commands, self.sim_backend.root_lin_vel_b
-            )
+            "track_lin_vel_xy_exp": track_linear_velocity_xy_exp(self.sim_backend.commands, self.sim_backend.root_lin_vel_b)
             * self.cfg.lin_vel_reward_scale
             * self.step_dt,
-            "track_ang_vel_z_exp": track_yaw_rate_z_exp(
-                self.sim_backend.commands, self.sim_backend.root_ang_vel_b
-            )
+            "track_ang_vel_z_exp": track_yaw_rate_z_exp(self.sim_backend.commands, self.sim_backend.root_ang_vel_b)
             * self.cfg.yaw_rate_reward_scale
             * self.step_dt,
-            "lin_vel_z_l2": mx.square(self.sim_backend.root_lin_vel_b[:, 2]) * self.cfg.z_vel_reward_scale * self.step_dt,
-            "ang_vel_xy_l2": mx.sum(mx.square(self.sim_backend.root_ang_vel_b[:, :2]), axis=1)
-            * self.cfg.ang_vel_reward_scale
+            "feet_air_time": feet_air_time_reward(self.sim_backend.contact_model, self.sim_backend.commands, baseline=0.6)
+            * self.cfg.feet_air_time_reward_scale
             * self.step_dt,
-            "dof_torques_l2": mx.sum(mx.square(self.sim_backend.applied_torque), axis=1)
-            * self.cfg.joint_torque_reward_scale
+            "feet_slide": _feet_slide_penalty(self.sim_backend.contact_model, self.sim_backend.body_vel_w)
+            * self.cfg.feet_slide_reward_scale
             * self.step_dt,
-            "dof_acc_l2": mx.sum(mx.square(self.sim_backend.joint_acc), axis=1)
-            * self.cfg.joint_accel_reward_scale
+            "dof_pos_limits": _joint_pos_limit_penalty(joint_pos, ANKLE_IDS, self.cfg.ankle_soft_limit)
+            * self.cfg.ankle_limit_reward_scale
+            * self.step_dt,
+            "joint_deviation_hip": _joint_deviation_l1(joint_pos, default_joint_pos, HIP_DEVIATION_IDS)
+            * self.cfg.joint_deviation_hip_reward_scale
+            * self.step_dt,
+            "joint_deviation_arms": _joint_deviation_l1(joint_pos, default_joint_pos, ARM_IDS)
+            * self.cfg.joint_deviation_arms_reward_scale
+            * self.step_dt,
+            "joint_deviation_torso": _joint_deviation_l1(joint_pos, default_joint_pos, TORSO_IDS)
+            * self.cfg.joint_deviation_torso_reward_scale
+            * self.step_dt,
+            "flat_orientation_l2": flat_orientation_l2(self.sim_backend.projected_gravity_b)
+            * self.cfg.flat_orientation_reward_scale
             * self.step_dt,
             "action_rate_l2": action_rate_l2(self._actions, self._previous_actions)
             * self.cfg.action_rate_reward_scale
             * self.step_dt,
-            "feet_air_time": feet_air_time_reward(self.sim_backend.contact_model, self.sim_backend.commands)
-            * self.cfg.feet_air_time_reward_scale
-            * self.step_dt,
-            "undesired_contacts": undesired_contacts(
-                self.sim_backend.contact_model,
-                THIGH_BODY_NAMES,
-                threshold=self.cfg.contact_force_threshold,
-            )
-            * self.cfg.undesired_contact_reward_scale
-            * self.step_dt,
-            "flat_orientation_l2": flat_orientation_l2(self.sim_backend.projected_gravity_b)
-            * self.cfg.flat_orientation_reward_scale
+            "dof_acc_l2": mx.sum(mx.square(self.sim_backend.joint_acc[:, list(LEFT_LEG_IDS + RIGHT_LEG_IDS)]), axis=1)
+            * self.cfg.joint_accel_reward_scale
             * self.step_dt,
         }
         for key, value in rewards.items():
@@ -613,10 +625,10 @@ class MacAnymalCFlatEnv:
             value[ids] = 0.0
 
 
-class MacAnymalCPolicy(nn.Module):
-    """Continuous policy/value MLP for the mac-native ANYmal-C slice."""
+class MacH1Policy(nn.Module):
+    """Continuous policy/value MLP for the mac-native H1 slice."""
 
-    def __init__(self, obs_dim: int = 48, hidden_dim: int = 128, action_dim: int = 12):
+    def __init__(self, obs_dim: int = 69, hidden_dim: int = 192, action_dim: int = 19):
         super().__init__()
         self.backbone = [
             nn.Linear(obs_dim, hidden_dim),
@@ -643,7 +655,7 @@ def _gaussian_entropy(action_dim: int, std: float) -> float:
 
 
 def _ppo_loss(
-    model: MacAnymalCPolicy,
+    model: MacH1Policy,
     obs: mx.array,
     actions: mx.array,
     old_log_probs: mx.array,
@@ -664,13 +676,13 @@ def _ppo_loss(
     return policy_loss + value_loss_coef * value_loss - entropy_coef * entropy_bonus
 
 
-def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control locomotion policy on the mac-native ANYmal-C slice."""
+def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control policy on the mac-native H1 flat slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = _resolve_resume_hidden_dim(cfg)
-    env = MacAnymalCFlatEnv(cfg.env)
-    model = MacAnymalCPolicy(
+    env = MacH1FlatEnv(cfg.env)
+    model = MacH1Policy(
         obs_dim=cfg.env.observation_space,
         hidden_dim=cfg.hidden_dim,
         action_dim=cfg.env.action_space,
@@ -769,7 +781,7 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10))
             print(
-                f"[mlx-anymal-c-flat] update={update + 1}/{cfg.updates} "
+                f"[mlx-h1-flat] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
@@ -787,21 +799,21 @@ def train_anymal_c_policy(cfg: MacAnymalCTrainCfg) -> dict[str, Any]:
     }
 
 
-def play_anymal_c_policy(
+def play_h1_policy(
     checkpoint_path: str,
     *,
-    env_cfg: MacAnymalCFlatEnvCfg | None = None,
+    env_cfg: MacH1FlatEnvCfg | None = None,
     episodes: int = 3,
     hidden_dim: int | None = None,
 ) -> list[float]:
-    """Run a trained ANYmal-C locomotion policy greedily and return episode returns."""
+    """Run a trained H1 locomotion policy greedily and return episode returns."""
 
-    cfg = env_cfg or MacAnymalCFlatEnvCfg(num_envs=1)
-    env = MacAnymalCFlatEnv(cfg)
+    cfg = env_cfg or MacH1FlatEnvCfg(num_envs=1)
+    env = MacH1FlatEnv(cfg)
     checkpoint = Path(checkpoint_path)
     metadata = _read_checkpoint_metadata(checkpoint)
-    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 128))
-    model = MacAnymalCPolicy(obs_dim=cfg.observation_space, hidden_dim=policy_hidden_dim, action_dim=cfg.action_space)
+    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 192))
+    model = MacH1Policy(obs_dim=cfg.observation_space, hidden_dim=policy_hidden_dim, action_dim=cfg.action_space)
     model.load_weights(str(checkpoint))
     obs = env.reset()[0]["policy"]
 

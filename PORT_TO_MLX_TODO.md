@@ -65,6 +65,7 @@ without pausing for replanning after every small success.
 - `DONE` reusable environment origin/grid helper now backs quadcopter root-state resets and goal sampling
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 - `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
+- `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
 
 ## Phase A: Import And Packaging Safety
 
@@ -364,9 +365,17 @@ without pausing for replanning after every small success.
 
 ### MLX-TASK-007
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-TASK-004`
 - Title: Port first humanoid locomotion task
+- Suggested target:
+  - `Isaac-Velocity-Flat-H1-v0`
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_h1.py`
+  - `source/isaaclab/test/backends/test_task_registry.py`
+  - `scripts/reinforcement_learning/mlx/train_h1.py`
+  - `scripts/reinforcement_learning/mlx/play_h1.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-TASK-008
 

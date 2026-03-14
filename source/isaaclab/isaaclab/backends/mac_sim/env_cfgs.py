@@ -187,3 +187,91 @@ class MacAnymalCFlatEnvCfg:
     flat_orientation_reward_scale: float = -5.0
 
     seed: int = 42
+
+
+@configclass
+class MacH1FlatEnvCfg:
+    """Configuration aligned with the upstream flat H1 locomotion task where practical."""
+
+    num_envs: int = 256
+    sim_dt: float = 1.0 / 200.0
+    decimation: int = 4
+    episode_length_s: float = 20.0
+    action_space: int = 19
+    observation_space: int = 69
+    state_space: int = 0
+
+    env_spacing: float = 4.0
+    terrain_tile_size: tuple[float, float] = (4.0, 4.0)
+    default_root_height: float = 1.05
+    min_root_height: float = 0.55
+    nominal_leg_extension: float = 0.86
+    foot_clearance: float = 0.12
+    gait_frequency: float = 1.35
+
+    action_scale: float = 0.35
+    command_x_range: tuple[float, float] = (0.0, 1.0)
+    yaw_command_scale: float = 1.0
+    joint_reset_noise: float = 0.04
+    default_joint_pos: tuple[float, ...] = (
+        0.0,
+        0.0,
+        -0.28,
+        0.79,
+        -0.52,
+        0.0,
+        0.0,
+        -0.28,
+        0.79,
+        -0.52,
+        0.0,
+        0.28,
+        0.0,
+        0.0,
+        0.52,
+        0.28,
+        0.0,
+        0.0,
+        0.52,
+    )
+
+    leg_joint_stiffness: float = 40.0
+    leg_joint_damping: float = 5.0
+    leg_joint_inertia: float = 1.9
+    torso_joint_stiffness: float = 18.0
+    torso_joint_damping: float = 3.0
+    torso_joint_inertia: float = 1.4
+    arm_joint_stiffness: float = 12.0
+    arm_joint_damping: float = 2.5
+    arm_joint_inertia: float = 1.1
+    joint_position_limit: float = 1.2
+    ankle_soft_limit: float = 0.9
+
+    command_tracking_gain: float = 3.6
+    yaw_tracking_gain: float = 4.0
+    root_lin_damping: float = 2.4
+    root_ang_damping: float = 2.1
+    height_stiffness: float = 34.0
+    height_damping: float = 7.0
+    balance_gain: float = 2.8
+    orientation_height_penalty: float = 4.5
+
+    contact_history_length: int = 3
+    contact_margin: float = 0.02
+    contact_stiffness: float = 2200.0
+    contact_damping: float = 60.0
+    contact_force_threshold: float = 1.0
+
+    lin_vel_reward_scale: float = 1.0
+    yaw_rate_reward_scale: float = 1.0
+    feet_air_time_reward_scale: float = 1.0
+    feet_slide_reward_scale: float = -0.25
+    ankle_limit_reward_scale: float = -1.0
+    joint_deviation_hip_reward_scale: float = -0.2
+    joint_deviation_arms_reward_scale: float = -0.2
+    joint_deviation_torso_reward_scale: float = -0.1
+    flat_orientation_reward_scale: float = -1.0
+    action_rate_reward_scale: float = -0.005
+    joint_accel_reward_scale: float = -1.25e-7
+
+    seed: int = 42

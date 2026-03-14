@@ -39,11 +39,13 @@ from .utils.importer import import_packages
 from .registry import ISAACSIM_ONLY_TASK_SPECS, LAZY_IMPORT_BLACKLIST, MAC_SAFE_TASK_SPECS
 
 
-def _register_gym_specs(specs: tuple[dict[str, object], ...]) -> None:
+def _register_gym_specs(specs: tuple[dict[str, object], ...], *, override: bool = False) -> None:
     """Register the provided task specs if they are not already present."""
     for spec in specs:
         if spec["id"] in gym.registry:
-            continue
+            if not override:
+                continue
+            gym.registry.pop(spec["id"], None)
         gym.register(
             id=spec["id"],
             entry_point=spec["entry_point"],
@@ -60,7 +62,7 @@ def register_tasks() -> None:
         import_packages(__name__, LAZY_IMPORT_BLACKLIST)
         return
 
-    _register_gym_specs(MAC_SAFE_TASK_SPECS)
+    _register_gym_specs(MAC_SAFE_TASK_SPECS, override=True)
 
 
 register_tasks()

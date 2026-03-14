@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("mlx.core")
+from isaaclab.backends.test_utils import require_mlx_runtime
+
+require_mlx_runtime()
 gym = pytest.importorskip("gymnasium")
 
 from isaaclab.backends.mac_sim import SHOWCASE_CFGS, MacCartpoleShowcaseEnv  # noqa: E402

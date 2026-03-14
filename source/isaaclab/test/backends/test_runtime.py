@@ -15,6 +15,8 @@ import types
 
 import pytest
 
+from isaaclab.backends.test_utils import require_mlx_runtime
+
 from isaaclab.app import AppLauncher
 from isaaclab.backends import (
     CpuKernelBackend,
@@ -236,7 +238,7 @@ def test_create_compute_backend_returns_mlx_adapter():
 
 def test_mac_runtime_entrypoints_import_without_isaacsim():
     """The public mac entrypoints should import without requiring Isaac Sim modules."""
-    pytest.importorskip("mlx.core")
+    require_mlx_runtime()
     set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
 
     importlib.import_module("isaaclab")
@@ -366,7 +368,7 @@ def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: py
 
 def test_mlx_compute_backend_seed_and_checkpoint(tmp_path):
     """MLX compute adapter should seed the backend and round-trip checkpoints."""
-    pytest.importorskip("mlx.core")
+    require_mlx_runtime()
     backend = MlxComputeBackend()
     checkpoint = tmp_path / "mlx_ckpt.pkl"
     payload = {"episode": 4, "reward": 1.5}

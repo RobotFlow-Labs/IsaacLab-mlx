@@ -66,6 +66,14 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
     Raises:
         ValueError: If the entry point key is not available in the gym registry for the task.
     """
+    # Re-assert runtime-appropriate task registrations on the mac path. This keeps
+    # the lightweight MLX/mac-sim specs authoritative even if isaaclab_tasks was
+    # first imported before the runtime selection was switched away from isaacsim.
+    if current_runtime().sim_backend != "isaacsim":
+        from isaaclab_tasks import register_tasks
+
+        register_tasks()
+
     # obtain the configuration entry point
     spec = gym.spec(task_name.split(":")[-1])
     _require_runtime_support(spec)
