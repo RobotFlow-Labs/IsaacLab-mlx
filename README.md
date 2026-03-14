@@ -40,6 +40,7 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
+- a Metal-backed locomotion root-step helper for the ANYmal-C and H1 slices, with benchmark and semantic-drift diagnostics that report `hotpath: "mlx-metal-root-step"` when that narrow kernel is active
 - trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, and cabinet-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
@@ -109,9 +110,9 @@ The kernel backend isolates Warp and future Metal custom-kernel paths:
 - `metal`: Apple Silicon path for MLX + Metal-backed kernel replacements
 - `cpu`: correctness fallback for bring-up and unsupported kernels
 
-Today the public MLX tasks mostly use pure MLX ops plus compiled MLX helpers. The explicit kernel selection seam has now landed its first true Metal-backed helper on the public path, so future narrow kernels can keep landing without rewriting task-facing APIs again.
+Today the public MLX tasks mostly use pure MLX ops plus compiled MLX helpers. The explicit kernel selection seam now has narrow Metal-backed helpers on both the Franka end-effector path and the shared locomotion root-step path, so future kernels can keep landing without rewriting task-facing APIs again.
 
-For the current locomotion slices, the hottest shared batched paths still run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`. For the Franka manipulation slices, the shared analytic end-effector kinematics helper now runs through a Metal-backed MLX kernel and benchmark diagnostics surface that as `hotpath: "mlx-metal-ee"` when that narrow helper is active, otherwise the path falls back to the compiled MLX helper.
+For the current locomotion slices, the shared root-step integrator now runs through a Metal-backed MLX kernel and benchmark diagnostics surface that as `hotpath: "mlx-metal-root-step"` when that narrow helper is active, while the remaining locomotion contact/support helpers stay on compiled MLX. For the Franka manipulation slices, the shared analytic end-effector kinematics helper continues to surface `hotpath: "mlx-metal-ee"` when that narrow helper is active, otherwise each family falls back to its compiled MLX helper path.
 
 ## MLX Quick Start
 
@@ -646,7 +647,7 @@ The cartpole path preserves the important upstream task semantics:
 - Franka cabinet preserves a reduced drawer-handle workflow with deterministic open-distance semantics, lightweight handle-grasp logic, and train/replay parity with the other manipulation slices
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
-- benchmark and semantic drift reports now surface `hotpath: "mlx-metal-ee"` for the Franka reach/lift/stack/stack-RGB/cabinet slices when the Metal end-effector helper is active, while the locomotion tasks still report `hotpath: "mlx-compiled"`
+- benchmark and semantic drift reports now surface `hotpath: "mlx-metal-root-step"` for the locomotion root-step seam when active, `hotpath: "mlx-metal-ee"` for the Franka reach/lift/stack/stack-RGB/cabinet slices when the Metal end-effector helper is active, and keep the remaining helpers explicit when they stay on compiled MLX
 - the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 
 ## Bootstrapping Upstream Sources

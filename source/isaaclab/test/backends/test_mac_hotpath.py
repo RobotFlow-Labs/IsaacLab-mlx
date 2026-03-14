@@ -17,6 +17,7 @@ mx = require_mlx_runtime()
 
 from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     HOTPATH_BACKEND,
+    _locomotion_root_step_impl,
     anymal_body_positions_hotpath,
     biped_support_metrics_hotpath,
     contact_update_hotpath,
@@ -25,6 +26,7 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
     get_franka_hotpath_backend,
+    get_locomotion_hotpath_backend,
     h1_body_positions_hotpath,
     locomotion_root_step_hotpath,
     prime_contact_state,
@@ -159,6 +161,7 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
     assert get_franka_hotpath_backend() in {"mlx-compiled", "mlx-metal-ee"}
+    assert get_locomotion_hotpath_backend() in {"mlx-compiled", "mlx-metal-root-step"}
 
 
 def test_franka_end_effector_hotpath_matches_reference_math():
@@ -438,7 +441,24 @@ def test_locomotion_root_step_hotpath_matches_reference_math():
         1.5,
         0.2,
     )
-    mx.eval(*outputs)
+    reference = _locomotion_root_step_impl(
+        dt,
+        root_pos_w,
+        root_quat_w,
+        root_lin_vel_b,
+        root_ang_vel_b,
+        projected_gravity_b,
+        commands,
+        lin_gain,
+        angular_acc_b,
+        target_height,
+        0.4,
+        0.3,
+        8.0,
+        1.5,
+        0.2,
+    )
+    mx.eval(*outputs, *reference)
     next_root_pos_w, next_root_quat_w, next_root_lin_vel_b, next_root_ang_vel_b, next_projected_gravity_b = outputs
 
     expected_lin_xy = np.array(root_lin_vel_b)[:, :2] + dt * (
@@ -456,6 +476,8 @@ def test_locomotion_root_step_hotpath_matches_reference_math():
     assert np.allclose(np.array(next_root_lin_vel_b)[:, :2], expected_lin_xy)
     assert np.allclose(np.array(next_root_lin_vel_b)[:, 2], expected_z)
     assert np.allclose(np.array(next_root_ang_vel_b), expected_ang)
+    for actual, expected in zip(outputs, reference, strict=True):
+        assert np.allclose(np.array(actual), np.array(expected), atol=1e-6)
     assert next_root_pos_w.shape == root_pos_w.shape
     assert next_root_quat_w.shape == root_quat_w.shape
     assert next_projected_gravity_b.shape == projected_gravity_b.shape

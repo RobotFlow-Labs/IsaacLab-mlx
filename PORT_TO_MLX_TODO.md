@@ -75,7 +75,7 @@ without pausing for replanning after every small success.
 - `DONE` Fourth trainable manipulation slice landed for `Isaac-Franka-Cabinet-Direct-v0` with a reduced drawer workflow, compiled cabinet hotpath helper, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
 - `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
-- `DONE` Franka manipulation hotpaths now combine a true Metal-backed analytic end-effector kernel with compiled MLX step helpers, and benchmark/semantic reports surface `hotpath: "mlx-metal-ee"` for the Franka slices while locomotion stays `mlx-compiled`
+- `DONE` Locomotion hotpaths now combine a true Metal-backed root-step kernel with compiled MLX contact/support helpers, and benchmark/semantic reports surface `hotpath: "mlx-metal-root-step"` for the ANYmal-C and H1 slices while Franka keeps its own family-specific hotpath label
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
@@ -479,12 +479,18 @@ without pausing for replanning after every small success.
 - Status: `DONE`
 - Depends on: `MLX-KERNEL-001`
 - Title: Implement Metal-backed replacements for locomotion hot loops
+- Progress:
+  - `locomotion_root_step_hotpath(...)` now uses a Metal-backed MLX kernel in `source/isaaclab/isaaclab/backends/mac_sim/hotpath.py`
+  - contact and support aggregation helpers remain on `mx.compile` until a separate benchmarked Metal tranche is justified
 - Validation:
   - `source/isaaclab/isaaclab/backends/mac_sim/hotpath.py`
   - `source/isaaclab/isaaclab/backends/mac_sim/contacts.py`
   - `source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`
   - `source/isaaclab/isaaclab/backends/mac_sim/h1.py`
   - `source/isaaclab/test/backends/test_mac_hotpath.py`
+  - `source/isaaclab/test/backends/test_mac_anymal_c.py`
+  - `source/isaaclab/test/backends/test_mac_h1.py`
+  - `source/isaaclab/test/backends/test_mac_semantic_drift.py`
   - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-KERNEL-004
@@ -729,7 +735,7 @@ This queue exists so work can continue without waiting for a new plan. The docum
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
 - Port the next manipulation milestone beyond the current five trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
-- Replace the next remaining hot `mx.compile` helper with a true custom Metal kernel now that the first Metal-backed Franka end-effector helper is landed and benchmarked.
+- Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 
 ## Validation Commands

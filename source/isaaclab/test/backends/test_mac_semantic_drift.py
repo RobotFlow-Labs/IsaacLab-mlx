@@ -16,7 +16,7 @@ from isaaclab.backends import build_semantic_drift_snapshot, compare_semantic_dr
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
-from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend  # noqa: E402
+from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend, get_locomotion_hotpath_backend  # noqa: E402
 
 
 def _load_module(module_name: str, relative_path: str):
@@ -33,6 +33,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     """Semantic snapshots should exclude training tasks and retain rollout/sensor contracts."""
     benchmark_module = _load_module("benchmark_mac_tasks", "scripts/benchmarks/mlx/benchmark_mac_tasks.py")
     expected_franka_hotpath = get_franka_hotpath_backend()
+    expected_locomotion_hotpath = get_locomotion_hotpath_backend()
 
     results = benchmark_module.run_benchmarks(
         benchmark_module.resolve_requested_tasks(None, "full"),
@@ -53,8 +54,9 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
-    assert snapshot["tasks"]["anymal-c-flat"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["anymal-c-flat"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["sensor_implementation"] == "analytic-terrain-raycast"
+    assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
@@ -75,6 +77,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9
+    assert snapshot["tasks"]["h1-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0
 
 

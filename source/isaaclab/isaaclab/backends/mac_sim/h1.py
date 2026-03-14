@@ -29,8 +29,8 @@ from isaaclab.utils.configclass import configclass
 from .contacts import BatchedContactSensorState
 from .env_cfgs import H1_FLAT_OBSERVATION_SPACE, MacH1FlatEnvCfg, MacH1RoughEnvCfg
 from .hotpath import (
-    HOTPATH_BACKEND,
     biped_support_metrics_hotpath,
+    get_locomotion_hotpath_backend,
     h1_body_positions_hotpath,
     h1_leg_extension_hotpath,
     locomotion_root_step_hotpath,
@@ -404,7 +404,7 @@ class MacH1FlatSimBackend(MacSimBackend):
                 "contacts": True,
                 "deterministic_resets": True,
                 "rollout_helpers": True,
-                "hotpath": HOTPATH_BACKEND,
+                "hotpath": get_locomotion_hotpath_backend(),
             },
             "root_state_shape": list(self.root_state.root_pos_w.shape),
             "joint_state_shape": list(self.joint_state.joint_pos.shape),

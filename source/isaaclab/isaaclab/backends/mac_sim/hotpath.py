@@ -535,6 +535,9 @@ _franka_end_effector_position_compiled = mx.compile(_franka_end_effector_positio
 _franka_end_effector_position_metal = None
 _franka_end_effector_hotpath_initialized = False
 FRANKA_HOTPATH_BACKEND = HOTPATH_BACKEND
+_locomotion_root_step_metal = None
+_locomotion_root_step_hotpath_initialized = False
+LOCOMOTION_HOTPATH_BACKEND = HOTPATH_BACKEND
 
 
 def _build_franka_end_effector_metal_kernel():
@@ -650,7 +653,246 @@ def _locomotion_root_step_impl(
     return next_root_pos_w, next_root_quat_w, next_lin_vel_b, next_ang_vel_b, next_projected_gravity_b
 
 
-locomotion_root_step_hotpath = mx.compile(_locomotion_root_step_impl)
+_locomotion_root_step_compiled = mx.compile(_locomotion_root_step_impl)
+
+
+def _build_locomotion_root_step_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float dt = params[0];
+        float root_lin_damping = params[1];
+        float root_ang_damping = params[2];
+        float height_stiffness = params[3];
+        float height_damping = params[4];
+        float orientation_height_penalty = params[5];
+
+        float3 root_pos = float3(root_pos_w[env_id * 3 + 0], root_pos_w[env_id * 3 + 1], root_pos_w[env_id * 3 + 2]);
+        float4 root_quat = float4(
+            root_quat_w[env_id * 4 + 0],
+            root_quat_w[env_id * 4 + 1],
+            root_quat_w[env_id * 4 + 2],
+            root_quat_w[env_id * 4 + 3]
+        );
+        float3 root_lin = float3(
+            root_lin_vel_b[env_id * 3 + 0],
+            root_lin_vel_b[env_id * 3 + 1],
+            root_lin_vel_b[env_id * 3 + 2]
+        );
+        float3 root_ang = float3(
+            root_ang_vel_b[env_id * 3 + 0],
+            root_ang_vel_b[env_id * 3 + 1],
+            root_ang_vel_b[env_id * 3 + 2]
+        );
+        float3 projected_gravity = float3(
+            projected_gravity_b[env_id * 3 + 0],
+            projected_gravity_b[env_id * 3 + 1],
+            projected_gravity_b[env_id * 3 + 2]
+        );
+        float3 command = float3(commands[env_id * 3 + 0], commands[env_id * 3 + 1], commands[env_id * 3 + 2]);
+        float lin_gain_value = lin_gain[env_id];
+        float3 angular_acc = float3(
+            angular_acc_b[env_id * 3 + 0],
+            angular_acc_b[env_id * 3 + 1],
+            angular_acc_b[env_id * 3 + 2]
+        );
+        float target_height_value = target_height[env_id];
+
+        float2 lin_xy = float2(root_lin.x, root_lin.y);
+        float2 next_lin_xy = lin_xy + dt * (
+            lin_gain_value * (float2(command.x, command.y) - lin_xy) - root_lin_damping * lin_xy
+        );
+        float orientation_penalty = projected_gravity.x * projected_gravity.x + projected_gravity.y * projected_gravity.y;
+        float z_acc = height_stiffness * (target_height_value - root_pos.z)
+            - height_damping * root_lin.z
+            - orientation_height_penalty * orientation_penalty;
+        float3 next_lin = float3(next_lin_xy.x, next_lin_xy.y, root_lin.z + dt * z_acc);
+        float3 next_ang = root_ang + dt * (angular_acc - root_ang_damping * root_ang);
+
+        float3 delta = next_ang * dt;
+        float angle = metal::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+        float half_angle = 0.5f * angle;
+        float3 axis = angle > 1e-8f ? delta / angle : float3(0.0f);
+        float sin_half = metal::sin(half_angle);
+        float cos_half = metal::cos(half_angle);
+        float4 delta_quat = float4(axis.x * sin_half, axis.y * sin_half, axis.z * sin_half, cos_half);
+        float delta_norm = metal::sqrt(
+            delta_quat.x * delta_quat.x
+            + delta_quat.y * delta_quat.y
+            + delta_quat.z * delta_quat.z
+            + delta_quat.w * delta_quat.w
+        );
+        delta_quat = delta_quat / metal::max(delta_norm, 1e-8f);
+
+        float4 next_quat = float4(
+            root_quat.w * delta_quat.x + root_quat.x * delta_quat.w + root_quat.y * delta_quat.z - root_quat.z * delta_quat.y,
+            root_quat.w * delta_quat.y - root_quat.x * delta_quat.z + root_quat.y * delta_quat.w + root_quat.z * delta_quat.x,
+            root_quat.w * delta_quat.z + root_quat.x * delta_quat.y - root_quat.y * delta_quat.x + root_quat.z * delta_quat.w,
+            root_quat.w * delta_quat.w - root_quat.x * delta_quat.x - root_quat.y * delta_quat.y - root_quat.z * delta_quat.z
+        );
+        float next_quat_norm = metal::sqrt(
+            next_quat.x * next_quat.x + next_quat.y * next_quat.y + next_quat.z * next_quat.z + next_quat.w * next_quat.w
+        );
+        next_quat = next_quat / metal::max(next_quat_norm, 1e-8f);
+
+        float3 quat_xyz = float3(next_quat.x, next_quat.y, next_quat.z);
+        float quat_w = next_quat.w;
+        float3 cross1 = metal::cross(quat_xyz, next_lin);
+        float3 cross2 = metal::cross(quat_xyz, cross1);
+        float3 world_vel = next_lin + 2.0f * (quat_w * cross1 + cross2);
+        float3 next_pos = root_pos + dt * world_vel;
+
+        float3 conj_xyz = -quat_xyz;
+        float3 gravity = float3(0.0f, 0.0f, -1.0f);
+        float3 gcross1 = metal::cross(conj_xyz, gravity);
+        float3 gcross2 = metal::cross(conj_xyz, gcross1);
+        float3 next_gravity = gravity + 2.0f * (quat_w * gcross1 + gcross2);
+
+        next_root_pos_w[env_id * 3 + 0] = next_pos.x;
+        next_root_pos_w[env_id * 3 + 1] = next_pos.y;
+        next_root_pos_w[env_id * 3 + 2] = next_pos.z;
+        next_root_quat_w[env_id * 4 + 0] = next_quat.x;
+        next_root_quat_w[env_id * 4 + 1] = next_quat.y;
+        next_root_quat_w[env_id * 4 + 2] = next_quat.z;
+        next_root_quat_w[env_id * 4 + 3] = next_quat.w;
+        next_root_lin_vel_b[env_id * 3 + 0] = next_lin.x;
+        next_root_lin_vel_b[env_id * 3 + 1] = next_lin.y;
+        next_root_lin_vel_b[env_id * 3 + 2] = next_lin.z;
+        next_root_ang_vel_b[env_id * 3 + 0] = next_ang.x;
+        next_root_ang_vel_b[env_id * 3 + 1] = next_ang.y;
+        next_root_ang_vel_b[env_id * 3 + 2] = next_ang.z;
+        next_projected_gravity_b[env_id * 3 + 0] = next_gravity.x;
+        next_projected_gravity_b[env_id * 3 + 1] = next_gravity.y;
+        next_projected_gravity_b[env_id * 3 + 2] = next_gravity.z;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="locomotion_root_step",
+            input_names=[
+                "root_pos_w",
+                "root_quat_w",
+                "root_lin_vel_b",
+                "root_ang_vel_b",
+                "projected_gravity_b",
+                "commands",
+                "lin_gain",
+                "angular_acc_b",
+                "target_height",
+                "params",
+            ],
+            output_names=[
+                "next_root_pos_w",
+                "next_root_quat_w",
+                "next_root_lin_vel_b",
+                "next_root_ang_vel_b",
+                "next_projected_gravity_b",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_locomotion_root_hotpath() -> None:
+    global _locomotion_root_step_metal
+    global _locomotion_root_step_hotpath_initialized
+    global LOCOMOTION_HOTPATH_BACKEND
+    if _locomotion_root_step_hotpath_initialized:
+        return
+    _locomotion_root_step_hotpath_initialized = True
+    _locomotion_root_step_metal = _build_locomotion_root_step_metal_kernel()
+    if _locomotion_root_step_metal is not None:
+        LOCOMOTION_HOTPATH_BACKEND = "mlx-metal-root-step"
+
+
+def get_locomotion_hotpath_backend() -> str:
+    _ensure_locomotion_root_hotpath()
+    return LOCOMOTION_HOTPATH_BACKEND
+
+
+def locomotion_root_step_hotpath(
+    dt: float,
+    root_pos_w: mx.array,
+    root_quat_w: mx.array,
+    root_lin_vel_b: mx.array,
+    root_ang_vel_b: mx.array,
+    projected_gravity_b: mx.array,
+    commands: mx.array,
+    lin_gain: mx.array,
+    angular_acc_b: mx.array,
+    target_height: mx.array,
+    root_lin_damping: float,
+    root_ang_damping: float,
+    height_stiffness: float,
+    height_damping: float,
+    orientation_height_penalty: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array]:
+    _ensure_locomotion_root_hotpath()
+    root_pos_w = mx.array(root_pos_w, dtype=mx.float32)
+    root_quat_w = mx.array(root_quat_w, dtype=mx.float32)
+    root_lin_vel_b = mx.array(root_lin_vel_b, dtype=mx.float32)
+    root_ang_vel_b = mx.array(root_ang_vel_b, dtype=mx.float32)
+    projected_gravity_b = mx.array(projected_gravity_b, dtype=mx.float32)
+    commands = mx.array(commands, dtype=mx.float32)
+    lin_gain = mx.array(lin_gain, dtype=mx.float32)
+    angular_acc_b = mx.array(angular_acc_b, dtype=mx.float32)
+    target_height = mx.array(target_height, dtype=mx.float32)
+    if _locomotion_root_step_metal is None:
+        return _locomotion_root_step_compiled(
+            dt,
+            root_pos_w,
+            root_quat_w,
+            root_lin_vel_b,
+            root_ang_vel_b,
+            projected_gravity_b,
+            commands,
+            lin_gain,
+            angular_acc_b,
+            target_height,
+            root_lin_damping,
+            root_ang_damping,
+            height_stiffness,
+            height_damping,
+            orientation_height_penalty,
+        )
+    if int(root_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros_like(root_pos_w),
+            mx.zeros_like(root_quat_w),
+            mx.zeros_like(root_lin_vel_b),
+            mx.zeros_like(root_ang_vel_b),
+            mx.zeros_like(projected_gravity_b),
+        )
+    params = mx.array(
+        [dt, root_lin_damping, root_ang_damping, height_stiffness, height_damping, orientation_height_penalty],
+        dtype=mx.float32,
+    )
+    outputs = _locomotion_root_step_metal(
+        inputs=[
+            root_pos_w,
+            root_quat_w,
+            root_lin_vel_b,
+            root_ang_vel_b,
+            projected_gravity_b,
+            commands,
+            lin_gain,
+            angular_acc_b,
+            target_height,
+            params,
+        ],
+        grid=(int(root_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            tuple(root_pos_w.shape),
+            tuple(root_quat_w.shape),
+            tuple(root_lin_vel_b.shape),
+            tuple(root_ang_vel_b.shape),
+            tuple(projected_gravity_b.shape),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return outputs[0], outputs[1], outputs[2], outputs[3], outputs[4]
 
 
 def prime_contact_state(
