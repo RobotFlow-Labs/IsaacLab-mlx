@@ -1,191 +1,488 @@
-# Port To MLX Todo
+# Port To MLX Task Board
 
-This file tracks the full CUDA-to-MLX port program for IsaacLab on Apple Silicon.
+This file is the execution backlog for the full CUDA-to-MLX port of IsaacLab on Apple Silicon.
 
-## Program Shape
+It is intentionally written as a task source, not as a loose idea list. The goal is to keep shipping work on `main`
+without pausing for replanning after every small success.
 
-- Horizon: multi-day to multi-week porting program
-- Cadence: each pass should land one concrete compatibility or runtime win on `main`
-- Validation rule: every runtime/import/packaging change must add or extend tests, install smoke, or benchmark smoke
-- Memory rule: every meaningful win must be appended to `/Users/ilessio/.codex/skills/port-to-mlx/references/progress_log.md`
+## Working Rules
 
-## Phase Breakdown
+- Always take the next unblocked task from the `Execution Order` section.
+- Every merged task must update:
+  - this file
+  - `/Users/ilessio/.codex/skills/port-to-mlx/references/progress_log.md`
+- Every compatibility task needs at least one of:
+  - import-safety test
+  - install smoke
+  - benchmark smoke
+  - replay/train smoke
+- “Done” means:
+  - code landed on `main`
+  - validation ran
+  - follow-on tasks updated
 
-### Phase A. Import And Install Safety
+## Status Legend
 
-Estimated effort: 8-16 focused hours
+- `DONE`: landed and validated
+- `ACTIVE`: current execution focus
+- `READY`: unblocked and next in line
+- `BLOCKED`: depends on earlier tasks
+- `LATER`: intentionally deferred until the earlier substrate exists
 
-- Goal: make the public MLX/mac path install and import cleanly without Isaac Sim
-- Exit criteria:
-  - editable install works for `source/isaaclab[macos-mlx,dev]`
-  - base `source/isaaclab_rl[dev]` can coexist without forcing framework extras
-  - public config modules import without `carb`, `omni`, `isaacsim`, or `warp`
+## Execution Order
 
-### Phase B. Shared Runtime Abstractions
+1. `MLX-IMPORT-001` through `MLX-IMPORT-008`
+2. `MLX-PKG-001` through `MLX-PKG-004`
+3. `MLX-SIM-001` through `MLX-SIM-010`
+4. `MLX-TASK-001` through `MLX-TASK-012`
+5. `MLX-KERNEL-001` through `MLX-KERNEL-008`
+6. `MLX-SENSOR-001` through `MLX-SENSOR-006`
+7. `MLX-RL-001` through `MLX-RL-006`
+8. `MLX-CI-001` through `MLX-CI-006`
+9. `MLX-ROS-001` through `MLX-ROS-003`
 
-Estimated effort: 10-20 focused hours
+## Current Wins
 
-- Goal: move shared runtime assumptions behind explicit adapters
-- Exit criteria:
-  - compute, kernel, sim, planner, and sensor seams are the only supported backend touchpoints
-  - unsupported features fail through capability checks
-  - benchmark and diagnostics surfaces report the selected backend contract
+- `DONE` Runtime backend seam for `torch-cuda|mlx`
+- `DONE` Sim backend seam for `isaacsim|mac-sim`
+- `DONE` Kernel backend seam for `warp|metal|cpu`
+- `DONE` AppLauncher mac-sim bootstrap mode
+- `DONE` MLX/mac-sim slices for cartpole, cart-double-pendulum, quadcopter
+- `DONE` Focused backend tests and benchmark harness
+- `DONE` Base package extras for `macos-mlx`, `cuda-isaacsim`, and `dev`
+- `DONE` RL package base install no longer forces framework extras
+- `DONE` `isaaclab_rl.sb3` and `isaaclab_rl.skrl` import-safe on MLX/mac path
+- `DONE` `RmpFlowControllerCfg` split from the heavy controller implementation
+- `DONE` Lightweight Nucleus constant module split from the heavy assets helper
 
-### Phase C. mac-sim Core Generalization
+## Phase A: Import And Packaging Safety
 
-Estimated effort: 20-40 focused hours
+### MLX-IMPORT-001
 
-- Goal: replace task-local simulator logic with reusable batched simulator primitives
-- Exit criteria:
-  - shared articulation/root-state layer exists
-  - resets, state writes, origins, and common reward/termination helpers are centralized
-  - first locomotion task can reuse the shared simulator substrate
+- Status: `DONE`
+- Title: Split controller config dataclasses away from heavy Isaac Sim runtime modules
+- Validation:
+  - focused backend tests
+  - fresh import smoke
 
-### Phase D. Task Port Expansion
+### MLX-IMPORT-002
 
-Estimated effort: 30-60 focused hours
+- Status: `DONE`
+- Title: Split Nucleus constants away from `isaaclab.utils.assets`
+- Validation:
+  - focused backend tests
+  - fresh import smoke
 
-- Goal: expand beyond the current cartpole/cart-double-pendulum/quadcopter slice
-- Exit criteria:
-  - at least one quadruped locomotion task
-  - at least one humanoid task
-  - at least one manipulation reach/lift task
-  - each new task has replay/train smoke and benchmark coverage
+### MLX-IMPORT-003
 
-### Phase E. Kernel And Sensor Replacement
+- Status: `ACTIVE`
+- Title: Audit `isaaclab.sim` public config/helper imports and isolate config-safe surfaces
+- Scope:
+  - `isaaclab.sim.__init__`
+  - `isaaclab.sim.schemas`
+  - `isaaclab.sim.spawners.*_cfg`
+  - `isaaclab.sim.utils` modules that should be config-safe
+- Acceptance:
+  - config-only imports do not pull `carb`, `omni`, `isaacsim`, or `pxr` unless explicitly upstream-only
+  - tests prove the new import-safe path
 
-Estimated effort: 30-80 focused hours
+### MLX-IMPORT-004
 
-- Goal: replace the first important Warp/CUDA kernels and add task-usable sensors
-- Exit criteria:
-  - raycast path exists on mac
-  - hot loops have MLX-op or Metal implementations
-  - benchmarked paths do not silently fall back to CPU
+- Status: `READY`
+- Depends on: `MLX-IMPORT-003`
+- Title: Audit `isaaclab.envs.mdp.actions` config surfaces for config-only imports that still pull runtime-heavy modules
+- Acceptance:
+  - action config modules import on `mlx + mac-sim`
+  - unsupported runtime paths fail when instantiated, not when imported
 
-### Phase F. Public Release Hardening
+### MLX-IMPORT-005
 
-Estimated effort: 8-20 focused hours
+- Status: `READY`
+- Depends on: `MLX-IMPORT-003`
+- Title: Audit `isaaclab.markers` config surfaces for any remaining heavy imports
+- Acceptance:
+  - config modules use lightweight constants/helpers where possible
 
-- Goal: make the fork publishable and maintainable
-- Exit criteria:
-  - CI proves install/import/runtime smoke on Apple Silicon
-  - benchmark artifacts are archived
-  - support matrix and known limitations are documented
+### MLX-IMPORT-006
 
-## Active Queue
+- Status: `READY`
+- Depends on: `MLX-IMPORT-003`
+- Title: Audit `isaaclab.devices.openxr` retargeter config/helpers for constant-only imports
+- Acceptance:
+  - config constants come from lightweight modules
+  - heavy runtime helpers stay lazy
 
-These are the highest-priority items to keep moving without waiting for deeper architecture work:
+### MLX-IMPORT-007
 
-1. Keep stripping config-only imports away from heavy runtime modules.
-2. Keep shrinking the set of modules that require `carb`, `omni`, `isaacsim`, or `warp` at import time.
-3. Generalize the current mac-sim task slices into shared batched simulator primitives.
-4. Start the first locomotion port as soon as the shared articulation substrate is ready.
-5. Add benchmark artifact collection and trend comparison for M-series runs.
+- Status: `READY`
+- Depends on: `MLX-IMPORT-003`
+- Title: Add explicit import-safety test matrix for public bootstrap modules
+- Acceptance:
+  - test covers `isaaclab`, `isaaclab.sim`, `isaaclab.controllers`, `isaaclab_rl`
+  - runs without Isaac Sim installed
 
-## Definitions Of Done
+### MLX-IMPORT-008
 
-- Import-safe:
-  The module imports on `mlx + mac-sim` without Isaac Sim installed.
-- Packaging-safe:
-  The documented `uv` install path works in a fresh environment.
-- Runtime-safe:
-  The code path either runs correctly on `mlx + mac-sim` or raises an explicit unsupported backend/capability error.
-- Ported task:
-  The task has reset/step smoke, replay smoke, and benchmark coverage.
-- Performance-ready:
-  The benchmarked path is free of accidental CPU fallback.
+- Status: `READY`
+- Depends on: `MLX-IMPORT-007`
+- Title: Publish a definitive “import-safe on mac” module surface
+- Acceptance:
+  - documented in README
+  - kept in sync with tests
 
-## Completed Foundations
+### MLX-PKG-001
 
-- [x] Runtime selection seam for `torch-cuda|mlx`
-- [x] Simulation selection seam for `isaacsim|mac-sim`
-- [x] Kernel selection seam for `warp|metal|cpu`
-- [x] Sensor and planner capability adapters
-- [x] AppLauncher mac-sim bootstrap mode
-- [x] MLX/mac-sim reference slices for cartpole, cart-double-pendulum, quadcopter
-- [x] Focused Apple Silicon backend tests
-- [x] Public benchmark harness for current MLX task slices
-- [x] Public `uv` install path for `source/isaaclab[macos-mlx,dev]`
+- Status: `DONE`
+- Title: Core package extras split for MLX vs CUDA users
 
-## Track 1: Packaging And Public Install
+### MLX-PKG-002
 
-- [x] Remove torch-only assumptions from `source/isaaclab_rl/setup.py`
-- [x] Move RL framework dependencies into extras instead of base install
-- [x] Add install smoke tests for `source/isaaclab_rl` on the mac path
-- [ ] Document which extras are required for MLX-only versus upstream CUDA paths
-- [ ] Add a support matrix for base package, RL wrappers, tasks, sensors, planners
-- [ ] Move any remaining config-only constants away from heavy runtime helper modules
+- Status: `DONE`
+- Title: RL package extras split so framework deps are optional
 
-## Track 2: Import Safety And Capability Gating
+### MLX-PKG-003
 
-- [x] Make `isaaclab_rl.sb3` import-safe on mac without forcing `isaaclab.envs` or torch imports at module import time
-- [x] Make `isaaclab_rl.skrl` import-safe on mac without forcing Isaac Sim env imports at module import time
-- [x] Split `RmpFlowControllerCfg` out of the heavy controller module so config imports stay mac-safe
-- [x] Split Nucleus path constants out of the heavy `isaaclab.utils.assets` module
-- [ ] Audit `isaaclab.controllers` for remaining eager Isaac Sim imports
-- [ ] Audit `isaaclab.sim` subpackages for public imports that should be lazy-gated
-- [ ] Audit `isaaclab.envs` helpers and config loaders for mac-safe import paths
-- [ ] Add explicit capability checks for unsupported sensors, planners, and UI-only components
+- Status: `READY`
+- Title: Add clear support matrix for package extras and runtime combinations
+- Acceptance:
+  - README section listing supported install combos
+  - one install smoke per documented combo
 
-## Track 3: mac-sim Core Generalization
+### MLX-PKG-004
 
-- [ ] Introduce a reusable articulated-state container shared by mac-sim tasks
-- [ ] Generalize joint-space reset/step helpers out of the task-specific envs
-- [ ] Add root-state write/read helpers shared by quadcopter and future tasks
-- [ ] Add basic terrain representation and collision hooks
-- [ ] Add contact modeling needed for the first locomotion task
-- [ ] Add a shared env origin/grid manager for large batched scenes
+- Status: `READY`
+- Depends on: `MLX-PKG-003`
+- Title: Add fresh-env install smoke for documented public paths in CI
+- Acceptance:
+  - MLX base install smoke
+  - MLX + RL base install smoke
+  - upstream CUDA path remains unaffected
 
-## Track 4: Next Task Ports
+## Phase B: Shared mac-sim Substrate
 
-- [ ] Port one quadruped locomotion task
-- [ ] Port one humanoid locomotion task
-- [ ] Port one Franka-style reach task
-- [ ] Port one Franka-style lift/manipulation task
-- [ ] Add a raycast-driven navigation or perception task
-- [ ] Add a benchmark case for each newly ported task
+### MLX-SIM-001
 
-## Track 5: Kernel Replacement
+- Status: `READY`
+- Title: Extract shared articulated joint-state container from cartpole/cart-double-pendulum
+- Acceptance:
+  - no duplicated joint state reset/write logic across those envs
 
-- [ ] Inventory the exact Warp/custom CUDA kernels used by the first target tasks
-- [ ] Implement MLX-op replacements where possible
-- [ ] Add Metal-backed replacements for hot loops that need throughput
-- [ ] Keep CPU fallback only for bring-up and parity debugging
-- [ ] Add per-kernel reference tests against upstream outputs
+### MLX-SIM-002
 
-## Track 6: Sensors
+- Status: `READY`
+- Depends on: `MLX-SIM-001`
+- Title: Extract shared root-state container from quadcopter path
+- Acceptance:
+  - root pose/velocity read/write helpers centralized
 
-- [ ] Add a `mac-sensors` raycast implementation
-- [ ] Define the task-level sensor contract for depth outputs
-- [ ] Add a basic task-usable camera/depth pipeline
-- [ ] Add capability-gated explicit unsupported errors for RTX-only camera features
-- [ ] Add sensor parity tests for shapes, frames, and reset behavior
+### MLX-SIM-003
 
-## Track 7: RL And Training
+- Status: `READY`
+- Depends on: `MLX-SIM-001`, `MLX-SIM-002`
+- Title: Create reusable mac-sim batched state primitives module
+- Acceptance:
+  - cartpole/cart-double-pendulum/quadcopter use the shared substrate
 
-- [ ] Define an MLX-native RL wrapper surface separate from torch-centric wrappers
-- [ ] Port a reusable PPO trainer abstraction outside the cartpole-specific slice
-- [ ] Add checkpoint compatibility rules across MLX tasks
-- [ ] Add evaluation and replay helpers shared by all MLX tasks
-- [ ] Add train/infer coverage for at least one locomotion task
+### MLX-SIM-004
 
-## Track 8: CI And Release
+- Status: `READY`
+- Depends on: `MLX-SIM-003`
+- Title: Add reusable environment origin/grid manager
 
-- [x] Extend `.github/workflows/mlx-macos.yml` with package install smoke via extras
-- [ ] Add benchmark smoke artifact upload for M-series runs
-- [ ] Add import-safety jobs that run with no Isaac Sim installed
-- [ ] Add nightly drift checks against selected upstream task semantics
-- [ ] Publish the support matrix and benchmark expectations in release docs
+### MLX-SIM-005
 
-## Track 9: Follow-On Compatibility
+- Status: `READY`
+- Depends on: `MLX-SIM-003`
+- Title: Add terrain representation for the first locomotion task
 
-- [ ] Define a planner compatibility layer to replace cuRobo gradually
-- [ ] Start ROS 2 interoperability without CUDA/NITROS assumptions
-- [ ] Add CPU/Metal transport notes for future Isaac ROS compatibility
+### MLX-SIM-006
 
-## Working Rule
+- Status: `BLOCKED`
+- Depends on: `MLX-SIM-005`
+- Title: Add contact approximation model sufficient for first locomotion bring-up
 
-Every concrete success should update both:
+### MLX-SIM-007
 
-- `/Users/ilessio/.codex/skills/port-to-mlx/references/progress_log.md`
-- this repo todo when it changes status materially
+- Status: `BLOCKED`
+- Depends on: `MLX-SIM-006`
+- Title: Add contact-oriented reward/termination utilities
+
+### MLX-SIM-008
+
+- Status: `READY`
+- Depends on: `MLX-SIM-003`
+- Title: Centralize reset sampling helpers and determinism controls
+
+### MLX-SIM-009
+
+- Status: `READY`
+- Depends on: `MLX-SIM-003`
+- Title: Add capability reporting from concrete mac-sim adapters into benchmarks and diagnostics
+
+### MLX-SIM-010
+
+- Status: `READY`
+- Depends on: `MLX-SIM-003`
+- Title: Add shared replay/rollout helpers for mac-native tasks
+
+## Phase C: Task Ports
+
+### MLX-TASK-001
+
+- Status: `DONE`
+- Title: Port cartpole
+
+### MLX-TASK-002
+
+- Status: `DONE`
+- Title: Port cart-double-pendulum
+
+### MLX-TASK-003
+
+- Status: `DONE`
+- Title: Port quadcopter
+
+### MLX-TASK-004
+
+- Status: `BLOCKED`
+- Depends on: `MLX-SIM-005`, `MLX-SIM-006`, `MLX-SIM-007`
+- Title: Port first quadruped locomotion task
+- Suggested target:
+  - pick the simplest existing velocity locomotion task with minimal sensor coupling
+
+### MLX-TASK-005
+
+- Status: `BLOCKED`
+- Depends on: `MLX-TASK-004`
+- Title: Add quadruped replay smoke and benchmark
+
+### MLX-TASK-006
+
+- Status: `BLOCKED`
+- Depends on: `MLX-TASK-004`
+- Title: Add quadruped training smoke on MLX
+
+### MLX-TASK-007
+
+- Status: `LATER`
+- Depends on: `MLX-TASK-004`
+- Title: Port first humanoid locomotion task
+
+### MLX-TASK-008
+
+- Status: `LATER`
+- Depends on: `MLX-SIM-003`
+- Title: Port first manipulation reach task
+
+### MLX-TASK-009
+
+- Status: `LATER`
+- Depends on: `MLX-TASK-008`
+- Title: Port first manipulation lift task
+
+### MLX-TASK-010
+
+- Status: `LATER`
+- Depends on: `MLX-SENSOR-001`
+- Title: Port first raycast-driven task
+
+### MLX-TASK-011
+
+- Status: `READY`
+- Title: Keep all current task slices benchmarked on every major substrate change
+
+### MLX-TASK-012
+
+- Status: `READY`
+- Title: Keep checkpoint/replay contracts stable across all mac-native tasks
+
+## Phase D: Kernel Replacement
+
+### MLX-KERNEL-001
+
+- Status: `READY`
+- Title: Inventory first real Warp/custom CUDA kernels needed by planned locomotion target
+
+### MLX-KERNEL-002
+
+- Status: `READY`
+- Depends on: `MLX-KERNEL-001`
+- Title: Implement MLX-op replacements for non-hot helper kernels
+
+### MLX-KERNEL-003
+
+- Status: `BLOCKED`
+- Depends on: `MLX-KERNEL-001`
+- Title: Implement Metal-backed replacements for locomotion hot loops
+
+### MLX-KERNEL-004
+
+- Status: `READY`
+- Depends on: `MLX-KERNEL-001`
+- Title: Add per-kernel parity tests against upstream outputs where feasible
+
+### MLX-KERNEL-005
+
+- Status: `READY`
+- Title: Add benchmark reporting that detects accidental CPU fallback
+
+### MLX-KERNEL-006
+
+- Status: `LATER`
+- Title: Inventory raycast kernels for future sensor port
+
+### MLX-KERNEL-007
+
+- Status: `LATER`
+- Title: Inventory camera/tiled-camera reshape kernels
+
+### MLX-KERNEL-008
+
+- Status: `LATER`
+- Title: Create a shared kernel-compat layer instead of scattered replacements
+
+## Phase E: Sensors
+
+### MLX-SENSOR-001
+
+- Status: `LATER`
+- Title: Implement `mac-sensors` raycast substrate
+
+### MLX-SENSOR-002
+
+- Status: `LATER`
+- Depends on: `MLX-SENSOR-001`
+- Title: Add raycast parity tests and benchmark
+
+### MLX-SENSOR-003
+
+- Status: `LATER`
+- Title: Define minimal depth output contract for task-usable cameras
+
+### MLX-SENSOR-004
+
+- Status: `LATER`
+- Depends on: `MLX-SENSOR-003`
+- Title: Add basic camera/depth path for non-RTX tasks
+
+### MLX-SENSOR-005
+
+- Status: `READY`
+- Title: Ensure unsupported camera/RTX features fail explicitly via capability checks
+
+### MLX-SENSOR-006
+
+- Status: `LATER`
+- Title: Add benchmark coverage for sensor-heavy mac-native tasks
+
+## Phase F: RL And Training
+
+### MLX-RL-001
+
+- Status: `READY`
+- Title: Extract reusable PPO trainer substrate from cartpole-specific code
+
+### MLX-RL-002
+
+- Status: `READY`
+- Depends on: `MLX-RL-001`
+- Title: Define shared MLX policy/checkpoint format for mac-native tasks
+
+### MLX-RL-003
+
+- Status: `BLOCKED`
+- Depends on: `MLX-TASK-004`, `MLX-RL-001`
+- Title: Train first locomotion task on MLX
+
+### MLX-RL-004
+
+- Status: `READY`
+- Title: Add shared replay/eval scripts for all MLX task slices
+
+### MLX-RL-005
+
+- Status: `LATER`
+- Title: Define MLX-native wrapper surface instead of relying on torch-centric RL wrappers
+
+### MLX-RL-006
+
+- Status: `LATER`
+- Title: Add multi-task benchmark/training dashboard output
+
+## Phase G: CI And Release
+
+### MLX-CI-001
+
+- Status: `DONE`
+- Title: Add MLX macOS smoke workflow
+
+### MLX-CI-002
+
+- Status: `READY`
+- Title: Add benchmark smoke run and artifact upload to MLX macOS workflow
+
+### MLX-CI-003
+
+- Status: `READY`
+- Depends on: `MLX-CI-002`
+- Title: Add import-safety lane that proves no Isaac Sim install is required
+
+### MLX-CI-004
+
+- Status: `LATER`
+- Title: Add nightly drift checks against selected upstream task semantics
+
+### MLX-CI-005
+
+- Status: `READY`
+- Title: Publish support matrix and benchmark expectations in README
+
+### MLX-CI-006
+
+- Status: `LATER`
+- Title: Archive benchmark trend JSON for M-series comparisons
+
+## Phase H: Follow-On Compatibility
+
+### MLX-ROS-001
+
+- Status: `LATER`
+- Title: Define planner compatibility seam to replace cuRobo progressively
+
+### MLX-ROS-002
+
+- Status: `LATER`
+- Title: Start plain ROS 2 process/message interoperability without CUDA assumptions
+
+### MLX-ROS-003
+
+- Status: `LATER`
+- Title: Document future CPU/Metal transport path for Isaac ROS compatibility
+
+## Continuous Work Queue
+
+This queue exists so work can continue without waiting for a new plan:
+
+- If `MLX-IMPORT-003` is incomplete, keep taking the next import blocker from `isaaclab.sim`.
+- If `MLX-IMPORT-003` is complete, move directly to `MLX-IMPORT-004`.
+- Once the import-safety pass stops yielding high-value wins, start `MLX-SIM-001`.
+- Once `MLX-SIM-003` is complete, immediately start `MLX-TASK-004`.
+
+## Validation Commands
+
+```bash
+PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
+  source/isaaclab_rl/test/test_import_safety.py \
+  source/isaaclab/test/backends/test_runtime.py \
+  source/isaaclab/test/backends/test_portability_utils.py \
+  source/isaaclab/test/backends/test_mac_cartpole.py \
+  source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
+  source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+  source/isaaclab/test/backends/test_mac_quadcopter.py -q
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+  --tasks cartpole cart-double-pendulum quadcopter train-cartpole
+```
