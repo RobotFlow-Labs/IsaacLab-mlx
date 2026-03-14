@@ -9,35 +9,27 @@ from __future__ import annotations
 
 import importlib
 
-_EXPLICIT_EXPORTS = {
-    "configclass": (".configclass", "configclass"),
-    "Timer": (".timer", "Timer"),
-}
+from .configclass import configclass
+from .timer import Timer
+
 _SEARCH_MODULES = (
+    ".dict",
+    ".string",
+    ".version",
     ".array",
     ".buffers",
-    ".dict",
     ".interpolation",
     ".logger",
     ".mesh",
     ".modifiers",
-    ".string",
     ".types",
-    ".version",
 )
 
-__all__ = [*_EXPLICIT_EXPORTS.keys()]
+__all__ = ["configclass", "Timer"]
 _OPTIONAL_IMPORT_PREFIXES = ("omni", "isaacsim", "warp", "torch", "carb", "pxr")
 
 
 def __getattr__(name: str):
-    target = _EXPLICIT_EXPORTS.get(name)
-    if target is not None:
-        module = importlib.import_module(target[0], __name__)
-        value = getattr(module, target[1])
-        globals()[name] = value
-        return value
-
     for module_name in _SEARCH_MODULES:
         try:
             module = importlib.import_module(module_name, __name__)

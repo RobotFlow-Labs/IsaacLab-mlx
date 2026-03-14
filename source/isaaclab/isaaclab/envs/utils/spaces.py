@@ -8,7 +8,6 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-import torch
 
 from ..common import SpaceType
 
@@ -63,6 +62,7 @@ def sample_space(space: gym.spaces.Space, device: str, batch_size: int = -1, fil
     Returns:
         Tensorized sampled space.
     """
+    import torch
 
     def tensorize(s: gym.spaces.Space, x: Any) -> Any:
         if isinstance(s, gym.spaces.Box):

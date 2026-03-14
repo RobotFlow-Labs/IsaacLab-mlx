@@ -14,7 +14,11 @@ The package is structured as follows:
 """
 
 import os
+
+import gymnasium as gym
 import toml
+
+from isaaclab.backends import current_runtime
 
 # Conveniences to other module directories via relative paths
 ISAACLAB_TASKS_EXT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
@@ -30,10 +34,56 @@ __version__ = ISAACLAB_TASKS_METADATA["package"]["version"]
 # Register Gym environments.
 ##
 
-from .utils import import_packages
+from .utils.importer import import_packages
 
 # The blacklist is used to prevent importing configs from sub-packages
 # TODO(@ashwinvk): Remove pick_place from the blacklist once pinocchio from Isaac Sim is compatibility
 _BLACKLIST_PKGS = ["utils", ".mdp", "pick_place", "direct.humanoid_amp.motions"]
-# Import all configs in this package
-import_packages(__name__, _BLACKLIST_PKGS)
+_MAC_SAFE_TASK_SPECS = (
+    {
+        "id": "Isaac-Cartpole-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacCartpoleEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacCartpoleEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Cart-Double-Pendulum-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacCartDoublePendulumEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacCartDoublePendulumEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Quadcopter-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacQuadcopterEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacQuadcopterEnvCfg",
+        },
+    },
+)
+
+
+def _register_gym_specs(specs: tuple[dict[str, object], ...]) -> None:
+    """Register the provided task specs if they are not already present."""
+    for spec in specs:
+        if spec["id"] in gym.registry:
+            continue
+        gym.register(
+            id=spec["id"],
+            entry_point=spec["entry_point"],
+            disable_env_checker=True,
+            kwargs=spec["kwargs"],
+        )
+
+
+def register_tasks() -> None:
+    """Register task packages appropriate for the active runtime."""
+    if current_runtime().sim_backend == "isaacsim":
+        import_packages(__name__, _BLACKLIST_PKGS)
+        return
+
+    _register_gym_specs(_MAC_SAFE_TASK_SPECS)
+
+
+register_tasks()

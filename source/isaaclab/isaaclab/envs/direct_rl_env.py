@@ -30,6 +30,7 @@ from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
 from isaaclab.sim.utils.stage import attach_stage_to_usd_context, use_stage
 from isaaclab.utils.noise import NoiseModel
+from isaaclab.utils.string import string_to_callable
 from isaaclab.utils.seed import configure_seed
 from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
@@ -205,10 +206,16 @@ class DirectRLEnv(gym.Env):
 
         # setup noise cfg for adding action and observation noise
         if self.cfg.action_noise_model:
+            if isinstance(self.cfg.action_noise_model.class_type, str):
+                self.cfg.action_noise_model.class_type = string_to_callable(self.cfg.action_noise_model.class_type)
             self._action_noise_model: NoiseModel = self.cfg.action_noise_model.class_type(
                 self.cfg.action_noise_model, num_envs=self.num_envs, device=self.device
             )
         if self.cfg.observation_noise_model:
+            if isinstance(self.cfg.observation_noise_model.class_type, str):
+                self.cfg.observation_noise_model.class_type = string_to_callable(
+                    self.cfg.observation_noise_model.class_type
+                )
             self._observation_noise_model: NoiseModel = self.cfg.observation_noise_model.class_type(
                 self.cfg.observation_noise_model, num_envs=self.num_envs, device=self.device
             )

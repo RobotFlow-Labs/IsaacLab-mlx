@@ -19,34 +19,46 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # generic
     "numpy<2",
-    "torch>=2.7",
-    "onnx>=1.18.0",  # 1.16.2 throws access violation on Windows
     "prettytable==3.3.0",
     "toml",
-    # devices
-    "hidapi==0.14.0.post2",
     # reinforcement learning
     "gymnasium==1.2.1",
     # procedural-generation
     "trimesh",
-    "pyglet<2",
-    # image processing
-    "transformers==4.57.6",
-    "einops",  # needed for transformers, doesn't always auto-install
     # make sure this is consistent with isaac sim version
     "pillow==11.3.0",
-    # livestream
-    "starlette==0.49.1",
     "packaging",
 ]
 
 EXTRAS_REQUIRE = {
+    "torch-runtime": [
+        "torch>=2.7",
+    ],
     "cuda-isaacsim": [
+        "torch>=2.7",
         "warp-lang ; platform_system != 'Darwin'",
     ],
     "macos-mlx": [
         "mlx ; platform_system == 'Darwin' and platform_machine in 'arm64,aarch64'",
     ],
+    "vision": [
+        "transformers==4.57.6",
+        "einops",
+    ],
+    "terrain-viewer": [
+        "pyglet<2",
+    ],
+    "teleop": [
+        "hidapi==0.14.0.post2",
+    ],
+    "onnx-export": [
+        "onnx>=1.18.0",
+    ],
+    "livestream": [
+        "starlette==0.49.1",
+    ],
+    "pink-ik": [],
+    "openxr-retargeting": [],
     "dev": [
         "pytest",
         "pytest-mock",
@@ -60,9 +72,14 @@ EXTRAS_REQUIRE = {
 SUPPORTED_ARCHS_ARM = "platform_machine in 'x86_64,AMD64,aarch64,arm64'"
 SUPPORTED_ARCHS = "platform_machine in 'x86_64,AMD64'"
 INSTALL_REQUIRES += [
+    # keep the core install lean on the MLX/mac path; optional stacks move to extras below
+]
+EXTRAS_REQUIRE["pink-ik"] += [
     # required by isaaclab.isaaclab.controllers.pink_ik
     f"pin-pink==3.1.0 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS_ARM})",
     f"daqp==0.7.2 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS_ARM})",
+]
+EXTRAS_REQUIRE["openxr-retargeting"] += [
     # required by isaaclab.devices.openxr.retargeters.humanoid.fourier.gr1_t2_dex_retargeting_utils
     f"dex-retargeting==0.4.6 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS})",
 ]

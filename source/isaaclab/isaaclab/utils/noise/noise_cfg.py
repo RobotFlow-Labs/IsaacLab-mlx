@@ -7,20 +7,23 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import MISSING
-from typing import Literal
-
-import torch
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 from isaaclab.utils import configclass
 
-from . import noise_model
+if TYPE_CHECKING:
+    import torch
+
+    TensorLike: TypeAlias = torch.Tensor
+else:
+    TensorLike: TypeAlias = Any
 
 
 @configclass
 class NoiseCfg:
     """Base configuration for a noise term."""
 
-    func: Callable[[torch.Tensor, NoiseCfg], torch.Tensor] = MISSING
+    func: Callable[[TensorLike, NoiseCfg], TensorLike] | str = MISSING
     """The function to be called for applying the noise.
 
     Note:
@@ -34,9 +37,9 @@ class NoiseCfg:
 class ConstantNoiseCfg(NoiseCfg):
     """Configuration for an additive constant noise term."""
 
-    func = noise_model.constant_noise
+    func = "isaaclab.utils.noise.noise_model:constant_noise"
 
-    bias: torch.Tensor | float = 0.0
+    bias: TensorLike | float = 0.0
     """The bias to add. Defaults to 0.0."""
 
 
@@ -44,11 +47,11 @@ class ConstantNoiseCfg(NoiseCfg):
 class UniformNoiseCfg(NoiseCfg):
     """Configuration for a additive uniform noise term."""
 
-    func = noise_model.uniform_noise
+    func = "isaaclab.utils.noise.noise_model:uniform_noise"
 
-    n_min: torch.Tensor | float = -1.0
+    n_min: TensorLike | float = -1.0
     """The minimum value of the noise. Defaults to -1.0."""
-    n_max: torch.Tensor | float = 1.0
+    n_max: TensorLike | float = 1.0
     """The maximum value of the noise. Defaults to 1.0."""
 
 
@@ -56,11 +59,11 @@ class UniformNoiseCfg(NoiseCfg):
 class GaussianNoiseCfg(NoiseCfg):
     """Configuration for an additive gaussian noise term."""
 
-    func = noise_model.gaussian_noise
+    func = "isaaclab.utils.noise.noise_model:gaussian_noise"
 
-    mean: torch.Tensor | float = 0.0
+    mean: TensorLike | float = 0.0
     """The mean of the noise. Defaults to 0.0."""
-    std: torch.Tensor | float = 1.0
+    std: TensorLike | float = 1.0
     """The standard deviation of the noise. Defaults to 1.0."""
 
 
@@ -73,13 +76,13 @@ class GaussianNoiseCfg(NoiseCfg):
 class NoiseModelCfg:
     """Configuration for a noise model."""
 
-    class_type: type = noise_model.NoiseModel
+    class_type: type | str = "isaaclab.utils.noise.noise_model:NoiseModel"
     """The class type of the noise model."""
 
     noise_cfg: NoiseCfg = MISSING
     """The noise configuration to use."""
 
-    func: Callable[[torch.Tensor], torch.Tensor] | None = None
+    func: Callable[[TensorLike], TensorLike] | None = None
     """Function or callable class used by this noise model.
 
     The function must take a single `torch.Tensor` (the batch of observations) as input
@@ -97,7 +100,7 @@ class NoiseModelCfg:
 class NoiseModelWithAdditiveBiasCfg(NoiseModelCfg):
     """Configuration for an additive gaussian noise with bias model."""
 
-    class_type: type = noise_model.NoiseModelWithAdditiveBias
+    class_type: type | str = "isaaclab.utils.noise.noise_model:NoiseModelWithAdditiveBias"
 
     bias_noise_cfg: NoiseCfg = MISSING
     """The noise configuration for the bias.

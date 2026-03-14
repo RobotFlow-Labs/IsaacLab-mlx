@@ -16,6 +16,7 @@ import torch
 from prettytable import PrettyTable
 
 from isaaclab.utils import class_to_dict, modifiers, noise
+from isaaclab.utils.string import string_to_callable
 from isaaclab.utils.buffers import CircularBuffer
 
 from .manager_base import ManagerBase, ManagerTermBase
@@ -621,8 +622,14 @@ class ObservationManager(ManagerBase):
                                 )
 
                 # prepare noise model classes
+                if term_cfg.noise is not None and isinstance(term_cfg.noise, noise.NoiseCfg):
+                    if isinstance(term_cfg.noise.func, str):
+                        term_cfg.noise.func = string_to_callable(term_cfg.noise.func)
                 if term_cfg.noise is not None and isinstance(term_cfg.noise, noise.NoiseModelCfg):
                     noise_model_cls = term_cfg.noise.class_type
+                    if isinstance(noise_model_cls, str):
+                        noise_model_cls = string_to_callable(noise_model_cls)
+                        term_cfg.noise.class_type = noise_model_cls
                     if not issubclass(noise_model_cls, noise.NoiseModel):
                         raise TypeError(
                             f"Class type for observation term '{term_name}' NoiseModelCfg"

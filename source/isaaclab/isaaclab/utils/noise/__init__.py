@@ -25,11 +25,42 @@ Usage:
     my_noisified_tensor = cfg.func(my_tensor, cfg)
 
 """
-from .noise_cfg import NoiseCfg  # noqa: F401
-from .noise_cfg import ConstantNoiseCfg, GaussianNoiseCfg, NoiseModelCfg, NoiseModelWithAdditiveBiasCfg, UniformNoiseCfg
-from .noise_model import NoiseModel, NoiseModelWithAdditiveBias, constant_noise, gaussian_noise, uniform_noise
+from __future__ import annotations
+
+import importlib
+
+_MODULE_EXPORTS = {
+    "NoiseCfg": (".noise_cfg", "NoiseCfg"),
+    "ConstantNoiseCfg": (".noise_cfg", "ConstantNoiseCfg"),
+    "GaussianNoiseCfg": (".noise_cfg", "GaussianNoiseCfg"),
+    "NoiseModelCfg": (".noise_cfg", "NoiseModelCfg"),
+    "NoiseModelWithAdditiveBiasCfg": (".noise_cfg", "NoiseModelWithAdditiveBiasCfg"),
+    "UniformNoiseCfg": (".noise_cfg", "UniformNoiseCfg"),
+    "NoiseModel": (".noise_model", "NoiseModel"),
+    "NoiseModelWithAdditiveBias": (".noise_model", "NoiseModelWithAdditiveBias"),
+    "constant_noise": (".noise_model", "constant_noise"),
+    "gaussian_noise": (".noise_model", "gaussian_noise"),
+    "uniform_noise": (".noise_model", "uniform_noise"),
+}
+
+__all__ = [*_MODULE_EXPORTS.keys(), "ConstantBiasNoiseCfg", "AdditiveUniformNoiseCfg", "AdditiveGaussianNoiseCfg"]
+
+
+def __getattr__(name: str):
+    if name == "ConstantBiasNoiseCfg":
+        value = __getattr__("ConstantNoiseCfg")
+    elif name == "AdditiveUniformNoiseCfg":
+        value = __getattr__("UniformNoiseCfg")
+    elif name == "AdditiveGaussianNoiseCfg":
+        value = __getattr__("GaussianNoiseCfg")
+    else:
+        target = _MODULE_EXPORTS.get(name)
+        if target is None:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+
+    globals()[name] = value
+    return value
 
 # Backward compatibility
-ConstantBiasNoiseCfg = ConstantNoiseCfg
-AdditiveUniformNoiseCfg = UniformNoiseCfg
-AdditiveGaussianNoiseCfg = GaussianNoiseCfg

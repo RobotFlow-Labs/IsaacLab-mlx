@@ -11,7 +11,6 @@ configuring the environment instances, viewer settings, and simulation parameter
 
 from dataclasses import MISSING, field
 
-import isaaclab.envs.mdp as mdp
 from isaaclab.devices.device_base import DevicesCfg
 from isaaclab.devices.openxr.xr_cfg import XrCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -32,7 +31,7 @@ class DefaultEventManagerCfg:
     by the scene configuration.
     """
 
-    reset_scene_to_default = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    reset_scene_to_default = EventTerm(func="isaaclab.envs.mdp.events:reset_scene_to_default", mode="reset")
 
 
 @configclass

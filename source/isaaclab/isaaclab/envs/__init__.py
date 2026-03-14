@@ -42,6 +42,8 @@ _ISAACSIM_ONLY_EXPORTS = {
     "ManagerBasedRLEnvCfg",
     "ManagerBasedRLEnv",
     "ManagerBasedRLMimicEnv",
+    "multi_agent_to_single_agent",
+    "multi_agent_with_one_agent",
 }
 
 __all__ = ["mdp", "ui", *_MODULE_EXPORTS.keys()]

@@ -25,10 +25,6 @@ INSTALL_REQUIRES = [
     "hydra-core",
     # data collection
     "h5py",
-    # basic logger
-    "tensorboard",
-    # video recording
-    "moviepy",
     # make sure this is consistent with isaac sim version
     "pillow==11.3.0",
     "packaging<24",
@@ -43,17 +39,21 @@ TORCH_DEPENDENCIES = [
 # Extra dependencies for RL agents
 EXTRAS_REQUIRE = {
     "torch": TORCH_DEPENDENCIES,
-    "sb3": [*TORCH_DEPENDENCIES, "stable-baselines3>=2.6", "tqdm", "rich"],  # tqdm/rich for progress bar
+    "rl-logging": ["tensorboard"],
+    "video": ["moviepy"],
+    "sb3": [*TORCH_DEPENDENCIES, "stable-baselines3>=2.6", "tqdm", "rich", "tensorboard"],  # tqdm/rich for progress bar
     "skrl": ["skrl>=1.4.3"],
     "rl-games": [
         *TORCH_DEPENDENCIES,
         "rl-games @ git+https://github.com/isaac-sim/rl_games.git@python3.11",
         "gym",
+        "tensorboard",
     ],  # rl-games still needs gym :(
     "rsl-rl": [
         *TORCH_DEPENDENCIES,
         "rsl-rl-lib==5.0.1",
         "onnxscript>=0.5",
+        "tensorboard",
     ],  # linux aarch 64 requires manual onnxscript installation
     "dev": ["pytest", "pytest-mock"],
 }

@@ -5,16 +5,24 @@
 
 """Sub-module with utilities for parsing and loading configurations."""
 
+from __future__ import annotations
+
 import collections
 import importlib
 import inspect
 import os
 import re
+from typing import TYPE_CHECKING
 
 import gymnasium as gym
-import yaml
 
-from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - optional dependency on the MLX/mac path
+    yaml = None
+
+if TYPE_CHECKING:
+    from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
 
 def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | object:
@@ -82,6 +90,10 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
         )
     # parse the default config file
     if isinstance(cfg_entry_point, str) and cfg_entry_point.endswith(".yaml"):
+        if yaml is None:
+            raise ModuleNotFoundError(
+                "PyYAML is required to load YAML task configs. Install it or use a Python config entry point."
+            )
         if os.path.exists(cfg_entry_point):
             # absolute path for the config file
             config_file = cfg_entry_point
@@ -146,13 +158,19 @@ def parse_env_cfg(
         raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
 
     # simulation device
-    cfg.sim.device = device
+    if hasattr(cfg, "sim") and hasattr(cfg.sim, "device"):
+        cfg.sim.device = device
+    elif hasattr(cfg, "device"):
+        cfg.device = device
     # disable fabric to read/write through USD
-    if use_fabric is not None:
+    if use_fabric is not None and hasattr(cfg, "sim") and hasattr(cfg.sim, "use_fabric"):
         cfg.sim.use_fabric = use_fabric
     # number of environments
     if num_envs is not None:
-        cfg.scene.num_envs = num_envs
+        if hasattr(cfg, "scene") and hasattr(cfg.scene, "num_envs"):
+            cfg.scene.num_envs = num_envs
+        elif hasattr(cfg, "num_envs"):
+            cfg.num_envs = num_envs
 
     return cfg
 

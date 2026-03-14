@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import builtins
 import importlib
 import sys
 import types
@@ -263,6 +264,34 @@ def test_mac_runtime_entrypoints_import_without_isaacsim():
     assert cfg.usd_path.endswith("default_environment.usd")
 
 
+def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: pytest.MonkeyPatch):
+    """The shared config/helper surface should stay import-safe without torch on the mac bootstrap path."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    sys.modules.pop("isaaclab.envs.common", None)
+    sys.modules.pop("isaaclab.utils.noise", None)
+    sys.modules.pop("isaaclab.utils.noise.noise_cfg", None)
+    sys.modules.pop("isaaclab.utils.io", None)
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "torch":
+            raise ModuleNotFoundError("No module named 'torch'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    envs = importlib.import_module("isaaclab.envs")
+    noise = importlib.import_module("isaaclab.utils.noise")
+    io = importlib.import_module("isaaclab.utils.io")
+    types_mod = importlib.import_module("isaaclab.utils.types")
+    spaces = importlib.import_module("isaaclab.envs.utils.spaces")
+
+    assert envs.ViewerCfg.__name__ == "ViewerCfg"
+    assert noise.NoiseModelCfg.__name__ == "NoiseModelCfg"
+    assert callable(io.dump_yaml)
+    assert types_mod.ArticulationActions.__name__ == "ArticulationActions"
+    assert callable(spaces.spec_to_gym_space)
+
+
 def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """Torch compute adapter should forward device, seed, and checkpoint I/O to torch."""
     calls: list[tuple[str, object]] = []
@@ -390,6 +419,15 @@ def test_mac_sim_env_exports_fail_with_clear_backend_error():
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         _ = envs.DirectRLEnv
+
+
+def test_mac_sim_marl_helpers_fail_with_clear_backend_error():
+    """Multi-agent conversion helpers should stay gated behind the Isaac Sim runtime."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    envs = importlib.import_module("isaaclab.envs")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = envs.multi_agent_to_single_agent
 
 
 def test_mac_sim_can_load_simulation_cfg_but_not_simulation_context():

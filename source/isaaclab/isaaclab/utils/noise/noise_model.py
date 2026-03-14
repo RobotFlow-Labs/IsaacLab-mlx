@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from isaaclab.utils.string import string_to_callable
+
 if TYPE_CHECKING:
     from . import noise_cfg
 
@@ -118,6 +120,8 @@ class NoiseModel:
         self._noise_model_cfg = noise_model_cfg
         self._num_envs = num_envs
         self._device = device
+        if isinstance(self._noise_model_cfg.noise_cfg.func, str):
+            self._noise_model_cfg.noise_cfg.func = string_to_callable(self._noise_model_cfg.noise_cfg.func)
 
     def reset(self, env_ids: Sequence[int] | None = None):
         """Reset the noise model.
@@ -154,6 +158,8 @@ class NoiseModelWithAdditiveBias(NoiseModel):
         super().__init__(noise_model_cfg, num_envs, device)
         # store the bias noise configuration
         self._bias_noise_cfg = noise_model_cfg.bias_noise_cfg
+        if isinstance(self._bias_noise_cfg.func, str):
+            self._bias_noise_cfg.func = string_to_callable(self._bias_noise_cfg.func)
         self._bias = torch.zeros((num_envs, 1), device=self._device)
         self._num_components: int | None = None
         self._sample_bias_per_component = noise_model_cfg.sample_bias_per_component

@@ -57,6 +57,9 @@ without pausing for replanning after every small success.
 - `DONE` `isaaclab.sim` config surfaces for schemas, converters, and file spawners import on `mlx + mac-sim`
 - `DONE` `isaaclab.envs.mdp.actions` config surfaces import on `mlx + mac-sim` without runtime action modules
 - `DONE` macOS install/import smoke now writes retained JSON artifacts and benchmark results in CI
+- `DONE` `isaaclab_tasks` lazy mac task registry for cartpole, cart-double-pendulum, and quadcopter
+- `DONE` clean MLX/mac base install no longer pulls `torch`, `onnx`, `hidapi`, `transformers`, `starlette`, `tensorboard`, `numba`, or `moviepy`
+- `DONE` shared config/helper imports for `envs.common`, `utils.noise`, `utils.io`, `utils.types`, and `envs.utils.spaces` are now torch-free on the mac bootstrap path
 
 ## Phase A: Import And Packaging Safety
 
@@ -146,7 +149,7 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-009
 
-- Status: `ACTIVE`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-007`
 - Title: Replace `isaaclab_tasks` eager recursive package registration with a lazy task registry
 - Scope:
@@ -158,7 +161,7 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-010
 
-- Status: `READY`
+- Status: `ACTIVE`
 - Depends on: `MLX-IMPORT-009`
 - Title: Split direct-task CUDA/IsaacSim clusters from task package import surfaces
 - Scope:
@@ -182,7 +185,7 @@ without pausing for replanning after every small success.
 
 ### MLX-PKG-003
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Add clear support matrix for package extras and runtime combinations
 - Acceptance:
   - README section listing supported install combos
@@ -190,7 +193,7 @@ without pausing for replanning after every small success.
 
 ### MLX-PKG-004
 
-- Status: `READY`
+- Status: `ACTIVE`
 - Depends on: `MLX-PKG-003`
 - Title: Add fresh-env install smoke for documented public paths in CI
 - Acceptance:

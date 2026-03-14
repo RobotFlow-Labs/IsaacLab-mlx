@@ -19,13 +19,20 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # generic
     "numpy<2",
-    "torch>=2.7",
-    "torchvision>=0.14.1",  # ensure compatibility with torch 1.13.1
     "protobuf>=4.25.8,!=5.26.0",
-    # basic logger
-    "tensorboard",
-    "numba",
 ]
+EXTRAS_REQUIRE = {
+    "torch": [
+        "torch>=2.7",
+        "torchvision>=0.14.1",  # ensure compatibility with torch 1.13.1
+    ],
+    "rl-logging": [
+        "tensorboard",
+    ],
+    "cuda-automate": [
+        "numba",
+    ],
+}
 
 PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu128"]
 
@@ -41,6 +48,7 @@ setup(
     include_package_data=True,
     python_requires=">=3.10",
     install_requires=INSTALL_REQUIRES,
+    extras_require=EXTRAS_REQUIRE,
     dependency_links=PYTORCH_INDEX_URL,
     packages=find_packages(include=["isaaclab_tasks", "isaaclab_tasks.*"]),
     classifiers=[

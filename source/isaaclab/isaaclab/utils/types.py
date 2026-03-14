@@ -9,8 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TypeAlias
 
-import torch
+if TYPE_CHECKING:
+    import torch
+
+    TensorLike: TypeAlias = torch.Tensor
+else:
+    TensorLike: TypeAlias = Any
 
 
 @dataclass
@@ -23,16 +29,16 @@ class ArticulationActions:
     If the actions are not provided, the values are set to None.
     """
 
-    joint_positions: torch.Tensor | None = None
+    joint_positions: TensorLike | None = None
     """The joint positions of the articulation. Defaults to None."""
 
-    joint_velocities: torch.Tensor | None = None
+    joint_velocities: TensorLike | None = None
     """The joint velocities of the articulation. Defaults to None."""
 
-    joint_efforts: torch.Tensor | None = None
+    joint_efforts: TensorLike | None = None
     """The joint efforts of the articulation. Defaults to None."""
 
-    joint_indices: torch.Tensor | Sequence[int] | slice | None = None
+    joint_indices: TensorLike | Sequence[int] | slice | None = None
     """The joint indices of the articulation. Defaults to None.
 
     If the joint indices are a slice, this indicates that the indices are continuous and correspond

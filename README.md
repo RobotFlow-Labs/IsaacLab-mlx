@@ -100,6 +100,26 @@ Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selectio
 
 This path is for Apple Silicon macOS.
 
+### Install Matrix
+
+Use the smallest extra set that matches the workflow you actually need.
+
+| Workflow | Command |
+| --- | --- |
+| MLX/mac core runtime | `uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev]` |
+| MLX/mac core runtime + task registry | `uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev] -e source/isaaclab_tasks` |
+| MLX/mac core runtime + optional RL wrappers | `uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev] -e source/isaaclab_rl[dev]` |
+| Upstream CUDA / Isaac Sim runtime | `uv pip install --python .venv/bin/python -e source/isaaclab[cuda-isaacsim,dev]` |
+| Optional vision helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[vision]` |
+| Optional terrain viewer helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[terrain-viewer]` |
+| Optional teleop devices | `uv pip install --python .venv/bin/python -e source/isaaclab[teleop]` |
+| Optional ONNX export helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[onnx-export]` |
+| Optional livestream/web helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[livestream]` |
+| Optional Pink IK helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[pink-ik]` |
+| Optional OpenXR retargeting helpers | `uv pip install --python .venv/bin/python -e source/isaaclab[openxr-retargeting]` |
+| Optional IsaacLab task extras for CUDA AutoMate | `uv pip install --python .venv/bin/python -e source/isaaclab_tasks[cuda-automate]` |
+| Optional RL logging/video extras | `uv pip install --python .venv/bin/python -e source/isaaclab_rl[rl-logging,video]` |
+
 ### 1. Create the environment with `uv`
 
 ```bash

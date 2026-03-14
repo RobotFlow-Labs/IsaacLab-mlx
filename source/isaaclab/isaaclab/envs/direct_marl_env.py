@@ -28,6 +28,7 @@ from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
 from isaaclab.sim.utils.stage import attach_stage_to_usd_context, use_stage
 from isaaclab.utils.noise import NoiseModel
+from isaaclab.utils.string import string_to_callable
 from isaaclab.utils.seed import configure_seed
 from isaaclab.utils.timer import Timer
 from isaaclab.utils.version import get_isaac_sim_version
@@ -197,13 +198,21 @@ class DirectMARLEnv(gym.Env):
         # setup noise cfg for adding action and observation noise
         if self.cfg.action_noise_model:
             self._action_noise_model: dict[AgentID, NoiseModel] = {
-                agent: noise_model.class_type(noise_model, num_envs=self.num_envs, device=self.device)
+                agent: (
+                    (string_to_callable(noise_model.class_type) if isinstance(noise_model.class_type, str) else noise_model.class_type)(
+                        noise_model, num_envs=self.num_envs, device=self.device
+                    )
+                )
                 for agent, noise_model in self.cfg.action_noise_model.items()
                 if noise_model is not None
             }
         if self.cfg.observation_noise_model:
             self._observation_noise_model: dict[AgentID, NoiseModel] = {
-                agent: noise_model.class_type(noise_model, num_envs=self.num_envs, device=self.device)
+                agent: (
+                    (string_to_callable(noise_model.class_type) if isinstance(noise_model.class_type, str) else noise_model.class_type)(
+                        noise_model, num_envs=self.num_envs, device=self.device
+                    )
+                )
                 for agent, noise_model in self.cfg.observation_noise_model.items()
                 if noise_model is not None
             }

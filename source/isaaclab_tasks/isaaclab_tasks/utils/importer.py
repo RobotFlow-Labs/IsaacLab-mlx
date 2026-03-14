@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import sys
+from collections.abc import Sequence
 
 
 def import_packages(package_name: str, blacklist_pkgs: list[str] | None = None):
@@ -39,6 +40,12 @@ def import_packages(package_name: str, blacklist_pkgs: list[str] | None = None):
     # Import all Python files
     for _ in _walk_packages(package.__path__, package.__name__ + ".", blacklist_pkgs=blacklist_pkgs):
         pass
+
+
+def import_modules(module_names: Sequence[str]):
+    """Import a fixed list of modules."""
+    for module_name in module_names:
+        importlib.import_module(module_name)
 
 
 """
