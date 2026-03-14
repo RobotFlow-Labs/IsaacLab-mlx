@@ -26,6 +26,8 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleTrainCfg,
     MacQuadcopterEnv,
     MacQuadcopterEnvCfg,
+    mac_env_diagnostics,
+    rollout_env,
     train_cartpole_policy,
 )
 
@@ -78,20 +80,6 @@ def _make_benchmark_result(
     return result
 
 
-def _sim_backend_snapshot(env: Any) -> dict[str, Any]:
-    """Capture the concrete simulator adapter contract for the benchmarked env."""
-    sim_backend = env.sim_backend
-    return {
-        "backend": sim_backend.name,
-        "capabilities": sim_backend.capabilities.__dict__,
-        "contract": {
-            "reset_signature": sim_backend.contract.reset_signature,
-            "step_signature": sim_backend.contract.step_signature,
-            "articulations": sim_backend.contract.articulations.__dict__,
-        },
-    }
-
-
 def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the cartpole MLX env step loop."""
     env = MacCartpoleEnv(MacCartpoleEnvCfg(num_envs=num_envs, seed=seed))
@@ -100,9 +88,7 @@ def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     _sync([observations["policy"]])
 
     start = time.perf_counter()
-    for _ in range(steps):
-        observations, rewards, terminated, truncated, _ = env.step(actions)
-        _sync([observations["policy"], rewards, terminated, truncated])
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
     elapsed_s = time.perf_counter() - start
 
     return _make_benchmark_result(
@@ -113,7 +99,7 @@ def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
         runtime_state=get_runtime_state(env.runtime),
         extra={
             "observation_dim": env.cfg.observation_space,
-            "sim_adapter": _sim_backend_snapshot(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
 
@@ -129,18 +115,7 @@ def benchmark_cart_double_pendulum(num_envs: int, steps: int, seed: int) -> dict
     _sync([observations["cart"], observations["pendulum"]])
 
     start = time.perf_counter()
-    for _ in range(steps):
-        observations, rewards, terminated, truncated, _ = env.step(actions)
-        _sync(
-            [
-                observations["cart"],
-                observations["pendulum"],
-                rewards["cart"],
-                rewards["pendulum"],
-                terminated["cart"],
-                truncated["cart"],
-            ]
-        )
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
     elapsed_s = time.perf_counter() - start
 
     return _make_benchmark_result(
@@ -152,7 +127,7 @@ def benchmark_cart_double_pendulum(num_envs: int, steps: int, seed: int) -> dict
         extra={
             "cart_observation_dim": env.cfg.observation_spaces["cart"],
             "pendulum_observation_dim": env.cfg.observation_spaces["pendulum"],
-            "sim_adapter": _sim_backend_snapshot(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
 
@@ -166,9 +141,7 @@ def benchmark_quadcopter(num_envs: int, steps: int, seed: int, thrust_action: fl
     _sync([observations["policy"]])
 
     start = time.perf_counter()
-    for _ in range(steps):
-        observations, rewards, terminated, truncated, _ = env.step(actions)
-        _sync([observations["policy"], rewards, terminated, truncated])
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
     elapsed_s = time.perf_counter() - start
 
     return _make_benchmark_result(
@@ -180,7 +153,7 @@ def benchmark_quadcopter(num_envs: int, steps: int, seed: int, thrust_action: fl
         extra={
             "observation_dim": env.cfg.observation_space,
             "thrust_action": thrust_action,
-            "sim_adapter": _sim_backend_snapshot(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
 

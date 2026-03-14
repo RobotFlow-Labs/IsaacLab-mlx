@@ -63,6 +63,7 @@ without pausing for replanning after every small success.
 - `DONE` a first static manifest now keeps AutoMate, Factory, FORGE, Franka Cabinet, and manager-based pick-place task IDs discoverable on mac while gating them behind explicit `sim-backend=isaacsim` errors
 - `DONE` shared mac-sim batched state primitives now back cartpole, cart-double-pendulum, and quadcopter
 - `DONE` reusable environment origin/grid helper now backs quadcopter root-state resets and goal sampling
+- `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 
 ## Phase A: Import And Packaging Safety
 
@@ -263,39 +264,53 @@ without pausing for replanning after every small success.
 
 ### MLX-SIM-005
 
-- Status: `ACTIVE`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Add terrain representation for the first locomotion task
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_phase_b_support.py`
 
 ### MLX-SIM-006
 
-- Status: `BLOCKED`
+- Status: `DONE`
 - Depends on: `MLX-SIM-005`
 - Title: Add contact approximation model sufficient for first locomotion bring-up
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_phase_b_support.py`
 
 ### MLX-SIM-007
 
-- Status: `BLOCKED`
+- Status: `DONE`
 - Depends on: `MLX-SIM-006`
 - Title: Add contact-oriented reward/termination utilities
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_phase_b_support.py`
 
 ### MLX-SIM-008
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Centralize reset sampling helpers and determinism controls
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_phase_b_support.py`
+  - focused backend suite
 
 ### MLX-SIM-009
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Add capability reporting from concrete mac-sim adapters into benchmarks and diagnostics
+- Validation:
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
+  - benchmark smoke JSON output
 
 ### MLX-SIM-010
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Add shared replay/rollout helpers for mac-native tasks
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_phase_b_support.py`
 
 ## Phase C: Task Ports
 
@@ -316,11 +331,11 @@ without pausing for replanning after every small success.
 
 ### MLX-TASK-004
 
-- Status: `BLOCKED`
+- Status: `READY`
 - Depends on: `MLX-SIM-005`, `MLX-SIM-006`, `MLX-SIM-007`
 - Title: Port first quadruped locomotion task
 - Suggested target:
-  - pick the simplest existing velocity locomotion task with minimal sensor coupling
+  - `Isaac-Velocity-Flat-Anymal-C-Direct-v0`
 
 ### MLX-TASK-005
 

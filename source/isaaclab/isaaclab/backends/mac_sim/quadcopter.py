@@ -22,6 +22,7 @@ from isaaclab.backends.runtime import (
 )
 
 from .env_cfgs import MacQuadcopterEnvCfg
+from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState, BatchedRootState, EnvironmentOriginGrid
 
 
@@ -88,9 +89,10 @@ class MacQuadcopterSimBackend(MacSimBackend):
         ),
     )
 
-    def __init__(self, cfg: MacQuadcopterEnvCfg):
+    def __init__(self, cfg: MacQuadcopterEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
+        self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
         self.origin_grid = EnvironmentOriginGrid(cfg.num_envs, cfg.env_spacing)
         self.root_state = BatchedRootState(cfg.num_envs, origin_grid=self.origin_grid)
         self.joint_state = BatchedArticulationState(cfg.num_envs, num_joints=4)
@@ -189,9 +191,20 @@ class MacQuadcopterSimBackend(MacSimBackend):
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "root_pos_w": self.root_state.root_pos_w.tolist(),
-            "root_lin_vel_b": self.root_state.root_lin_vel_b.tolist(),
-            "root_ang_vel_b": self.root_state.root_ang_vel_b.tolist(),
+            "capabilities": self.capabilities.__dict__,
+            "contract": {
+                "reset_signature": self.contract.reset_signature,
+                "step_signature": self.contract.step_signature,
+                "articulations": self.contract.articulations.__dict__,
+            },
+            "subsystems": {
+                "terrain": False,
+                "contacts": False,
+                "deterministic_resets": True,
+                "rollout_helpers": True,
+            },
+            "root_state_shape": list(self.root_state.root_pos_w.shape),
+            "env_spacing": self.origin_grid.spacing,
         }
 
     @property
@@ -225,6 +238,8 @@ class MacQuadcopterEnv:
     def __init__(self, cfg: MacQuadcopterEnvCfg | None = None):
         self.cfg = cfg or MacQuadcopterEnvCfg()
         mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        self.goal_sampler = self.reset_sampler.fork("goal-reset")
         runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
         self.runtime = runtime
         self.device = runtime.device
@@ -232,7 +247,7 @@ class MacQuadcopterEnv:
         self.step_dt = self.cfg.sim_dt * self.cfg.decimation
         self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
 
-        self.sim_backend = MacQuadcopterSimBackend(self.cfg)
+        self.sim_backend = MacQuadcopterSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
         self._actions = mx.zeros((self.num_envs, 4), dtype=mx.float32)
         self._thrust = mx.zeros((self.num_envs,), dtype=mx.float32)
         self._moment = mx.zeros((self.num_envs, 3), dtype=mx.float32)
@@ -340,7 +355,7 @@ class MacQuadcopterEnv:
             self._episode_sums[key][ids] = 0.0
 
         desired = mx.zeros((len(env_ids), 3), dtype=mx.float32)
-        desired[:, :2] = mx.random.uniform(low=-2.0, high=2.0, shape=(len(env_ids), 2))
+        desired[:, :2] = self.goal_sampler.uniform((len(env_ids), 2), -2.0, 2.0)
         desired[:, :2] = desired[:, :2] + self.sim_backend.env_origins[ids, :2]
-        desired[:, 2] = mx.random.uniform(low=0.5, high=1.5, shape=(len(env_ids),))
+        desired[:, 2] = self.goal_sampler.uniform((len(env_ids),), 0.5, 1.5)
         self._desired_pos_w[ids] = desired

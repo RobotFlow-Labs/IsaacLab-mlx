@@ -22,6 +22,7 @@ from isaaclab.backends.runtime import (
 )
 
 from .env_cfgs import MacCartDoublePendulumEnvCfg
+from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState
 
 
@@ -76,9 +77,10 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         ),
     )
 
-    def __init__(self, cfg: MacCartDoublePendulumEnvCfg):
+    def __init__(self, cfg: MacCartDoublePendulumEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
+        self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
         self.state = BatchedArticulationState(cfg.num_envs, num_joints=3)
         self.reset()
 
@@ -97,15 +99,15 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
             return
         joint_pos = mx.zeros((len(env_ids), 3), dtype=mx.float32)
         joint_vel = mx.zeros((len(env_ids), 3), dtype=mx.float32)
-        joint_pos[:, 1] = mx.random.uniform(
-            low=self.cfg.initial_pole_angle_range[0] * math.pi,
-            high=self.cfg.initial_pole_angle_range[1] * math.pi,
-            shape=(len(env_ids),),
+        joint_pos[:, 1] = self.reset_sampler.uniform(
+            (len(env_ids),),
+            self.cfg.initial_pole_angle_range[0] * math.pi,
+            self.cfg.initial_pole_angle_range[1] * math.pi,
         )
-        joint_pos[:, 2] = mx.random.uniform(
-            low=self.cfg.initial_pendulum_angle_range[0] * math.pi,
-            high=self.cfg.initial_pendulum_angle_range[1] * math.pi,
-            shape=(len(env_ids),),
+        joint_pos[:, 2] = self.reset_sampler.uniform(
+            (len(env_ids),),
+            self.cfg.initial_pendulum_angle_range[0] * math.pi,
+            self.cfg.initial_pendulum_angle_range[1] * math.pi,
         )
         self.state.reset_envs(env_ids, joint_pos=joint_pos, joint_vel=joint_vel, joint_effort_target=0.0)
 
@@ -193,12 +195,19 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "cart_pos": self.state.joint_pos[:, 0].tolist(),
-            "cart_vel": self.state.joint_vel[:, 0].tolist(),
-            "pole_angle": self.state.joint_pos[:, 1].tolist(),
-            "pole_vel": self.state.joint_vel[:, 1].tolist(),
-            "pendulum_angle": self.state.joint_pos[:, 2].tolist(),
-            "pendulum_vel": self.state.joint_vel[:, 2].tolist(),
+            "capabilities": self.capabilities.__dict__,
+            "contract": {
+                "reset_signature": self.contract.reset_signature,
+                "step_signature": self.contract.step_signature,
+                "articulations": self.contract.articulations.__dict__,
+            },
+            "subsystems": {
+                "terrain": False,
+                "contacts": False,
+                "deterministic_resets": True,
+                "rollout_helpers": True,
+            },
+            "joint_state_shape": list(self.state.joint_pos.shape),
         }
 
 
@@ -208,6 +217,7 @@ class MacCartDoublePendulumEnv:
     def __init__(self, cfg: MacCartDoublePendulumEnvCfg | None = None):
         self.cfg = cfg or MacCartDoublePendulumEnvCfg()
         mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
         runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
         self.runtime = runtime
         self.device = runtime.device
@@ -220,7 +230,10 @@ class MacCartDoublePendulumEnv:
             "pendulum": mx.zeros((self.num_envs, 1), dtype=mx.float32),
         }
 
-        self.sim_backend = MacCartDoublePendulumSimBackend(self.cfg)
+        self.sim_backend = MacCartDoublePendulumSimBackend(
+            self.cfg,
+            reset_sampler=self.reset_sampler.fork("sim-backend"),
+        )
         self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
         self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
         self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)

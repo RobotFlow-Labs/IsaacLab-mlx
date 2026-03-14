@@ -28,6 +28,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import MacCartpoleEnvCfg
+from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState
 
 
@@ -73,9 +74,10 @@ class MacCartpoleSimBackend(MacSimBackend):
         ),
     )
 
-    def __init__(self, cfg: MacCartpoleEnvCfg):
+    def __init__(self, cfg: MacCartpoleEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
+        self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
         self.state = BatchedArticulationState(cfg.num_envs, num_joints=2)
         self.reset()
 
@@ -94,10 +96,10 @@ class MacCartpoleSimBackend(MacSimBackend):
             return
         joint_pos = mx.zeros((len(env_ids), 2), dtype=mx.float32)
         joint_vel = mx.zeros((len(env_ids), 2), dtype=mx.float32)
-        joint_pos[:, 1] = mx.random.uniform(
-            low=self.cfg.initial_pole_angle_range[0],
-            high=self.cfg.initial_pole_angle_range[1],
-            shape=(len(env_ids),),
+        joint_pos[:, 1] = self.reset_sampler.uniform(
+            (len(env_ids),),
+            self.cfg.initial_pole_angle_range[0],
+            self.cfg.initial_pole_angle_range[1],
         )
         self.state.reset_envs(env_ids, joint_pos=joint_pos, joint_vel=joint_vel, joint_effort_target=0.0)
 
@@ -170,10 +172,19 @@ class MacCartpoleSimBackend(MacSimBackend):
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "cart_pos": self.state.joint_pos[:, 0].tolist(),
-            "cart_vel": self.state.joint_vel[:, 0].tolist(),
-            "pole_angle": self.state.joint_pos[:, 1].tolist(),
-            "pole_vel": self.state.joint_vel[:, 1].tolist(),
+            "capabilities": self.capabilities.__dict__,
+            "contract": {
+                "reset_signature": self.contract.reset_signature,
+                "step_signature": self.contract.step_signature,
+                "articulations": self.contract.articulations.__dict__,
+            },
+            "subsystems": {
+                "terrain": False,
+                "contacts": False,
+                "deterministic_resets": True,
+                "rollout_helpers": True,
+            },
+            "joint_state_shape": list(self.state.joint_pos.shape),
         }
 
 
@@ -183,6 +194,7 @@ class MacCartpoleEnv:
     def __init__(self, cfg: MacCartpoleEnvCfg | None = None):
         self.cfg = cfg or MacCartpoleEnvCfg()
         mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
         runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
         self.runtime = runtime
         self.device = runtime.device
@@ -193,7 +205,7 @@ class MacCartpoleEnv:
         self.single_action_space = self.cfg.action_space
         self.single_observation_space = {"policy": self.cfg.observation_space}
 
-        self.sim_backend = MacCartpoleSimBackend(self.cfg)
+        self.sim_backend = MacCartpoleSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
         self.actions = mx.zeros((self.num_envs, 1), dtype=mx.float32)
         self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
         self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
