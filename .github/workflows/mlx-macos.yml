@@ -231,7 +231,9 @@ jobs:
           source/isaaclab/test/backends/test_kernel_inventory.py \
           source/isaaclab/test/backends/test_kernel_compat.py \
           source/isaaclab/test/backends/test_mac_hotpath.py \
+          source/isaaclab/test/backends/test_mac_camera_capture.py \
           source/isaaclab/test/backends/test_mac_sensor_raycast.py \
+          source/isaaclab/test/backends/test_mac_stereo_depth.py \
           source/isaaclab/test/backends/test_mlx_task_cli.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab_rl/test/test_mlx_wrapper.py \
@@ -308,6 +310,44 @@ jobs:
         assert payload["episodes_completed"] == 1
         print(payload["task"], payload["episodes_completed"])
         PY
+
+    - name: Run synthetic MLX stereo depth smoke
+      run: |
+        mkdir -p logs/hardware
+        PYTHONPATH=.:source/isaaclab .venv/bin/python - <<'PY'
+        from pathlib import Path
+        import numpy as np
+
+        root = Path("logs/hardware")
+        width = 8
+        height = 4
+        left_luma = np.tile(np.array([20, 40, 60, 80], dtype=np.uint8), (height, 1))
+        right_luma = np.zeros_like(left_luma)
+        right_luma[:, :-1] = left_luma[:, 1:]
+        left = np.zeros((height, width // 2, 2), dtype=np.uint8)
+        right = np.zeros((height, width // 2, 2), dtype=np.uint8)
+        left[:, :, 0] = left_luma
+        right[:, :, 0] = right_luma
+        left[:, :, 1] = 128
+        right[:, :, 1] = 128
+        frame = np.concatenate([left, right], axis=1)
+        raw_path = root / "synthetic_stereo.raw"
+        raw_path.write_bytes(frame.tobytes())
+        Path(f"{raw_path}.txt").write_text(
+            "width=8\nheight=4\nchannels=2\npixel_format=yuyv422\n",
+            encoding="utf-8",
+        )
+        print(raw_path)
+        PY
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/tools/mac_stereo_depth_smoke.py \
+          logs/hardware/synthetic_stereo.raw \
+          logs/hardware/synthetic_depth \
+          --max-disparity 4 \
+          --window-size 1
+        test -f logs/hardware/synthetic_depth/left_rgb.png
+        test -f logs/hardware/synthetic_depth/right_rgb.png
+        test -f logs/hardware/synthetic_depth/disparity.png
 
     - name: Run MLX benchmark smoke
       run: |

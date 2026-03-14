@@ -510,14 +510,24 @@ without pausing for replanning after every small success.
 
 ### MLX-SENSOR-003
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Define minimal depth output contract for task-usable cameras
+- Validation:
+  - `source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`
+  - `source/isaaclab/test/backends/test_mac_stereo_depth.py`
+  - synthetic stereo smoke via `scripts/tools/mac_stereo_depth_smoke.py`
 
 ### MLX-SENSOR-004
 
-- Status: `LATER`
+- Status: `DONE`
 - Depends on: `MLX-SENSOR-003`
 - Title: Add basic camera/depth path for non-RTX tasks
+- Validation:
+  - `source/isaaclab/isaaclab/backends/mac_sim/cameras.py`
+  - `scripts/tools/probe_mac_camera.py`
+  - `scripts/tools/mac_stereo_depth_smoke.py`
+  - `source/isaaclab/test/backends/test_mac_camera_capture.py`
+  - focused backend suite
 
 ### MLX-SENSOR-005
 

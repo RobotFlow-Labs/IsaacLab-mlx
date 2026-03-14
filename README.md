@@ -39,6 +39,8 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a first mac-native analytic raycast / height-scan sensor substrate for flat-terrain locomotion tasks
+- a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i
+- a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
 - MLX training, checkpoint save/load, and replay scripts
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
@@ -50,7 +52,7 @@ What works today:
 What this does not claim yet:
 
 - full Isaac Sim compatibility on macOS
-- RTX sensors, camera pipelines, Warp kernels, cuRobo, or the full task zoo
+- RTX sensors, Omniverse camera modules, Warp kernels, cuRobo, or the full task zoo
 - Isaac ROS acceleration or CUDA transport parity
 
 ## MLX Port Architecture
@@ -139,7 +141,8 @@ This is the current public support contract for runtime combinations, not just w
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
-| macOS cameras / RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
+| Apple Silicon + backend-local external stereo capture | Supported prototype | AVFoundation/UVC discovery plus raw stereo dump and MLX depth smoke; not Isaac Sim camera parity |
+| macOS RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
 | macOS planners / cuRobo / Isaac ROS CUDA transport | Reference-only / deferred | Not part of the current public MLX support surface |
 
 ### Import-Safe Surface On macOS
@@ -293,7 +296,34 @@ train_payload = train_mlx_task("anymal-c-flat", num_envs=128, updates=10)
 eval_payload = evaluate_mlx_task("h1-flat", num_envs=32, episodes=3)
 ```
 
-### 9. Run the focused backend test suite
+### 9. Probe the backend-local mac camera path
+
+The fork now also ships backend-local macOS camera tools for external stereo devices. These do not depend on Isaac Sim or the Omniverse camera stack.
+
+- [`scripts/tools/probe_mac_camera.py`](scripts/tools/probe_mac_camera.py)
+- [`scripts/tools/mac_stereo_depth_smoke.py`](scripts/tools/mac_stereo_depth_smoke.py)
+
+Device discovery:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/tools/probe_mac_camera.py \
+  --json-out logs/hardware/mac_camera_probe.json
+```
+
+Stereo/depth smoke on a raw side-by-side YUYV dump:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/tools/mac_stereo_depth_smoke.py \
+  logs/hardware/synthetic_stereo.raw \
+  logs/hardware/synthetic_depth \
+  --max-disparity 64
+```
+
+The current live-camera validation path is intentionally separated from the main CI ring because camera ownership and TCC permissions depend on the host app. The software path is still fully test-backed through synthetic stereo dumps.
+
+### 10. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
@@ -302,8 +332,10 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_task_registry.py \
   source/isaaclab/test/backends/test_kernel_inventory.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
+  source/isaaclab/test/backends/test_mac_camera_capture.py \
   source/isaaclab/test/backends/test_mac_hotpath.py \
   source/isaaclab/test/backends/test_mac_sensor_raycast.py \
+  source/isaaclab/test/backends/test_mac_stereo_depth.py \
   source/isaaclab/test/backends/test_mlx_task_cli.py \
   source/isaaclab_rl/test/test_import_safety.py \
   source/isaaclab_rl/test/test_mlx_wrapper.py \
@@ -377,6 +409,7 @@ CI now preserves both benchmark JSON artifacts and a dedicated import-safety art
 - CI benchmark smokes are regression signals, not public performance claims.
 - A benchmark run is only considered healthy when `cpu_fallback.detected == false`.
 - Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons. Do not compare against CI smoke numbers.
+- Backend-local camera validation currently lives in synthetic stereo smoke tests and optional host-specific hardware probes, not in the task benchmark suite.
 
 ## Kernel Inventory
 
@@ -412,9 +445,13 @@ Implementation entrypoints:
 - ANYmal-C flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
 - analytic plane raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
+- backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
+- backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
 - public MLX wrapper surface in [`source/isaaclab_rl/isaaclab_rl/mlx.py`](source/isaaclab_rl/isaaclab_rl/mlx.py)
 - shared trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_task.py`](scripts/reinforcement_learning/mlx/train_task.py)
 - shared replay/eval entrypoint in [`scripts/reinforcement_learning/mlx/evaluate_task.py`](scripts/reinforcement_learning/mlx/evaluate_task.py)
+- backend-local camera probe in [`scripts/tools/probe_mac_camera.py`](scripts/tools/probe_mac_camera.py)
+- backend-local stereo/depth smoke in [`scripts/tools/mac_stereo_depth_smoke.py`](scripts/tools/mac_stereo_depth_smoke.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -429,6 +466,7 @@ The cartpole path preserves the important upstream task semantics:
 - H1 flat preserves a 19-DOF command-driven locomotion observation layout with contact-aware reward terms, base-contact termination, and MLX PPO smoke coverage
 - the first mac-native sensor slice is an analytic plane raycast / height-scan path for flat-terrain locomotion benchmarks
 - the `sensor-mac-native` benchmark rows correspond to `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
+- the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 
 ## Bootstrapping Upstream Sources
 

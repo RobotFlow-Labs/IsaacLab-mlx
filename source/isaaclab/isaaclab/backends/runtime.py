@@ -543,17 +543,17 @@ class MacSensorBackend(SensorBackend):
     capabilities = SensorCapabilities(
         proprioception=True,
         raycast=True,
-        cameras=False,
-        depth=False,
+        cameras=True,
+        depth=True,
         segmentation=False,
-        rgb=False,
+        rgb=True,
     )
 
     def state_dict(self) -> dict[str, Any]:
         return {
             "backend": self.name,
             "capabilities": self.capabilities.__dict__,
-            "implementation": "analytic-plane-raycast",
+            "implementation": "analytic-plane-raycast+external-stereo-depth",
         }
 
 
