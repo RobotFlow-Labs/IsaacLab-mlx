@@ -21,8 +21,11 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     biped_support_metrics_hotpath,
     contact_update_hotpath,
     h1_body_positions_hotpath,
+    locomotion_root_step_hotpath,
+    prime_contact_state,
     quadruped_support_metrics_hotpath,
 )
+from isaaclab.backends.mac_sim import BatchedContactSensorState, MacPlaneTerrain  # noqa: E402
 
 
 def test_contact_update_hotpath_matches_reference_math():
@@ -150,3 +153,79 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
 
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
+
+
+def test_locomotion_root_step_hotpath_matches_reference_math():
+    dt = 0.02
+    root_pos_w = mx.array([[0.1, 0.2, 0.55], [1.0, -0.2, 0.92]], dtype=mx.float32)
+    root_quat_w = mx.array([[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0]], dtype=mx.float32)
+    root_lin_vel_b = mx.array([[0.2, -0.1, 0.05], [0.0, 0.1, -0.03]], dtype=mx.float32)
+    root_ang_vel_b = mx.array([[0.01, -0.02, 0.03], [-0.02, 0.01, -0.04]], dtype=mx.float32)
+    projected_gravity_b = mx.array([[0.02, -0.03, -1.0], [0.05, 0.01, -0.99]], dtype=mx.float32)
+    commands = mx.array([[0.4, 0.1, 0.2], [0.1, -0.2, -0.1]], dtype=mx.float32)
+    lin_gain = mx.array([0.7, 0.5], dtype=mx.float32)
+    angular_acc_b = mx.array([[0.1, -0.2, 0.3], [-0.1, 0.2, -0.3]], dtype=mx.float32)
+    target_height = mx.array([0.6, 1.0], dtype=mx.float32)
+
+    outputs = locomotion_root_step_hotpath(
+        dt,
+        root_pos_w,
+        root_quat_w,
+        root_lin_vel_b,
+        root_ang_vel_b,
+        projected_gravity_b,
+        commands,
+        lin_gain,
+        angular_acc_b,
+        target_height,
+        0.4,
+        0.3,
+        8.0,
+        1.5,
+        0.2,
+    )
+    mx.eval(*outputs)
+    next_root_pos_w, next_root_quat_w, next_root_lin_vel_b, next_root_ang_vel_b, next_projected_gravity_b = outputs
+
+    expected_lin_xy = np.array(root_lin_vel_b)[:, :2] + dt * (
+        np.array(lin_gain)[:, None] * (np.array(commands)[:, :2] - np.array(root_lin_vel_b)[:, :2])
+        - 0.4 * np.array(root_lin_vel_b)[:, :2]
+    )
+    expected_orientation_penalty = np.sum(np.square(np.array(projected_gravity_b)[:, :2]), axis=1)
+    expected_z = np.array(root_lin_vel_b)[:, 2] + dt * (
+        8.0 * (np.array(target_height) - np.array(root_pos_w)[:, 2])
+        - 1.5 * np.array(root_lin_vel_b)[:, 2]
+        - 0.2 * expected_orientation_penalty
+    )
+    expected_ang = np.array(root_ang_vel_b) + dt * (np.array(angular_acc_b) - 0.3 * np.array(root_ang_vel_b))
+
+    assert np.allclose(np.array(next_root_lin_vel_b)[:, :2], expected_lin_xy)
+    assert np.allclose(np.array(next_root_lin_vel_b)[:, 2], expected_z)
+    assert np.allclose(np.array(next_root_ang_vel_b), expected_ang)
+    assert next_root_pos_w.shape == root_pos_w.shape
+    assert next_root_quat_w.shape == root_quat_w.shape
+    assert next_projected_gravity_b.shape == projected_gravity_b.shape
+
+
+def test_prime_contact_state_returns_zero_velocity_and_updates_contact_buffers():
+    terrain = MacPlaneTerrain(num_envs=2, env_spacing=4.0, tile_size=(4.0, 4.0))
+    contacts = BatchedContactSensorState(
+        num_envs=2,
+        body_names=("base", "LF_FOOT", "RF_FOOT"),
+        foot_body_names=("LF_FOOT", "RF_FOOT"),
+        step_dt=0.05,
+    )
+    body_pos_w = mx.array(
+        [
+            [[0.0, 0.0, 0.3], [0.2, 0.2, 0.005], [-0.2, 0.2, 0.006]],
+            [[4.0, 0.0, 0.3], [4.2, 0.2, 0.07], [3.8, 0.2, 0.004]],
+        ],
+        dtype=mx.float32,
+    )
+
+    zero_body_vel = prime_contact_state(body_pos_w, contacts, terrain)
+    mx.eval(zero_body_vel, contacts.contact_mask)
+
+    assert np.allclose(np.array(zero_body_vel), 0.0)
+    assert bool(contacts.contact_mask[0, 1].item()) is True
+    assert bool(contacts.contact_mask[1, 2].item()) is True

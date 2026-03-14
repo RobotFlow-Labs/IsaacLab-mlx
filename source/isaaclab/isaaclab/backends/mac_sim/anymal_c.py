@@ -33,6 +33,8 @@ from .hotpath import (
     HOTPATH_BACKEND,
     anymal_body_positions_hotpath,
     anymal_leg_extension_hotpath,
+    locomotion_root_step_hotpath,
+    prime_contact_state,
     quadruped_support_metrics_hotpath,
 )
 from .locomotion import (
@@ -44,7 +46,6 @@ from .locomotion import (
     track_yaw_rate_z_exp,
     undesired_contacts,
 )
-from .quadcopter import _quat_conjugate, _quat_from_angular_velocity, _quat_multiply, _quat_normalize, _quat_rotate
 from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState, BatchedRootState
 from .terrain import MacPlaneTerrain
@@ -260,7 +261,7 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         self.contact_model.reset_envs(env_ids)
         body_pos_w = self._body_positions()[ids]
         self._last_body_pos_w[ids] = body_pos_w
-        self.contact_model.update(body_pos_w, mx.zeros_like(body_pos_w), self.terrain, env_ids=env_ids)
+        prime_contact_state(body_pos_w, self.contact_model, self.terrain, env_ids=env_ids)
 
     def _leg_extension(self, joint_pos: mx.array) -> mx.array:
         return anymal_leg_extension_hotpath(joint_pos)
@@ -317,37 +318,36 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
             self.commands[:, 2] - self.root_state.root_ang_vel_b[:, 2]
         )
 
-        self.root_state.root_ang_vel_b[:, 0] = self.root_state.root_ang_vel_b[:, 0] + dt * (
-            roll_acc - self.cfg.root_ang_damping * self.root_state.root_ang_vel_b[:, 0]
-        )
-        self.root_state.root_ang_vel_b[:, 1] = self.root_state.root_ang_vel_b[:, 1] + dt * (
-            pitch_acc - self.cfg.root_ang_damping * self.root_state.root_ang_vel_b[:, 1]
-        )
-        self.root_state.root_ang_vel_b[:, 2] = self.root_state.root_ang_vel_b[:, 2] + dt * (
-            yaw_acc - self.cfg.root_ang_damping * self.root_state.root_ang_vel_b[:, 2]
-        )
-
         extension = self._leg_extension(self.joint_state.joint_pos)
         target_height = (
             self.cfg.default_root_height
             + 0.15 * (mx.mean(extension, axis=1) - self.cfg.nominal_leg_extension)
             + 0.03 * (support_ratio - 1.0)
         )
-        orientation_penalty = mx.sum(mx.square(self.root_state.projected_gravity_b[:, :2]), axis=1)
-        z_acc = (
-            self.cfg.height_stiffness * (target_height - self.root_state.root_pos_w[:, 2])
-            - self.cfg.height_damping * self.root_state.root_lin_vel_b[:, 2]
-            - self.cfg.orientation_height_penalty * orientation_penalty
+        angular_acc_b = mx.stack([roll_acc, pitch_acc, yaw_acc], axis=1)
+        (
+            self.root_state.root_pos_w,
+            self.root_state.root_quat_w,
+            self.root_state.root_lin_vel_b,
+            self.root_state.root_ang_vel_b,
+            self.root_state.projected_gravity_b,
+        ) = locomotion_root_step_hotpath(
+            dt,
+            self.root_state.root_pos_w,
+            self.root_state.root_quat_w,
+            self.root_state.root_lin_vel_b,
+            self.root_state.root_ang_vel_b,
+            self.root_state.projected_gravity_b,
+            self.commands,
+            lin_gain,
+            angular_acc_b,
+            target_height,
+            self.cfg.root_lin_damping,
+            self.cfg.root_ang_damping,
+            self.cfg.height_stiffness,
+            self.cfg.height_damping,
+            self.cfg.orientation_height_penalty,
         )
-        self.root_state.root_lin_vel_b[:, 2] = self.root_state.root_lin_vel_b[:, 2] + dt * z_acc
-
-        delta_quat = _quat_from_angular_velocity(self.root_state.root_ang_vel_b, dt)
-        self.root_state.root_quat_w = _quat_normalize(_quat_multiply(self.root_state.root_quat_w, delta_quat))
-        world_vel = _quat_rotate(self.root_state.root_quat_w, self.root_state.root_lin_vel_b)
-        self.root_state.root_pos_w = self.root_state.root_pos_w + dt * world_vel
-
-        gravity_w = mx.tile(mx.array([[0.0, 0.0, -1.0]], dtype=mx.float32), (self.num_envs, 1))
-        self.root_state.projected_gravity_b = _quat_rotate(_quat_conjugate(self.root_state.root_quat_w), gravity_w)
 
     def get_joint_state(self, articulation: Any) -> tuple[mx.array, mx.array]:
         del articulation

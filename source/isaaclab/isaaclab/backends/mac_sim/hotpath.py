@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import mlx.core as mx
 
+from .quadcopter import _quat_conjugate, _quat_from_angular_velocity, _quat_multiply, _quat_normalize, _quat_rotate
+
 
 HOTPATH_BACKEND = "mlx-compiled"
 
@@ -278,3 +280,57 @@ anymal_leg_extension_hotpath = mx.compile(_anymal_leg_extension_impl)
 anymal_body_positions_hotpath = mx.compile(_anymal_body_positions_impl)
 h1_leg_extension_hotpath = mx.compile(_h1_leg_extension_impl)
 h1_body_positions_hotpath = mx.compile(_h1_body_positions_impl)
+
+
+def _locomotion_root_step_impl(
+    dt: float,
+    root_pos_w: mx.array,
+    root_quat_w: mx.array,
+    root_lin_vel_b: mx.array,
+    root_ang_vel_b: mx.array,
+    projected_gravity_b: mx.array,
+    commands: mx.array,
+    lin_gain: mx.array,
+    angular_acc_b: mx.array,
+    target_height: mx.array,
+    root_lin_damping: float,
+    root_ang_damping: float,
+    height_stiffness: float,
+    height_damping: float,
+    orientation_height_penalty: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array]:
+    lin_xy = root_lin_vel_b[:, :2]
+    next_lin_xy = lin_xy + dt * (lin_gain[:, None] * (commands[:, :2] - lin_xy) - root_lin_damping * lin_xy)
+    orientation_penalty = mx.sum(mx.square(projected_gravity_b[:, :2]), axis=1)
+    z_acc = (
+        height_stiffness * (target_height - root_pos_w[:, 2])
+        - height_damping * root_lin_vel_b[:, 2]
+        - orientation_height_penalty * orientation_penalty
+    )
+    next_lin_vel_b = mx.concatenate([next_lin_xy, (root_lin_vel_b[:, 2] + dt * z_acc)[:, None]], axis=1)
+
+    next_ang_vel_b = root_ang_vel_b + dt * (angular_acc_b - root_ang_damping * root_ang_vel_b)
+    delta_quat = _quat_from_angular_velocity(next_ang_vel_b, dt)
+    next_root_quat_w = _quat_normalize(_quat_multiply(root_quat_w, delta_quat))
+    world_vel = _quat_rotate(next_root_quat_w, next_lin_vel_b)
+    next_root_pos_w = root_pos_w + dt * world_vel
+
+    gravity_w = mx.broadcast_to(mx.array([[0.0, 0.0, -1.0]], dtype=mx.float32), next_lin_vel_b.shape)
+    next_projected_gravity_b = _quat_rotate(_quat_conjugate(next_root_quat_w), gravity_w)
+    return next_root_pos_w, next_root_quat_w, next_lin_vel_b, next_ang_vel_b, next_projected_gravity_b
+
+
+locomotion_root_step_hotpath = mx.compile(_locomotion_root_step_impl)
+
+
+def prime_contact_state(
+    body_pos_w: mx.array,
+    contact_model,
+    terrain,
+    *,
+    env_ids: list[int] | None = None,
+) -> mx.array:
+    """Prime a contact model with zero body velocity at the provided body positions."""
+    zero_body_vel = mx.zeros_like(body_pos_w)
+    contact_model.update(body_pos_w, zero_body_vel, terrain, env_ids=env_ids)
+    return zero_body_vel
