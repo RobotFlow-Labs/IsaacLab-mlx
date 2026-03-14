@@ -37,6 +37,7 @@ What works today:
 - a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
 - a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
 - MLX training, checkpoint save/load, and replay scripts
+- portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
 
 What this does not claim yet:
@@ -150,6 +151,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
+  source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \

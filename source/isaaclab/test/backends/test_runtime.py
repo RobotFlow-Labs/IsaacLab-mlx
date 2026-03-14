@@ -264,3 +264,12 @@ def test_mac_sim_can_load_simulation_cfg_but_not_simulation_context():
     assert sim.SimulationCfg.__name__ == "SimulationCfg"
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         _ = sim.SimulationContext
+
+
+def test_mac_sim_asset_exports_fail_with_clear_backend_error():
+    """Import-time asset access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    assets = importlib.import_module("isaaclab.assets")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = assets.Articulation
