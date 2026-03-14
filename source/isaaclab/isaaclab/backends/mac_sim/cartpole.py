@@ -77,6 +77,7 @@ class MacCartpoleTrainCfg:
     entropy_coef: float = 0.01
     checkpoint_path: str = "logs/mlx/cartpole_policy.npz"
     eval_interval: int = 10
+    resume_from: str | None = None
 
 
 class MacCartpoleSimBackend(MacSimBackend):
@@ -441,6 +442,13 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     model = MacCartpolePolicy(obs_dim=cfg.env.observation_space, hidden_dim=cfg.hidden_dim)
     optimizer = optim.Adam(learning_rate=cfg.learning_rate)
     loss_and_grad = nn.value_and_grad(model, _ppo_loss)
+    resumed_from = None
+    if cfg.resume_from:
+        resume_path = Path(cfg.resume_from)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Checkpoint to resume from does not exist: {resume_path}")
+        model.load_weights(str(resume_path))
+        resumed_from = str(resume_path)
     mx.eval(model.parameters())
 
     obs = env.reset()[0]["policy"]
@@ -529,6 +537,7 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     return {
         "checkpoint_path": str(checkpoint_path),
         "metadata_path": str(metadata_path),
+        "resumed_from": resumed_from,
         "train_cfg": asdict(cfg),
         "completed_episodes": len(completed_returns),
         "mean_recent_return": sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10)),

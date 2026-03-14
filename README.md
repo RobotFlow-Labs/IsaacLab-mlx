@@ -117,6 +117,16 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --episodes 3
 ```
 
+Optional resume flow:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_cartpole.py \
+  --resume-from logs/mlx/cartpole_policy.npz \
+  --checkpoint logs/mlx/cartpole_policy_resumed.npz \
+  --updates 50
+```
+
 ### 4. Run cart-double-pendulum MARL smoke
 
 ```bash
