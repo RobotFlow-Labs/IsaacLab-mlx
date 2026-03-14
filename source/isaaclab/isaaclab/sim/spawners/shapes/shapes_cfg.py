@@ -11,7 +11,35 @@ from isaaclab.sim.spawners import materials
 from isaaclab.sim.spawners.spawner_cfg import RigidObjectSpawnerCfg
 from isaaclab.utils import configclass
 
-from . import shapes
+
+def _spawn_sphere(*args, **kwargs):
+    from .shapes import spawn_sphere
+
+    return spawn_sphere(*args, **kwargs)
+
+
+def _spawn_cuboid(*args, **kwargs):
+    from .shapes import spawn_cuboid
+
+    return spawn_cuboid(*args, **kwargs)
+
+
+def _spawn_cylinder(*args, **kwargs):
+    from .shapes import spawn_cylinder
+
+    return spawn_cylinder(*args, **kwargs)
+
+
+def _spawn_capsule(*args, **kwargs):
+    from .shapes import spawn_capsule
+
+    return spawn_capsule(*args, **kwargs)
+
+
+def _spawn_cone(*args, **kwargs):
+    from .shapes import spawn_cone
+
+    return spawn_cone(*args, **kwargs)
 
 
 @configclass
@@ -52,7 +80,7 @@ class SphereCfg(ShapeCfg):
     See :meth:`spawn_sphere` for more information.
     """
 
-    func: Callable = shapes.spawn_sphere
+    func: Callable = _spawn_sphere
 
     radius: float = MISSING
     """Radius of the sphere (in m)."""
@@ -65,7 +93,7 @@ class CuboidCfg(ShapeCfg):
     See :meth:`spawn_cuboid` for more information.
     """
 
-    func: Callable = shapes.spawn_cuboid
+    func: Callable = _spawn_cuboid
 
     size: tuple[float, float, float] = MISSING
     """Size of the cuboid."""
@@ -78,7 +106,7 @@ class CylinderCfg(ShapeCfg):
     See :meth:`spawn_cylinder` for more information.
     """
 
-    func: Callable = shapes.spawn_cylinder
+    func: Callable = _spawn_cylinder
 
     radius: float = MISSING
     """Radius of the cylinder (in m)."""
@@ -95,7 +123,7 @@ class CapsuleCfg(ShapeCfg):
     See :meth:`spawn_capsule` for more information.
     """
 
-    func: Callable = shapes.spawn_capsule
+    func: Callable = _spawn_capsule
 
     radius: float = MISSING
     """Radius of the capsule (in m)."""
@@ -112,7 +140,7 @@ class ConeCfg(ShapeCfg):
     See :meth:`spawn_cone` for more information.
     """
 
-    func: Callable = shapes.spawn_cone
+    func: Callable = _spawn_cone
 
     radius: float = MISSING
     """Radius of the cone (in m)."""

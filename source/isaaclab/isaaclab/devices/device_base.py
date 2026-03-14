@@ -9,11 +9,16 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
-
-import torch
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from isaaclab.devices.retargeter_base import RetargeterBase, RetargeterCfg
+
+if TYPE_CHECKING:
+    import torch
+
+    TensorLike: TypeAlias = torch.Tensor
+else:
+    TensorLike: TypeAlias = Any
 
 
 @dataclass
@@ -105,7 +110,7 @@ class DeviceBase(ABC):
         """
         raise NotImplementedError("Derived class must implement _get_raw_data() or override advance()")
 
-    def advance(self) -> torch.Tensor:
+    def advance(self) -> TensorLike:
         """Process current device state and return control commands.
 
         This method retrieves raw data from the device and optionally applies
@@ -128,6 +133,8 @@ class DeviceBase(ABC):
 
         # With multiple retargeters, return a tuple of outputs
         # Concatenate retargeted outputs into a single tensor
+        import torch
+
         return torch.cat([retargeter.retarget(raw_data) for retargeter in self._retargeters], dim=-1)
 
     # -----------------------------

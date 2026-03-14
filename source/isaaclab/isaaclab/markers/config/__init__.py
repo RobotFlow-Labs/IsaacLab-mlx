@@ -3,8 +3,10 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import isaaclab.sim as sim_utils
-from isaaclab.markers.visualization_markers import VisualizationMarkersCfg
+from isaaclab.markers.visualization_markers_cfg import VisualizationMarkersCfg
+from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
+from isaaclab.sim.spawners.materials.visual_materials_cfg import PreviewSurfaceCfg
+from isaaclab.sim.spawners.shapes.shapes_cfg import CuboidCfg, CylinderCfg, SphereCfg
 from isaaclab.utils.nucleus import ISAAC_NUCLEUS_DIR
 
 ##
@@ -13,9 +15,9 @@ from isaaclab.utils.nucleus import ISAAC_NUCLEUS_DIR
 
 RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "hit": sim_utils.SphereCfg(
+        "hit": SphereCfg(
             radius=0.02,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         ),
     },
 )
@@ -24,13 +26,13 @@ RAY_CASTER_MARKER_CFG = VisualizationMarkersCfg(
 
 CONTACT_SENSOR_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "contact": sim_utils.SphereCfg(
+        "contact": SphereCfg(
             radius=0.02,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         ),
-        "no_contact": sim_utils.SphereCfg(
+        "no_contact": SphereCfg(
             radius=0.02,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
             visible=False,
         ),
     },
@@ -39,9 +41,9 @@ CONTACT_SENSOR_MARKER_CFG = VisualizationMarkersCfg(
 
 DEFORMABLE_TARGET_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "target": sim_utils.SphereCfg(
+        "target": SphereCfg(
             radius=0.02,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.75, 0.8)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.75, 0.8)),
         ),
     },
 )
@@ -49,9 +51,9 @@ DEFORMABLE_TARGET_MARKER_CFG = VisualizationMarkersCfg(
 
 VISUO_TACTILE_SENSOR_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "tacsl_pts": sim_utils.SphereCfg(
+        "tacsl_pts": SphereCfg(
             radius=0.0002,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
         ),
     },
 )
@@ -63,14 +65,14 @@ VISUO_TACTILE_SENSOR_MARKER_CFG = VisualizationMarkersCfg(
 
 FRAME_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "frame": sim_utils.UsdFileCfg(
+        "frame": UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
             scale=(0.5, 0.5, 0.5),
         ),
-        "connecting_line": sim_utils.CylinderCfg(
+        "connecting_line": CylinderCfg(
             radius=0.002,
             height=1.0,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 0.0), roughness=1.0),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 0.0), roughness=1.0),
         ),
     }
 )
@@ -79,10 +81,10 @@ FRAME_MARKER_CFG = VisualizationMarkersCfg(
 
 RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "arrow": sim_utils.UsdFileCfg(
+        "arrow": UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
             scale=(1.0, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         )
     }
 )
@@ -91,10 +93,10 @@ RED_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
 
 BLUE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "arrow": sim_utils.UsdFileCfg(
+        "arrow": UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
             scale=(1.0, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
         )
     }
 )
@@ -102,10 +104,10 @@ BLUE_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
 
 GREEN_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "arrow": sim_utils.UsdFileCfg(
+        "arrow": UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
             scale=(1.0, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         )
     }
 )
@@ -118,9 +120,9 @@ GREEN_ARROW_X_MARKER_CFG = VisualizationMarkersCfg(
 
 CUBOID_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "cuboid": sim_utils.CuboidCfg(
+        "cuboid": CuboidCfg(
             size=(0.1, 0.1, 0.1),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         ),
     }
 )
@@ -128,9 +130,9 @@ CUBOID_MARKER_CFG = VisualizationMarkersCfg(
 
 SPHERE_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "sphere": sim_utils.SphereCfg(
+        "sphere": SphereCfg(
             radius=0.05,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         ),
     }
 )
@@ -138,17 +140,17 @@ SPHERE_MARKER_CFG = VisualizationMarkersCfg(
 
 POSITION_GOAL_MARKER_CFG = VisualizationMarkersCfg(
     markers={
-        "target_far": sim_utils.SphereCfg(
+        "target_far": SphereCfg(
             radius=0.01,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
         ),
-        "target_near": sim_utils.SphereCfg(
+        "target_near": SphereCfg(
             radius=0.01,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
-        "target_invisible": sim_utils.SphereCfg(
+        "target_invisible": SphereCfg(
             radius=0.01,
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
+            visual_material=PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
             visible=False,
         ),
     }

@@ -11,27 +11,32 @@ import importlib
 
 from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-_CORE_EXPORTS = {
-    "VisualizationMarkers": (".visualization_markers", "VisualizationMarkers"),
-    "VisualizationMarkersCfg": (".visualization_markers", "VisualizationMarkersCfg"),
+_SAFE_EXPORTS = {
+    "VisualizationMarkersCfg": (".visualization_markers_cfg", "VisualizationMarkersCfg"),
 }
-_SEARCH_MODULES = (".config",)
+_SAFE_MODULES = {
+    "config": ".config",
+}
+_ISAACSIM_EXPORTS = {
+    "VisualizationMarkers": (".visualization_markers", "VisualizationMarkers"),
+}
 
-__all__ = [*_CORE_EXPORTS.keys()]
+__all__ = [*_SAFE_EXPORTS.keys(), *_SAFE_MODULES.keys(), *_ISAACSIM_EXPORTS.keys()]
 
 
 def __getattr__(name: str):
-    target = _CORE_EXPORTS.get(name)
+    target = _SAFE_EXPORTS.get(name)
     if target is not None:
-        if current_runtime().sim_backend != "isaacsim":
-            raise UnsupportedBackendError(
-                f"`isaaclab.markers.{name}` currently requires `sim-backend=isaacsim`."
-                " Marker interfaces for `mac-sim` are exposed progressively via backend capabilities."
-            )
         module = importlib.import_module(target[0], __name__)
         value = getattr(module, target[1])
         globals()[name] = value
         return value
+
+    safe_module = _SAFE_MODULES.get(name)
+    if safe_module is not None:
+        module = importlib.import_module(safe_module, __name__)
+        globals()[name] = module
+        return module
 
     if current_runtime().sim_backend != "isaacsim":
         raise UnsupportedBackendError(
@@ -39,11 +44,11 @@ def __getattr__(name: str):
             " Marker interfaces for `mac-sim` are exposed progressively via backend capabilities."
         )
 
-    for module_name in _SEARCH_MODULES:
-        module = importlib.import_module(module_name, __name__)
-        if hasattr(module, name):
-            value = getattr(module, name)
-            globals()[name] = value
-            return value
+    target = _ISAACSIM_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

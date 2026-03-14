@@ -53,13 +53,31 @@ Usage with a class modifier:
 
 """
 
-# isort: off
-from .modifier_cfg import ModifierCfg
-from .modifier_base import ModifierBase
-from .modifier import DigitalFilter
-from .modifier_cfg import DigitalFilterCfg
-from .modifier import Integrator
-from .modifier_cfg import IntegratorCfg
+from __future__ import annotations
 
-# isort: on
-from .modifier import bias, clip, scale
+import importlib
+
+_MODULE_EXPORTS = {
+    "ModifierCfg": (".modifier_cfg_base", "ModifierCfg"),
+    "ModifierBase": (".modifier_base", "ModifierBase"),
+    "DigitalFilter": (".modifier", "DigitalFilter"),
+    "DigitalFilterCfg": (".modifier_cfg", "DigitalFilterCfg"),
+    "Integrator": (".modifier", "Integrator"),
+    "IntegratorCfg": (".modifier_cfg", "IntegratorCfg"),
+    "bias": (".modifier", "bias"),
+    "clip": (".modifier", "clip"),
+    "scale": (".modifier", "scale"),
+}
+
+__all__ = list(_MODULE_EXPORTS.keys())
+
+
+def __getattr__(name: str):
+    target = _MODULE_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

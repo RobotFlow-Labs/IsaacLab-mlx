@@ -111,20 +111,26 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-005
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-003`
 - Title: Audit `isaaclab.markers` config surfaces for any remaining heavy imports
 - Acceptance:
   - config modules use lightweight constants/helpers where possible
+- Validation:
+  - focused backend suite
+  - torch-free import smoke for `isaaclab.markers` and `isaaclab.markers.config`
 
 ### MLX-IMPORT-006
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-003`
 - Title: Audit `isaaclab.devices.openxr` retargeter config/helpers for constant-only imports
 - Acceptance:
   - config constants come from lightweight modules
   - heavy runtime helpers stay lazy
+- Validation:
+  - focused backend suite
+  - torch-free import smoke for `isaaclab.devices.openxr` and lazy retargeter packages
 
 ### MLX-IMPORT-007
 
@@ -141,12 +147,15 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-008
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-007`
 - Title: Publish a definitive “import-safe on mac” module surface
 - Acceptance:
   - documented in README
   - kept in sync with tests
+- Validation:
+  - README import-safe surface section
+  - `source/isaaclab/test/backends/test_runtime.py`
 
 ### MLX-IMPORT-009
 
@@ -162,7 +171,7 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-010
 
-- Status: `ACTIVE`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-009`
 - Title: Split direct-task CUDA/IsaacSim clusters from task package import surfaces
 - Scope:
@@ -175,7 +184,7 @@ without pausing for replanning after every small success.
   - runtime-only backends load on demand behind capability checks
 - Progress:
   - static manifest/gating completed for AutoMate, Factory, FORGE, Franka Cabinet, and manager-based pick-place
-  - remaining high-value families include shadow-hand vision and additional manager-based manipulation/locomanipulation clusters
+  - static manifest/gating extended to shadow-hand vision, shadow-hand-over, DexSuite, deploy, navigation, and locomanipulation tracking clusters
 
 ### MLX-PKG-001
 
@@ -197,13 +206,15 @@ without pausing for replanning after every small success.
 
 ### MLX-PKG-004
 
-- Status: `ACTIVE`
+- Status: `DONE`
 - Depends on: `MLX-PKG-003`
 - Title: Add fresh-env install smoke for documented public paths in CI
 - Acceptance:
   - MLX base install smoke
   - MLX + RL base install smoke
   - upstream CUDA path remains unaffected
+- Validation:
+  - fresh-env `uv` install matrix for core, core+tasks, and core+rl
 
 ## Phase B: Shared mac-sim Substrate
 

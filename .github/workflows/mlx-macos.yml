@@ -46,7 +46,51 @@ jobs:
           -e source/isaaclab_tasks
 
     - name: Prepare benchmark artifact directory
-      run: mkdir -p logs/benchmarks/mlx
+      run: mkdir -p logs/benchmarks/mlx/install-matrix
+
+    - name: Run fresh-env install matrix
+      run: |
+        uv venv --python 3.11 .venv-core
+        uv pip install --python .venv-core/bin/python -e source/isaaclab[macos-mlx,dev]
+        .venv-core/bin/python - <<'PY'
+        import json
+        from pathlib import Path
+        from isaaclab.backends import resolve_runtime_selection, set_runtime_selection
+        set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+        from isaaclab.envs import ViewerCfg
+        payload = {"combo": "core", "viewer_cfg_type": ViewerCfg.__name__}
+        Path("logs/benchmarks/mlx/install-matrix/core.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(payload)
+        PY
+
+        uv venv --python 3.11 .venv-core-tasks
+        uv pip install --python .venv-core-tasks/bin/python -e source/isaaclab[macos-mlx,dev] -e source/isaaclab_tasks
+        PYTHONPATH=.:source/isaaclab:source/isaaclab_tasks .venv-core-tasks/bin/python - <<'PY'
+        import json
+        from pathlib import Path
+        from isaaclab.backends import resolve_runtime_selection, set_runtime_selection
+        set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+        import isaaclab_tasks
+        from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
+        cfg = parse_env_cfg("Isaac-Cartpole-Direct-v0", device="cpu", num_envs=8)
+        payload = {"combo": "core+tasks", "task_cfg_type": type(cfg).__name__, "task_cfg_num_envs": cfg.num_envs}
+        Path("logs/benchmarks/mlx/install-matrix/core_tasks.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(payload)
+        PY
+
+        uv venv --python 3.11 .venv-core-rl
+        uv pip install --python .venv-core-rl/bin/python -e source/isaaclab[macos-mlx,dev] -e source/isaaclab_rl[dev]
+        PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv-core-rl/bin/python - <<'PY'
+        import json
+        from pathlib import Path
+        from isaaclab.backends import resolve_runtime_selection, set_runtime_selection
+        set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+        import isaaclab_rl.sb3
+        import isaaclab_rl.skrl
+        payload = {"combo": "core+rl", "modules": ["isaaclab_rl.sb3", "isaaclab_rl.skrl"]}
+        Path("logs/benchmarks/mlx/install-matrix/core_rl.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(payload)
+        PY
 
     - name: Run public install smoke
       run: |

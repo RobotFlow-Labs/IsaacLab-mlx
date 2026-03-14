@@ -271,6 +271,17 @@ def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: p
     sys.modules.pop("isaaclab.utils.noise", None)
     sys.modules.pop("isaaclab.utils.noise.noise_cfg", None)
     sys.modules.pop("isaaclab.utils.io", None)
+    sys.modules.pop("isaaclab.utils.modifiers", None)
+    sys.modules.pop("isaaclab.utils.modifiers.modifier_cfg_base", None)
+    sys.modules.pop("isaaclab.utils.interpolation", None)
+    sys.modules.pop("isaaclab.markers", None)
+    sys.modules.pop("isaaclab.markers.config", None)
+    sys.modules.pop("isaaclab.markers.visualization_markers_cfg", None)
+    sys.modules.pop("isaaclab.devices.device_base", None)
+    sys.modules.pop("isaaclab.devices.openxr", None)
+    sys.modules.pop("isaaclab.devices.openxr.xr_cfg", None)
+    sys.modules.pop("isaaclab.devices.openxr.retargeters", None)
+    sys.modules.pop("isaaclab.devices.openxr.retargeters.manipulator", None)
     real_import = builtins.__import__
 
     def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -282,14 +293,29 @@ def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: p
     envs = importlib.import_module("isaaclab.envs")
     noise = importlib.import_module("isaaclab.utils.noise")
     io = importlib.import_module("isaaclab.utils.io")
+    modifiers_mod = importlib.import_module("isaaclab.utils.modifiers")
+    interpolation_mod = importlib.import_module("isaaclab.utils.interpolation")
     types_mod = importlib.import_module("isaaclab.utils.types")
     spaces = importlib.import_module("isaaclab.envs.utils.spaces")
+    markers_mod = importlib.import_module("isaaclab.markers")
+    markers_cfg = importlib.import_module("isaaclab.markers.config")
+    openxr_mod = importlib.import_module("isaaclab.devices.openxr")
+    retargeters_mod = importlib.import_module("isaaclab.devices.openxr.retargeters")
+    manipulator_retargeters = importlib.import_module("isaaclab.devices.openxr.retargeters.manipulator")
 
     assert envs.ViewerCfg.__name__ == "ViewerCfg"
     assert noise.NoiseModelCfg.__name__ == "NoiseModelCfg"
     assert callable(io.dump_yaml)
+    assert modifiers_mod.ModifierCfg.__name__ == "ModifierCfg"
+    assert interpolation_mod.__name__.endswith(".interpolation")
     assert types_mod.ArticulationActions.__name__ == "ArticulationActions"
     assert callable(spaces.spec_to_gym_space)
+    assert markers_mod.VisualizationMarkersCfg.__name__ == "VisualizationMarkersCfg"
+    assert markers_cfg.FRAME_MARKER_CFG.__class__.__name__ == "VisualizationMarkersCfg"
+    assert openxr_mod.XrCfg.__name__ == "XrCfg"
+    assert callable(openxr_mod.remove_camera_configs)
+    assert retargeters_mod.__name__.endswith(".retargeters")
+    assert manipulator_retargeters.__name__.endswith(".manipulator")
 
 
 def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):

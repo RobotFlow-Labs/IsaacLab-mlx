@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import builtins
 from pathlib import Path
 
 import gymnasium as gym
@@ -25,6 +26,11 @@ UNSUPPORTED_MAC_TASK_IDS = (
     "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Factory-PegInsert-Direct-v0",
     "Isaac-PickPlace-GR1T2-Abs-v0",
+    "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
+    "Isaac-Dexsuite-Kuka-Allegro-Reorient-v0",
+    "Isaac-Deploy-Reach-UR10e-v0",
+    "Isaac-Navigation-Flat-Anymal-C-v0",
+    "Isaac-Tracking-LocoManip-Digit-v0",
 )
 
 
@@ -74,6 +80,30 @@ def test_parse_env_cfg_supports_mac_task_cfgs(monkeypatch):
     assert parsed_cfg.num_envs == 32
 
 
+def test_parse_env_cfg_keeps_mac_config_loading_free_of_mlx_runtime(monkeypatch):
+    """Config parsing for mac tasks should not import MLX runtime modules."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.startswith("mlx"):
+            raise ModuleNotFoundError("No module named 'mlx'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    cfg = parse_cfg.parse_env_cfg("Isaac-Cartpole-Direct-v0", device="cpu", num_envs=16)
+
+    assert type(cfg).__name__ == "MacCartpoleEnvCfg"
+    assert cfg.num_envs == 16
+
+
 def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
     """Isaac Sim-only tasks should fail with an explicit backend error on the mac runtime."""
     task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
@@ -87,3 +117,6 @@ def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        parse_cfg.parse_env_cfg("Isaac-Repose-Cube-Shadow-Vision-Direct-v0", device="cpu")

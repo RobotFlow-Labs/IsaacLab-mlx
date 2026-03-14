@@ -120,6 +120,21 @@ Use the smallest extra set that matches the workflow you actually need.
 | Optional IsaacLab task extras for CUDA AutoMate | `uv pip install --python .venv/bin/python -e source/isaaclab_tasks[cuda-automate]` |
 | Optional RL logging/video extras | `uv pip install --python .venv/bin/python -e source/isaaclab_rl[rl-logging,video]` |
 
+### Import-Safe Surface On macOS
+
+These imports are now part of the tested MLX/mac bootstrap surface and are expected to work without Isaac Sim,
+Warp, or torch installed:
+
+- `isaaclab`, `isaaclab.envs`, `isaaclab.sim`, `isaaclab.sim.schemas`, `isaaclab.sim.converters`, `isaaclab.sim.spawners.from_files`
+- `isaaclab.utils.io`, `isaaclab.utils.noise`, `isaaclab.utils.types`, `isaaclab.utils.modifiers`, `isaaclab.utils.interpolation`
+- `isaaclab.markers`, `isaaclab.markers.config`
+- `isaaclab.devices.openxr`
+- `isaaclab_tasks`, `isaaclab_rl.sb3`, `isaaclab_rl.skrl`
+
+On the mac path, configuration helpers such as `ViewerCfg`, `VisualizationMarkersCfg`, `XrCfg`,
+`remove_camera_configs`, and the lazy task registry stay available. Runtime-only Isaac Sim objects continue to
+fail through explicit backend checks when they are actually requested.
+
 ### 1. Create the environment with `uv`
 
 ```bash
