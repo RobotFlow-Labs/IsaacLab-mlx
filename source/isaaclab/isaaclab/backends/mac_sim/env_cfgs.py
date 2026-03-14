@@ -241,7 +241,11 @@ class MacH1FlatEnvCfg:
     state_space: int = 0
 
     env_spacing: float = 4.0
+    terrain_type: str = "plane"
     terrain_tile_size: tuple[float, float] = (4.0, 4.0)
+    terrain_border_width: float = 0.0
+    terrain_height_amplitude: float = 0.0
+    terrain_wavelength: tuple[float, float] = (1.0, 1.0)
     default_root_height: float = 1.05
     min_root_height: float = 0.55
     height_scan_enabled: bool = False
@@ -317,6 +321,27 @@ class MacH1FlatEnvCfg:
     joint_accel_reward_scale: float = -1.25e-7
 
     seed: int = 42
+
+
+@configclass
+class MacH1RoughEnvCfg(MacH1FlatEnvCfg):
+    """Configuration aligned with the upstream rough H1 locomotion task at a semantic level."""
+
+    terrain_type: str = "wave"
+    terrain_tile_size: tuple[float, float] = (5.0, 5.0)
+    terrain_border_width: float = 0.15
+    terrain_height_amplitude: float = 0.055
+    terrain_wavelength: tuple[float, float] = (1.5, 1.15)
+    default_root_height: float = 1.08
+    min_root_height: float = 0.62
+    height_scan_enabled: bool = True
+    height_scan_offsets: tuple[tuple[float, float], ...] = ROUGH_HEIGHT_SCAN_OFFSETS
+    height_scan_max_distance: float = 2.5
+    lin_vel_reward_scale: float = 1.1
+    yaw_rate_reward_scale: float = 1.05
+    flat_orientation_reward_scale: float = -1.4
+    feet_slide_reward_scale: float = -0.3
+    ankle_limit_reward_scale: float = -1.2
 
 
 @configclass

@@ -66,10 +66,12 @@ without pausing for replanning after every small success.
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 - `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
 - `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
+- `DONE` Second humanoid locomotion slice landed for `Isaac-Velocity-Rough-H1-v0` with wave terrain, analytic height scans, shared H1 substrate reuse, benchmark coverage, and deterministic replay tests
 - `DONE` First mac-native manipulation slices landed for `Isaac-Reach-Franka-v0` and `Isaac-Lift-Cube-Franka-v0` with lazy registry wiring, public MLX wrapper support, benchmark coverage, and focused backend tests
 - `DONE` First trainable manipulation slice landed for `Isaac-Reach-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
 - `DONE` Second trainable manipulation slice landed for `Isaac-Lift-Cube-Franka-v0` with shared PPO helpers, checkpoint/replay support, public MLX wrapper training, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
+- `DONE` Franka manipulation hotpaths now use compiled MLX helpers for analytic end-effector kinematics and lift object/grasp updates on the benchmarked mac-native path
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
@@ -721,7 +723,6 @@ This queue exists so work can continue without waiting for a new plan. The docum
 - Hardware-validate the backend-local stereo path against live ZED/ZED 2i capture once the camera is free, then retain a host-local probe artifact.
 - Port the next manipulation milestone beyond the first two Franka slices, likely `franka-stack` or a richer arm/object interaction task.
 - Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
-- Expand rough-terrain parity beyond ANYmal-C with one additional locomotion task that depends on terrain queries.
 - Grow the planner/ROS prototypes carefully: world-state richer obstacles first, then optional process/message interoperability layers that still avoid CUDA/NITROS assumptions.
 
 ## Validation Commands

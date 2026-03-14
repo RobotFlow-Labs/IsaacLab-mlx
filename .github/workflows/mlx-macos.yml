@@ -297,6 +297,13 @@ jobs:
           --task h1-flat \
           --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
 
+    - name: Run MLX H1 rough smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task h1-rough \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
+
     - name: Run MLX Franka reach smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -341,6 +348,7 @@ jobs:
         from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks, train_mlx_task
 
         assert "h1-flat" in list_mlx_tasks()
+        assert "h1-rough" in list_mlx_tasks()
         assert "franka-reach" in list_mlx_tasks()
         assert "franka-lift" in list_mlx_tasks()
         train_payload = train_mlx_task(
@@ -484,10 +492,10 @@ jobs:
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
         dashboard = json.loads(Path("logs/benchmarks/mlx/smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert dashboard["summary"]["rollout_task_count"] == 5
+        assert dashboard["summary"]["rollout_task_count"] == 9
         assert dashboard["summary"]["training_task_count"] == 0
         trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
-        assert trend["summary"]["task_count"] == 5
+        assert trend["summary"]["task_count"] == 9
         planner_payload = json.loads(Path("logs/planner/mac-planner-smoke.json").read_text(encoding="utf-8"))
         assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
         assert planner_payload["plan"]["waypoint_count"] == 6
@@ -503,12 +511,13 @@ jobs:
             benchmark = benchmark_by_task[task]
             assert benchmark["sensor_scan_dim"] == 9
             assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
-            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-plane-raycast"
+            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-terrain-raycast"
             assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
         print(sensor_payload["tasks"])
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
+        assert full_dashboard["summary"]["rollout_task_count"] == 11
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])

@@ -26,6 +26,7 @@ TASK_PREFIXES = {
     "anymal-c-flat": "mlx-anymal-c-flat",
     "anymal-c-rough": "mlx-anymal-c-rough",
     "h1-flat": "mlx-h1-flat",
+    "h1-rough": "mlx-h1-rough",
     "franka-reach": "mlx-franka-reach",
     "franka-lift": "mlx-franka-lift",
 }

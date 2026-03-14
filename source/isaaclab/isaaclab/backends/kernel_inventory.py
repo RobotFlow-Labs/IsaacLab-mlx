@@ -16,6 +16,7 @@ CURRENT_MAC_NATIVE_TASKS = (
     "anymal-c-flat",
     "anymal-c-rough",
     "h1-flat",
+    "h1-rough",
     "franka-reach",
     "franka-lift",
 )

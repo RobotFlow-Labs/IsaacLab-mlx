@@ -282,6 +282,63 @@ h1_leg_extension_hotpath = mx.compile(_h1_leg_extension_impl)
 h1_body_positions_hotpath = mx.compile(_h1_body_positions_impl)
 
 
+def _franka_end_effector_position_impl(joint_pos: mx.array) -> mx.array:
+    q0 = joint_pos[:, 0]
+    q1 = joint_pos[:, 1]
+    q2 = joint_pos[:, 2]
+    q3 = joint_pos[:, 3]
+    q4 = joint_pos[:, 4]
+    q5 = joint_pos[:, 5]
+    q6 = joint_pos[:, 6]
+    x = (
+        0.28
+        + 0.18 * mx.cos(q0) * mx.cos(q1)
+        + 0.14 * mx.cos(q0) * mx.cos(q1 + q2)
+        + 0.08 * mx.cos(q0) * mx.cos(q1 + q2 + 0.5 * q3)
+        - 0.02 * mx.sin(q4)
+    )
+    y = 0.20 * mx.sin(q0) + 0.07 * mx.sin(q0 + 0.5 * q3) + 0.03 * mx.tanh(q5) + 0.015 * mx.sin(q6)
+    z = 0.28 + 0.18 * mx.sin(-q1) + 0.13 * mx.sin(-(q1 + q2)) + 0.07 * mx.sin(-(q1 + q2 + 0.5 * q3))
+    return mx.stack((x, y, z), axis=-1).astype(mx.float32)
+
+
+def _franka_lift_object_step_impl(
+    cube_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    grasped: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    grasp_distance_threshold: float,
+    grasp_offset_z: float,
+    table_height: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array]:
+    gripper_target = mx.where(gripper_action < 0.0, gripper_lower_limit, gripper_upper_limit).astype(mx.float32)
+    gripper_velocity = (gripper_target - gripper_joint_pos) / physics_dt
+    dist_to_cube = mx.linalg.norm(cube_pos_w - ee_pos_w, axis=1)
+    gripper_closed = gripper_target <= gripper_closed_threshold
+    can_grasp = dist_to_cube <= grasp_distance_threshold
+    next_grasped = (grasped | (can_grasp & gripper_closed)) & gripper_closed
+    attached_cube = ee_pos_w + mx.array([0.0, 0.0, -grasp_offset_z], dtype=mx.float32)
+    resting_cube = mx.stack(
+        (
+            cube_pos_w[:, 0],
+            cube_pos_w[:, 1],
+            mx.maximum(table_height, cube_pos_w[:, 2] - physics_dt * 0.35),
+        ),
+        axis=-1,
+    )
+    next_cube_pos = mx.where(next_grasped[:, None], attached_cube, resting_cube)
+    return gripper_target, gripper_velocity.astype(mx.float32), next_grasped.astype(mx.bool_), next_cube_pos.astype(mx.float32)
+
+
+franka_end_effector_position_hotpath = mx.compile(_franka_end_effector_position_impl)
+franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
+
+
 def _locomotion_root_step_impl(
     dt: float,
     root_pos_w: mx.array,

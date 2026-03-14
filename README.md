@@ -306,6 +306,7 @@ Additional task slices exposed through the same API:
 
 ```python
 rough_payload = evaluate_mlx_task("anymal-c-rough", num_envs=32, episodes=2)
+h1_rough_payload = evaluate_mlx_task("h1-rough", num_envs=32, episodes=2)
 reach_train_payload = train_mlx_task("franka-reach", num_envs=64, updates=5)
 reach_payload = evaluate_mlx_task("franka-reach", checkpoint=reach_train_payload["checkpoint_path"], episodes=2)
 lift_train_payload = train_mlx_task("franka-lift", num_envs=64, updates=5)
@@ -453,7 +454,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
-- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift
+- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, and Franka lift
 - a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
@@ -534,6 +535,7 @@ Current task capability matrix:
 | `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
 | `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain plus analytic terrain raycasts |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Velocity-Rough-H1-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain, analytic terrain raycasts, and H1 rough-terrain semantics |
 | `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support |
 

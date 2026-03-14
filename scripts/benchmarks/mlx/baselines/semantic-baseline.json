@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T19:02:52Z",
+  "generated_at": "2026-03-14T20:24:24Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 10,
+  "task_count": 11,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -239,6 +239,37 @@
           "height_scan_hit_ratio": 1.0,
           "height_scan_mean": 1.0467644929885864,
           "height_scan_std": 8.854498446453363e-05
+        },
+        "sensor_implementation": "analytic-terrain-raycast",
+        "sensor_scan_dim": 9
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "h1-rough": {
+      "contract": {
+        "action_dim": 19,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 78,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.2627297639846802,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.1662605255842209,
+          "final_joint_pos_abs_mean": 0.25973454117774963,
+          "final_joint_vel_abs_mean": 0.0395796000957489,
+          "final_policy_mean": 0.11824077367782593,
+          "final_policy_std": 0.3769144117832184,
+          "final_reward_mean": 0.026051513850688934,
+          "final_root_ang_vel_norm_mean": 0.1975303292274475,
+          "final_root_height_mean": 1.0767645835876465,
+          "final_root_lin_vel_norm_mean": 0.09445567429065704,
+          "height_scan_hit_ratio": 1.0,
+          "height_scan_mean": 1.0768001079559326,
+          "height_scan_std": 0.02861831896007061
         },
         "sensor_implementation": "analytic-terrain-raycast",
         "sensor_scan_dim": 9

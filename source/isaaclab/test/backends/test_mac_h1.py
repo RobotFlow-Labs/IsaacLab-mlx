@@ -17,6 +17,8 @@ mx = require_mlx_runtime()
 from isaaclab.backends.mac_sim import (  # noqa: E402
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
+    MacH1RoughEnv,
+    MacH1RoughEnvCfg,
     MacH1TrainCfg,
     play_h1_policy,
     replay_actions,
@@ -64,6 +66,43 @@ def test_mac_h1_height_scan_expands_observation_space():
     assert env.height_scan_sensor is not None
     assert env.height_scan_dim == 3
     assert obs["policy"].shape == (4, 72)
+
+
+def test_mac_h1_rough_reset_and_step_shapes():
+    """The rough H1 env should expose wave terrain and height-scan channels deterministically."""
+    cfg = MacH1RoughEnvCfg(num_envs=6, seed=19, episode_length_s=0.5)
+    env = MacH1RoughEnv(cfg)
+
+    obs, extras = env.reset()
+    assert extras == {}
+    assert env.sim_backend.terrain.state_dict()["type"] == "wave"
+    assert env.height_scan_sensor is not None
+    assert env.height_scan_dim == 9
+    assert obs["policy"].shape == (6, 78)
+
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+    next_obs, reward, terminated, truncated, step_extras = env.step(actions)
+
+    assert next_obs["policy"].shape == (6, 78)
+    assert reward.shape == (6,)
+    assert terminated.shape == (6,)
+    assert truncated.shape == (6,)
+    assert isinstance(step_extras, dict)
+
+
+def test_mac_h1_rough_rollout_replay_is_deterministic():
+    """Shared rollout/replay helpers should preserve the rough H1 trajectory for fixed actions."""
+    cfg = MacH1RoughEnvCfg(num_envs=4, seed=31, episode_length_s=0.5)
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+
+    env_a = MacH1RoughEnv(cfg)
+    trace_a = rollout_env(env_a, actions, steps=6)
+
+    env_b = MacH1RoughEnv(cfg)
+    trace_b = replay_actions(env_b, trace_a.actions)
+
+    assert trace_a.summary() == trace_b.summary()
+    assert bool(mx.allclose(trace_a.observations[-1]["policy"], trace_b.observations[-1]["policy"]).item())
 
 
 def test_mac_h1_base_contact_termination():

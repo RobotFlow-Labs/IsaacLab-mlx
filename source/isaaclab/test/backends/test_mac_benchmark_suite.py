@@ -40,6 +40,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "anymal-c-flat",
         "anymal-c-rough",
         "h1-flat",
+        "h1-rough",
         "franka-reach",
         "franka-lift",
     )
@@ -104,7 +105,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_root_height_mean",
                 "final_distance_to_goal_mean",
             }
-        elif benchmark["task"] in {"anymal-c-flat", "anymal-c-rough", "h1-flat"}:
+        elif benchmark["task"] in {"anymal-c-flat", "anymal-c-rough", "h1-flat", "h1-rough"}:
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
             expected = {
                 "final_policy_mean",
@@ -119,7 +120,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_applied_torque_abs_mean",
                 "final_contact_count",
             }
-            if benchmark["task"] == "anymal-c-rough":
+            if benchmark["task"] in {"anymal-c-rough", "h1-rough"}:
                 expected |= {"height_scan_hit_ratio", "height_scan_mean", "height_scan_std"}
             assert benchmark["output_signature"].keys() == expected
         elif benchmark["task"] == "franka-reach":
@@ -208,9 +209,9 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     assert '"task_group": "current-mac-native"' in payload
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
     trend = json.loads(trend_path.read_text(encoding="utf-8"))
-    assert dashboard["summary"]["rollout_task_count"] == 8
+    assert dashboard["summary"]["rollout_task_count"] == 9
     assert dashboard["summary"]["training_task_count"] == 0
-    assert trend["summary"]["task_count"] == 8
+    assert trend["summary"]["task_count"] == 9
 
 
 def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
@@ -232,7 +233,7 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     trend = build_benchmark_trend(results, hardware_label="m5-max")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 10
+    assert dashboard["summary"]["rollout_task_count"] == 11
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None

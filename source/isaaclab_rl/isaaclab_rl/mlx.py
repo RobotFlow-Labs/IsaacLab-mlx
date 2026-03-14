@@ -31,6 +31,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaReachTrainCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
+    MacH1RoughEnv,
+    MacH1RoughEnvCfg,
     MacH1TrainCfg,
     MacQuadcopterEnv,
     MacQuadcopterEnvCfg,
@@ -70,6 +72,7 @@ MLX_TASK_SPECS = {
     "franka-reach": MlxTaskSpec("franka-reach", True, "logs/mlx/franka_reach_policy.npz", 128, 0.25),
     "franka-lift": MlxTaskSpec("franka-lift", True, "logs/mlx/franka_lift_policy.npz", 128, 0.25),
     "h1-flat": MlxTaskSpec("h1-flat", True, "logs/mlx/h1_flat_policy.npz", 192, 0.28),
+    "h1-rough": MlxTaskSpec("h1-rough", False, None, None),
 }
 
 
@@ -312,6 +315,36 @@ def evaluate_mlx_task(
             }
         cfg = MacH1FlatEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacH1FlatEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "h1-rough":
+        if checkpoint is not None:
+            raise ValueError("Task 'h1-rough' does not expose checkpoint replay on the public MLX wrapper.")
+        cfg = MacH1RoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacH1RoughEnv(cfg)
         mx.random.seed(seed)
         env.reset()
         completed: list[dict[str, Any]] = []

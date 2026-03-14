@@ -42,6 +42,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaReachEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
+    MacH1RoughEnv,
+    MacH1RoughEnvCfg,
     MacQuadcopterEnv,
     MacQuadcopterEnvCfg,
     mac_env_diagnostics,
@@ -535,6 +537,33 @@ def benchmark_h1_flat_height_scan(num_envs: int, steps: int, seed: int) -> dict[
     )
 
 
+def benchmark_h1_rough(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the H1 rough locomotion MLX env step loop."""
+    env = MacH1RoughEnv(MacH1RoughEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "h1-rough",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.observation_space,
+            "action_dim": env.cfg.action_space,
+            "sensor_scan_dim": env.height_scan_dim,
+            "output_signature": _locomotion_output_signature(env, trace) | _sensor_output_signature(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_train_cartpole(
     num_envs: int,
     updates: int,
@@ -628,6 +657,8 @@ def run_benchmarks(
             benchmark = benchmark_anymal_c_rough(num_envs, steps, seed)
         elif task == "h1-flat":
             benchmark = benchmark_h1_flat(num_envs, steps, seed)
+        elif task == "h1-rough":
+            benchmark = benchmark_h1_rough(num_envs, steps, seed)
         elif task == "franka-reach":
             benchmark = benchmark_franka_reach(num_envs, steps, seed)
         elif task == "franka-lift":

@@ -27,6 +27,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import MacFrankaLiftEnvCfg, MacFrankaReachEnvCfg
+from .hotpath import franka_end_effector_position_hotpath, franka_lift_object_step_hotpath
 from .ppo_training import (
     build_checkpoint_metadata,
     compute_gae,
@@ -82,29 +83,6 @@ class MacFrankaLiftTrainCfg:
     checkpoint_path: str = "logs/mlx/franka_lift_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
-
-
-def _franka_end_effector_position(joint_pos: mx.array) -> mx.array:
-    """Approximate Franka end-effector pose with a deterministic analytic kinematic map."""
-
-    q0 = joint_pos[:, 0]
-    q1 = joint_pos[:, 1]
-    q2 = joint_pos[:, 2]
-    q3 = joint_pos[:, 3]
-    q4 = joint_pos[:, 4]
-    q5 = joint_pos[:, 5]
-    q6 = joint_pos[:, 6]
-    x = (
-        0.28
-        + 0.18 * mx.cos(q0) * mx.cos(q1)
-        + 0.14 * mx.cos(q0) * mx.cos(q1 + q2)
-        + 0.08 * mx.cos(q0) * mx.cos(q1 + q2 + 0.5 * q3)
-        - 0.02 * mx.sin(q4)
-    )
-    y = 0.20 * mx.sin(q0) + 0.07 * mx.sin(q0 + 0.5 * q3) + 0.03 * mx.tanh(q5) + 0.015 * mx.sin(q6)
-    z = 0.28 + 0.18 * mx.sin(-q1) + 0.13 * mx.sin(-(q1 + q2)) + 0.07 * mx.sin(-(q1 + q2 + 0.5 * q3))
-    return mx.stack((x, y, z), axis=-1).astype(mx.float32)
-
 
 class MacFrankaReachSimBackend(MacSimBackend):
     """A lightweight batched Franka reach backend on MLX/mac-sim."""
@@ -173,7 +151,7 @@ class MacFrankaReachSimBackend(MacSimBackend):
         self.target_pos_w[ids, 0] = self.reset_sampler.uniform((rows,), self.cfg.target_x_range[0], self.cfg.target_x_range[1])
         self.target_pos_w[ids, 1] = self.reset_sampler.uniform((rows,), self.cfg.target_y_range[0], self.cfg.target_y_range[1])
         self.target_pos_w[ids, 2] = self.reset_sampler.uniform((rows,), self.cfg.target_z_range[0], self.cfg.target_z_range[1])
-        self.ee_pos_w[ids] = _franka_end_effector_position(self.state.joint_pos[ids, :7])
+        self.ee_pos_w[ids] = franka_end_effector_position_hotpath(self.state.joint_pos[ids, :7])
 
     def set_action_targets(self, actions: Any) -> None:
         self.action_targets = mx.clip(mx.array(actions, dtype=mx.float32).reshape((self.num_envs, self.cfg.action_space)), -1.0, 1.0)
@@ -198,7 +176,7 @@ class MacFrankaReachSimBackend(MacSimBackend):
         )
         self.joint_acc = acc
         self.applied_torque = self.cfg.joint_stiffness * pos_error
-        self.ee_pos_w = _franka_end_effector_position(self.state.joint_pos[:, :7])
+        self.ee_pos_w = franka_end_effector_position_hotpath(self.state.joint_pos[:, :7])
 
     def goal_distance(self) -> mx.array:
         return mx.linalg.norm(self.target_pos_w - self.ee_pos_w, axis=1)
@@ -222,7 +200,7 @@ class MacFrankaReachSimBackend(MacSimBackend):
     ) -> None:
         del articulation, joint_acc
         self.state.write(joint_pos, joint_vel, env_ids=env_ids)
-        self.ee_pos_w = _franka_end_effector_position(self.state.joint_pos[:, :7])
+        self.ee_pos_w = franka_end_effector_position_hotpath(self.state.joint_pos[:, :7])
 
     def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Any | None = None) -> None:
         del articulation, root_pose, env_ids
@@ -281,22 +259,22 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         super().step(render=render, update_fabric=update_fabric)
-        gripper_target = mx.where(
-            self.action_targets[:, 7] < 0.0,
-            self.joint_lower_limits[0, 7],
-            self.joint_upper_limits[0, 7],
-        ).astype(mx.float32)
-        self.state.joint_vel[:, 7] = (gripper_target - self.state.joint_pos[:, 7]) / self.physics_dt
+        gripper_target, gripper_velocity, self.grasped, self.cube_pos_w = franka_lift_object_step_hotpath(
+            self.cube_pos_w,
+            self.ee_pos_w,
+            self.state.joint_pos[:, 7],
+            self.action_targets[:, 7],
+            self.grasped,
+            self.physics_dt,
+            float(self.joint_lower_limits[0, 7].item()),
+            float(self.joint_upper_limits[0, 7].item()),
+            self.cfg.gripper_closed_threshold,
+            self.cfg.grasp_distance_threshold,
+            self.cfg.grasp_offset_z,
+            self.cfg.table_height,
+        )
+        self.state.joint_vel[:, 7] = gripper_velocity
         self.state.joint_pos[:, 7] = gripper_target
-        ee_to_cube = self.cube_pos_w - self.ee_pos_w
-        dist_to_cube = mx.linalg.norm(ee_to_cube, axis=1)
-        gripper_closed = self.state.joint_pos[:, 7] <= self.cfg.gripper_closed_threshold
-        can_grasp = dist_to_cube <= self.cfg.grasp_distance_threshold
-        self.grasped = (self.grasped | (can_grasp & gripper_closed)) & gripper_closed
-        attached_cube = self.ee_pos_w + mx.array([0.0, 0.0, -self.cfg.grasp_offset_z], dtype=mx.float32)
-        resting_cube = self.cube_pos_w
-        resting_cube[:, 2] = mx.maximum(self.cfg.table_height, resting_cube[:, 2] - self.physics_dt * 0.35)
-        self.cube_pos_w = mx.where(self.grasped[:, None], attached_cube, resting_cube)
 
     def lift_success(self) -> mx.array:
         return self.cube_pos_w[:, 2] >= self.cfg.lift_success_height

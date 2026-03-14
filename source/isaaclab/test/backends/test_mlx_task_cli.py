@@ -77,6 +77,24 @@ def test_shared_task_cli_evaluates_h1_manual_slice():
     assert payload["completed"][0]["length"] > 0
 
 
+def test_shared_task_cli_evaluates_h1_rough_manual_slice():
+    payload = evaluate_mlx_task(
+        "h1-rough",
+        num_envs=8,
+        episodes=1,
+        seed=27,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+    )
+
+    assert payload["task"] == "h1-rough"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_requested"] == 1
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
 def test_shared_task_cli_evaluates_franka_reach_manual_slice():
     payload = evaluate_mlx_task(
         "franka-reach",

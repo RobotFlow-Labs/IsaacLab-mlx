@@ -32,6 +32,7 @@ def test_public_mlx_task_lists_are_stable():
         "anymal-c-flat",
         "anymal-c-rough",
         "h1-flat",
+        "h1-rough",
         "franka-reach",
         "franka-lift",
     )
@@ -112,6 +113,24 @@ def test_evaluate_h1_manual_via_public_mlx_wrapper():
     )
 
     assert payload["task"] == "h1-flat"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
+def test_evaluate_h1_rough_manual_via_public_mlx_wrapper():
+    """The public wrapper should expose manual evaluation for the rough H1 slice."""
+    payload = evaluate_mlx_task(
+        "h1-rough",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
+        seed=33,
+    )
+
+    assert payload["task"] == "h1-rough"
     assert payload["mode"] == "manual"
     assert payload["episodes_completed"] == 1
     assert payload["completed"][0]["length"] > 0
@@ -233,6 +252,9 @@ def test_public_mlx_wrapper_rejects_checkpoint_for_eval_only_tasks():
 
     with pytest.raises(ValueError, match="does not expose checkpoint replay"):
         evaluate_mlx_task("cart-double-pendulum", checkpoint="logs/mlx/cart_double_policy.npz")
+
+    with pytest.raises(ValueError, match="does not expose checkpoint replay"):
+        evaluate_mlx_task("h1-rough", checkpoint="logs/mlx/h1_rough_policy.npz")
 
 def test_public_mlx_wrapper_honors_short_episode_length_for_cart_double_pendulum():
     """The shared wrapper should pass episode_length_s through to eval-only task configs."""

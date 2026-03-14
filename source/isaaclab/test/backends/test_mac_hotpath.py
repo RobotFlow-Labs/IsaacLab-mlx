@@ -20,6 +20,8 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     anymal_body_positions_hotpath,
     biped_support_metrics_hotpath,
     contact_update_hotpath,
+    franka_end_effector_position_hotpath,
+    franka_lift_object_step_hotpath,
     h1_body_positions_hotpath,
     locomotion_root_step_hotpath,
     prime_contact_state,
@@ -153,6 +155,86 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
 
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
+
+
+def test_franka_end_effector_hotpath_matches_reference_math():
+    joint_pos = mx.array(
+        [
+            [0.0, -0.55, 0.0, -2.1, 0.0, 1.65, 0.75],
+            [0.1, -0.45, 0.05, -1.9, -0.1, 1.4, 0.5],
+        ],
+        dtype=mx.float32,
+    )
+
+    ee_pos = franka_end_effector_position_hotpath(joint_pos)
+    mx.eval(ee_pos)
+
+    joint_np = np.array(joint_pos)
+    q0, q1, q2, q3, q4, q5, q6 = [joint_np[:, idx] for idx in range(7)]
+    expected = np.stack(
+        (
+            0.28
+            + 0.18 * np.cos(q0) * np.cos(q1)
+            + 0.14 * np.cos(q0) * np.cos(q1 + q2)
+            + 0.08 * np.cos(q0) * np.cos(q1 + q2 + 0.5 * q3)
+            - 0.02 * np.sin(q4),
+            0.20 * np.sin(q0) + 0.07 * np.sin(q0 + 0.5 * q3) + 0.03 * np.tanh(q5) + 0.015 * np.sin(q6),
+            0.28 + 0.18 * np.sin(-q1) + 0.13 * np.sin(-(q1 + q2)) + 0.07 * np.sin(-(q1 + q2 + 0.5 * q3)),
+        ),
+        axis=-1,
+    ).astype(np.float32)
+
+    assert np.allclose(np.array(ee_pos), expected)
+
+
+def test_franka_lift_object_hotpath_matches_reference_math():
+    cube_pos_w = mx.array([[0.55, 0.02, 0.08], [0.62, -0.03, 0.04]], dtype=mx.float32)
+    ee_pos_w = mx.array([[0.56, 0.01, 0.14], [0.70, -0.02, 0.16]], dtype=mx.float32)
+    gripper_joint_pos = mx.array([0.04, 0.04], dtype=mx.float32)
+    gripper_action = mx.array([-1.0, 1.0], dtype=mx.float32)
+    grasped = mx.array([False, True], dtype=mx.bool_)
+
+    gripper_target, gripper_velocity, next_grasped, next_cube_pos = franka_lift_object_step_hotpath(
+        cube_pos_w,
+        ee_pos_w,
+        gripper_joint_pos,
+        gripper_action,
+        grasped,
+        0.02,
+        0.0,
+        0.08,
+        0.03,
+        0.07,
+        0.055,
+        0.04,
+    )
+    mx.eval(gripper_target, gripper_velocity, next_grasped, next_cube_pos)
+
+    cube_np = np.array(cube_pos_w)
+    ee_np = np.array(ee_pos_w)
+    action_np = np.array(gripper_action)
+    grasped_np = np.array(grasped)
+    target_np = np.where(action_np < 0.0, 0.0, 0.08).astype(np.float32)
+    velocity_np = (target_np - np.array(gripper_joint_pos)) / 0.02
+    dist_np = np.linalg.norm(cube_np - ee_np, axis=1)
+    closed_np = target_np <= 0.03
+    can_grasp_np = dist_np <= 0.07
+    next_grasped_np = (grasped_np | (can_grasp_np & closed_np)) & closed_np
+    attached_np = ee_np + np.array([0.0, 0.0, -0.055], dtype=np.float32)
+    resting_np = np.stack(
+        (
+            cube_np[:, 0],
+            cube_np[:, 1],
+            np.maximum(0.04, cube_np[:, 2] - 0.02 * 0.35),
+        ),
+        axis=-1,
+    ).astype(np.float32)
+    next_cube_np = np.where(next_grasped_np[:, None], attached_np, resting_np)
+
+    assert np.allclose(np.array(gripper_target), target_np)
+    assert np.allclose(np.array(gripper_velocity), velocity_np)
+    assert np.array_equal(np.array(next_grasped), next_grasped_np)
+    assert np.allclose(np.array(next_cube_pos), next_cube_np)
 
 
 def test_locomotion_root_step_hotpath_matches_reference_math():
