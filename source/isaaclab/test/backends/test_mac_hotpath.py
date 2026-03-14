@@ -22,6 +22,7 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     contact_update_hotpath,
     franka_end_effector_position_hotpath,
     franka_lift_object_step_hotpath,
+    franka_stack_object_step_hotpath,
     h1_body_positions_hotpath,
     locomotion_root_step_hotpath,
     prime_contact_state,
@@ -234,6 +235,76 @@ def test_franka_lift_object_hotpath_matches_reference_math():
     assert np.allclose(np.array(gripper_target), target_np)
     assert np.allclose(np.array(gripper_velocity), velocity_np)
     assert np.array_equal(np.array(next_grasped), next_grasped_np)
+    assert np.allclose(np.array(next_cube_pos), next_cube_np)
+
+
+def test_franka_stack_object_hotpath_matches_reference_math():
+    cube_pos_w = mx.array([[0.55, 0.10, 0.08], [0.60, -0.02, 0.08]], dtype=mx.float32)
+    support_cube_pos_w = mx.array([[0.50, 0.02, 0.04], [0.58, -0.02, 0.04]], dtype=mx.float32)
+    ee_pos_w = mx.array([[0.50, 0.02, 0.095], [0.66, -0.02, 0.18]], dtype=mx.float32)
+    gripper_joint_pos = mx.array([0.0, 0.0], dtype=mx.float32)
+    gripper_action = mx.array([1.0, -1.0], dtype=mx.float32)
+    grasped = mx.array([True, False], dtype=mx.bool_)
+    stacked = mx.array([False, False], dtype=mx.bool_)
+
+    gripper_target, gripper_velocity, next_grasped, next_stacked, next_cube_pos = franka_stack_object_step_hotpath(
+        cube_pos_w,
+        support_cube_pos_w,
+        ee_pos_w,
+        gripper_joint_pos,
+        gripper_action,
+        grasped,
+        stacked,
+        0.02,
+        0.0,
+        0.08,
+        0.03,
+        0.05,
+        0.07,
+        0.055,
+        0.04,
+        0.04,
+        0.04,
+        0.03,
+    )
+    mx.eval(gripper_target, gripper_velocity, next_grasped, next_stacked, next_cube_pos)
+
+    cube_np = np.array(cube_pos_w)
+    support_np = np.array(support_cube_pos_w)
+    ee_np = np.array(ee_pos_w)
+    target_np = np.where(np.array(gripper_action) < 0.0, 0.0, 0.08).astype(np.float32)
+    velocity_np = (target_np - np.array(gripper_joint_pos)) / 0.02
+    dist_np = np.linalg.norm(cube_np - ee_np, axis=1)
+    gripper_closed_np = target_np <= 0.03
+    gripper_open_np = target_np >= 0.05
+    can_grasp_np = dist_np <= 0.07
+    attached_np = ee_np + np.array([0.0, 0.0, -0.055], dtype=np.float32)
+    stack_target_np = support_np + np.array([0.0, 0.0, 0.04], dtype=np.float32)
+    release_np = np.where(np.array(grasped)[:, None], attached_np, cube_np)
+    stack_xy_error_np = np.linalg.norm(release_np[:, :2] - stack_target_np[:, :2], axis=1)
+    stack_z_error_np = np.abs(release_np[:, 2] - stack_target_np[:, 2])
+    newly_stacked_np = np.array(grasped) & gripper_open_np & (stack_xy_error_np <= 0.04) & (stack_z_error_np <= 0.03)
+    next_stacked_np = np.array(stacked) | newly_stacked_np
+    next_grasped_np = (np.array(grasped) | (can_grasp_np & gripper_closed_np)) & gripper_closed_np & ~np.array(stacked)
+    resting_np = np.stack(
+        (
+            cube_np[:, 0],
+            cube_np[:, 1],
+            np.maximum(0.04, cube_np[:, 2] - 0.02 * 0.35),
+        ),
+        axis=-1,
+    ).astype(np.float32)
+    next_cube_np = np.where(
+        next_stacked_np[:, None],
+        stack_target_np,
+        np.where(next_grasped_np[:, None], attached_np, resting_np),
+    )
+    next_grasped_np = next_grasped_np & ~next_stacked_np
+
+    assert np.allclose(np.array(gripper_target), target_np)
+    assert np.allclose(np.array(gripper_velocity), velocity_np)
+    assert np.array_equal(np.array(next_grasped), next_grasped_np)
+    assert np.array_equal(np.array(next_stacked), next_stacked_np)
     assert np.allclose(np.array(next_cube_pos), next_cube_np)
 
 

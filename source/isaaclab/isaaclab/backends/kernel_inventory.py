@@ -19,6 +19,7 @@ CURRENT_MAC_NATIVE_TASKS = (
     "h1-rough",
     "franka-reach",
     "franka-lift",
+    "franka-stack",
 )
 """Current benchmarked mac-native task slices that must stay in the MLX smoke suite."""
 
@@ -68,14 +69,14 @@ KERNEL_PORT_INVENTORY = (
         key="wrench-composer",
         family="Warp wrench composition kernels",
         status="mlx-helper-ready",
-        target_tasks=("manipulation-reach", "manipulation-lift", "external-wrench-controls"),
+        target_tasks=("manipulation-reach", "manipulation-lift", "manipulation-stack", "external-wrench-controls"),
         upstream_modules=(
             "source/isaaclab/isaaclab/utils/warp/kernels.py",
             "source/isaaclab/isaaclab/utils/wrench_composer.py",
         ),
         symbols=("add_forces_and_torques_at_position", "set_forces_and_torques_at_position"),
         replacement_strategy="Pure MLX helper parity now exists for add/set wrench composition; only drop to Metal if manipulation benchmarks make it hot.",
-        notes="The first helper-level MLX replacement is implemented and parity-tested, but no mac-native manipulation env uses it yet.",
+        notes="The first helper-level MLX replacement is implemented and parity-tested, but no current mac-native manipulation env uses it directly yet.",
     ),
     KernelInventoryItem(
         key="fabric-transform-kernels",

@@ -24,6 +24,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "h1-rough",
         "franka-reach",
         "franka-lift",
+        "franka-stack",
     )
 
 

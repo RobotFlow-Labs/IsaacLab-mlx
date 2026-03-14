@@ -429,3 +429,26 @@ class MacFrankaLiftEnvCfg(MacFrankaReachEnvCfg):
     grasp_reward_scale: float = 0.5
     lift_reward_scale: float = 4.0
     lift_success_bonus: float = 4.0
+
+
+@configclass
+class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
+    """Configuration for a reduced mac-native Franka cube-stacking slice."""
+
+    observation_space: int = 33
+    episode_length_s: float = 10.0
+
+    support_cube_x_range: tuple[float, float] = (0.44, 0.58)
+    support_cube_y_range: tuple[float, float] = (-0.06, 0.06)
+    movable_cube_offset_x_range: tuple[float, float] = (0.10, 0.18)
+    movable_cube_offset_y_range: tuple[float, float] = (0.06, 0.14)
+    stack_offset_z: float = 0.04
+    stack_xy_threshold: float = 0.04
+    stack_z_threshold: float = 0.03
+    stack_release_open_threshold: float = 0.05
+
+    grasp_reward_scale: float = 0.45
+    lift_reward_scale: float = 1.25
+    stack_align_reward_scale: float = 2.5
+    stack_distance_reward_gain: float = 9.0
+    stack_success_bonus: float = 6.0

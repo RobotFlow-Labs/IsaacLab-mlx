@@ -26,8 +26,8 @@ from isaaclab.backends.runtime import (
 )
 from isaaclab.utils.configclass import configclass
 
-from .env_cfgs import MacFrankaLiftEnvCfg, MacFrankaReachEnvCfg
-from .hotpath import franka_end_effector_position_hotpath, franka_lift_object_step_hotpath
+from .env_cfgs import MacFrankaLiftEnvCfg, MacFrankaReachEnvCfg, MacFrankaStackEnvCfg
+from .hotpath import franka_end_effector_position_hotpath, franka_lift_object_step_hotpath, franka_stack_object_step_hotpath
 from .ppo_training import (
     build_checkpoint_metadata,
     compute_gae,
@@ -81,6 +81,27 @@ class MacFrankaLiftTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.25
     checkpoint_path: str = "logs/mlx/franka_lift_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacFrankaStackTrainCfg:
+    """Training configuration for the MLX Franka stack slice."""
+
+    env: MacFrankaStackEnvCfg = MacFrankaStackEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.25
+    checkpoint_path: str = "logs/mlx/franka_stack_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -292,6 +313,113 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
         return payload
 
 
+class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
+    """A lightweight batched Franka cube-stack backend on MLX/mac-sim."""
+
+    capabilities = SimCapabilities(
+        batched_stepping=True,
+        articulated_rigid_bodies=True,
+        contacts=True,
+        proprioceptive_observations=True,
+        cameras=False,
+        planners=False,
+    )
+
+    def __init__(self, cfg: MacFrankaStackEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
+        self.cube_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.support_cube_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.grasped = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.stacked = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        super().__init__(cfg, reset_sampler=reset_sampler)
+        self.cfg = cfg
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        super().reset_envs(env_ids)
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        support_x = self.reset_sampler.uniform((rows,), self.cfg.support_cube_x_range[0], self.cfg.support_cube_x_range[1])
+        support_y = self.reset_sampler.uniform((rows,), self.cfg.support_cube_y_range[0], self.cfg.support_cube_y_range[1])
+        direction = mx.where(self.reset_sampler.uniform((rows,), 0.0, 1.0) > 0.5, 1.0, -1.0)
+        offset_x = self.reset_sampler.uniform(
+            (rows,),
+            self.cfg.movable_cube_offset_x_range[0],
+            self.cfg.movable_cube_offset_x_range[1],
+        )
+        offset_y = direction * self.reset_sampler.uniform(
+            (rows,),
+            self.cfg.movable_cube_offset_y_range[0],
+            self.cfg.movable_cube_offset_y_range[1],
+        )
+        movable_x = mx.clip(support_x + offset_x, self.cfg.cube_x_range[0], self.cfg.cube_x_range[1])
+        movable_y = mx.clip(support_y + offset_y, self.cfg.cube_y_range[0], self.cfg.cube_y_range[1])
+        self.support_cube_pos_w[ids] = mx.stack(
+            (
+                support_x,
+                support_y,
+                mx.full((rows,), self.cfg.table_height, dtype=mx.float32),
+            ),
+            axis=-1,
+        )
+        self.cube_pos_w[ids] = mx.stack(
+            (
+                movable_x,
+                movable_y,
+                mx.full((rows,), self.cfg.table_height, dtype=mx.float32),
+            ),
+            axis=-1,
+        )
+        self.grasped[ids] = False
+        self.stacked[ids] = False
+
+    def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
+        MacFrankaReachSimBackend.step(self, render=render, update_fabric=update_fabric)
+        gripper_target, gripper_velocity, self.grasped, self.stacked, self.cube_pos_w = franka_stack_object_step_hotpath(
+            self.cube_pos_w,
+            self.support_cube_pos_w,
+            self.ee_pos_w,
+            self.state.joint_pos[:, 7],
+            self.action_targets[:, 7],
+            self.grasped,
+            self.stacked,
+            self.physics_dt,
+            float(self.joint_lower_limits[0, 7].item()),
+            float(self.joint_upper_limits[0, 7].item()),
+            self.cfg.gripper_closed_threshold,
+            self.cfg.stack_release_open_threshold,
+            self.cfg.grasp_distance_threshold,
+            self.cfg.grasp_offset_z,
+            self.cfg.table_height,
+            self.cfg.stack_offset_z,
+            self.cfg.stack_xy_threshold,
+            self.cfg.stack_z_threshold,
+        )
+        self.state.joint_vel[:, 7] = gripper_velocity
+        self.state.joint_pos[:, 7] = gripper_target
+
+    def stack_target_pos_w(self) -> mx.array:
+        return self.support_cube_pos_w + mx.array([0.0, 0.0, self.cfg.stack_offset_z], dtype=mx.float32)
+
+    def stack_error(self) -> mx.array:
+        return self.stack_target_pos_w() - self.cube_pos_w
+
+    def stack_success(self) -> mx.array:
+        return self.stacked
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "franka-stack"
+        payload["subsystems"] = {
+            "analytic_kinematics": True,
+            "object_tracking": True,
+            "grasp_logic": True,
+            "stack_logic": True,
+            "hotpath": "mlx-compiled",
+        }
+        return payload
+
+
 class MacFrankaReachEnv:
     """Vectorized Franka reach task for MLX/mac-sim."""
 
@@ -333,15 +461,17 @@ class MacFrankaReachEnv:
         self.episode_return_buf = self.episode_return_buf + self.reward_buf
         self.reset_terminated, self.reset_time_outs = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
-        step_reward = self.reward_buf
-        step_terminated = self.reset_terminated
-        step_time_outs = self.reset_time_outs
+        # Snapshot per-step signals before any auto-reset mutates backend-backed buffers.
+        step_reward = mx.array(self.reward_buf)
+        step_terminated = mx.array(self.reset_terminated)
+        step_time_outs = mx.array(self.reset_time_outs)
 
         reset_ids = [index for index, flag in enumerate(self.reset_buf.tolist()) if flag]
         extras: dict[str, Any] = {}
         if reset_ids:
             ids = mx.array(reset_ids, dtype=mx.int32)
             extras = {
+                "reset_env_ids": reset_ids,
                 "completed_lengths": [int(self.episode_length_buf[index].item()) for index in reset_ids],
                 "completed_returns": [float(self.episode_return_buf[index].item()) for index in reset_ids],
                 "terminated_env_ids": [index for index in reset_ids if bool(step_terminated[index].item())],
@@ -439,6 +569,78 @@ class MacFrankaLiftEnv(MacFrankaReachEnv):
 
     def _get_dones(self) -> tuple[mx.array, mx.array]:
         success = self.sim_backend.lift_success()
+        time_out = self.episode_length_buf >= self.max_episode_length
+        return success, time_out
+
+
+class MacFrankaStackEnv(MacFrankaReachEnv):
+    """Vectorized Franka cube-stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFrankaStackEnvCfg | None = None):
+        self.cfg = cfg or MacFrankaStackEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacFrankaStackSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+    def _build_policy_observations(self) -> mx.array:
+        joint_pos, joint_vel = self.sim_backend.get_joint_state(None)
+        cube_error = self.sim_backend.cube_pos_w - self.sim_backend.ee_pos_w
+        stack_error = self.sim_backend.stack_error()
+        grasped = self.sim_backend.grasped.astype(mx.float32).reshape((-1, 1))
+        stacked = self.sim_backend.stacked.astype(mx.float32).reshape((-1, 1))
+        return mx.concatenate(
+            (
+                joint_pos,
+                joint_vel,
+                self.sim_backend.ee_pos_w,
+                self.sim_backend.cube_pos_w,
+                self.sim_backend.support_cube_pos_w,
+                cube_error,
+                stack_error,
+                grasped,
+                stacked,
+            ),
+            axis=-1,
+        )
+
+    def _get_rewards(self) -> mx.array:
+        cube_error = mx.linalg.norm(self.sim_backend.cube_pos_w - self.sim_backend.ee_pos_w, axis=1)
+        stack_error = mx.linalg.norm(self.sim_backend.stack_error(), axis=1)
+        reach_reward = self.cfg.reach_reward_scale * mx.exp(-self.cfg.distance_reward_gain * cube_error)
+        grasp_reward = self.cfg.grasp_reward_scale * self.sim_backend.grasped.astype(mx.float32)
+        lift_reward = self.cfg.lift_reward_scale * mx.maximum(self.sim_backend.cube_pos_w[:, 2] - self.cfg.table_height, 0.0)
+        stack_align_reward = self.cfg.stack_align_reward_scale * mx.exp(-self.cfg.stack_distance_reward_gain * stack_error)
+        success_bonus = self.cfg.stack_success_bonus * self.sim_backend.stack_success().astype(mx.float32)
+        action_penalty = self.cfg.action_rate_penalty_scale * mx.sum(mx.square(self._actions - self._previous_actions), axis=1)
+        joint_vel_penalty = self.cfg.joint_vel_penalty_scale * mx.sum(mx.square(self.sim_backend.state.joint_vel), axis=1)
+        return (
+            reach_reward
+            + grasp_reward
+            + lift_reward
+            + stack_align_reward
+            + success_bonus
+            + action_penalty
+            + joint_vel_penalty
+        ) * self.step_dt
+
+    def _get_dones(self) -> tuple[mx.array, mx.array]:
+        success = self.sim_backend.stack_success()
         time_out = self.episode_length_buf >= self.max_episode_length
         return success, time_out
 
@@ -784,6 +986,157 @@ def play_franka_lift_policy(
     return play_gaussian_policy_checkpoint(
         checkpoint_path,
         env_factory=MacFrankaLiftEnv,
+        env_cfg=cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka stack policy on the mac-native MLX slice."""
+
+    mx.random.seed(cfg.env.seed)
+    cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
+    env = MacFrankaStackEnv(cfg.env)
+    model = MacFrankaReachPolicy(
+        obs_dim=cfg.env.observation_space,
+        hidden_dim=cfg.hidden_dim,
+        action_dim=cfg.env.action_space,
+    )
+    optimizer = optim.Adam(learning_rate=cfg.learning_rate)
+    loss_and_grad = nn.value_and_grad(model, _ppo_loss)
+    resumed_from = None
+    if cfg.resume_from:
+        resume_path = Path(cfg.resume_from)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Checkpoint to resume from does not exist: {resume_path}")
+        model.load_weights(str(resume_path))
+        resumed_from = str(resume_path)
+    mx.eval(model.parameters())
+
+    obs = env.reset()[0]["policy"]
+    completed_returns: list[float] = []
+
+    for update in range(cfg.updates):
+        obs_rollout = []
+        actions_rollout = []
+        log_probs_rollout = []
+        rewards_rollout = []
+        terminated_rollout = []
+        values_rollout = []
+        bootstrap_obs_rollout = []
+
+        for _ in range(cfg.rollout_steps):
+            mean, values = model(obs)
+            noise = mx.random.normal(shape=mean.shape).astype(mx.float32)
+            actions = mx.clip(mean + cfg.action_std * noise, -1.0, 1.0)
+            next_obs, reward, terminated, _, extras = env.step(actions)
+            bootstrap_obs = next_obs["policy"]
+            if extras.get("reset_env_ids"):
+                ids = mx.array(extras["reset_env_ids"], dtype=mx.int32)
+                bootstrap_obs = bootstrap_obs + 0.0
+                bootstrap_obs[ids] = extras["final_policy_observations"]
+
+            obs_rollout.append(obs)
+            actions_rollout.append(actions)
+            log_probs_rollout.append(_gaussian_log_probs(actions, mean, cfg.action_std))
+            rewards_rollout.append(reward)
+            terminated_rollout.append(terminated.astype(mx.float32))
+            values_rollout.append(values)
+            bootstrap_obs_rollout.append(bootstrap_obs)
+            obs = next_obs["policy"]
+
+            if extras.get("completed_returns"):
+                completed_returns.extend(extras["completed_returns"])
+
+        rewards_t = mx.stack(rewards_rollout)
+        terminated_t = mx.stack(terminated_rollout)
+        values_t = mx.stack(values_rollout)
+        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, cfg.env.observation_space))
+        _, flat_next_values = model(flat_bootstrap_obs)
+        next_values_t = mx.reshape(flat_next_values, (cfg.rollout_steps, cfg.env.num_envs))
+        advantages, returns = compute_gae(
+            rewards_t,
+            terminated_t,
+            values_t,
+            next_values_t,
+            gamma=cfg.gamma,
+            gae_lambda=cfg.gae_lambda,
+        )
+
+        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
+        flat_actions = mx.reshape(mx.stack(actions_rollout), (-1, cfg.env.action_space))
+        flat_log_probs = mx.reshape(mx.stack(log_probs_rollout), (-1,))
+        flat_advantages = mx.reshape(advantages, (-1,))
+        flat_returns = mx.reshape(returns, (-1,))
+        flat_advantages = normalize_advantages(flat_advantages)
+
+        for _ in range(cfg.epochs_per_update):
+            loss, grads = loss_and_grad(
+                model,
+                flat_obs,
+                flat_actions,
+                flat_log_probs,
+                flat_advantages,
+                flat_returns,
+                cfg.clip_epsilon,
+                cfg.value_loss_coef,
+                cfg.entropy_coef,
+                cfg.action_std,
+            )
+            optimizer.update(model, grads)
+            mx.eval(loss, model.state, optimizer.state)
+
+        if (update + 1) % cfg.eval_interval == 0 or update == 0 or update == cfg.updates - 1:
+            mean_reward = float(mx.mean(rewards_t).item())
+            mean_return = mean_recent_return(completed_returns)
+            print(
+                f"[mlx-franka-stack] update={update + 1}/{cfg.updates} "
+                f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
+            )
+
+    checkpoint_path, metadata_path = save_policy_checkpoint(
+        model,
+        cfg.checkpoint_path,
+        build_checkpoint_metadata(
+            hidden_dim=cfg.hidden_dim,
+            observation_space=cfg.env.observation_space,
+            action_space=cfg.env.action_space,
+            task_id="Isaac-Stack-Cube-Franka-v0",
+            policy_distribution="gaussian",
+            action_std=cfg.action_std,
+            train_cfg=asdict(cfg),
+        ),
+    )
+    return {
+        "checkpoint_path": checkpoint_path,
+        "metadata_path": metadata_path,
+        "resumed_from": resumed_from,
+        "train_cfg": asdict(cfg),
+        "completed_episodes": len(completed_returns),
+        "mean_recent_return": mean_recent_return(completed_returns),
+    }
+
+
+def play_franka_stack_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackEnvCfg(num_envs=1)
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=MacFrankaStackEnv,
         env_cfg=cfg,
         model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
             obs_dim=obs_dim,

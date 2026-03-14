@@ -47,7 +47,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 13
+    assert snapshot["task_count"] == 14
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -56,6 +56,9 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == "mlx-compiled"
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-stack"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0
 

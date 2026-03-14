@@ -45,6 +45,20 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Stack-Cube-Franka-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Velocity-Flat-H1-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacH1FlatEnv",
         "kwargs": {
