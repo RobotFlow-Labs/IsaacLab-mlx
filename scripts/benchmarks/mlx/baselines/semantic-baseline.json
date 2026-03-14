@@ -1,0 +1,199 @@
+{
+  "generated_at": "2026-03-14T17:40:26Z",
+  "git_sha": null,
+  "hardware_label": "darwin-arm64",
+  "parameters": {
+    "epochs_per_update": 1,
+    "num_envs": 8,
+    "quadcopter_thrust_action": 0.2,
+    "rollout_steps": 4,
+    "seed": 42,
+    "steps": 8,
+    "train_updates": 1
+  },
+  "platform": {
+    "apple_chip": "Apple M5",
+    "machine": "arm64",
+    "platform": "macOS-26.3-arm64-arm-64bit-Mach-O",
+    "python": "3.13.12",
+    "system": "Darwin"
+  },
+  "run_id": null,
+  "schema_version": 1,
+  "task_count": 7,
+  "task_group": "full",
+  "tasks": {
+    "anymal-c-flat": {
+      "contract": {
+        "action_dim": 12,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 48,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.3008396029472351,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.18802474439144135,
+          "final_joint_pos_abs_mean": 0.6073803901672363,
+          "final_joint_vel_abs_mean": 0.04642656445503235,
+          "final_policy_mean": -0.030886126682162285,
+          "final_policy_std": 0.209601491689682,
+          "final_reward_mean": 0.013153361156582832,
+          "final_root_ang_vel_norm_mean": 0.19297409057617188,
+          "final_root_height_mean": 0.5389002561569214,
+          "final_root_lin_vel_norm_mean": 0.24305790662765503
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "anymal-c-flat-height-scan": {
+      "contract": {
+        "action_dim": 12,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 57,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.3008396029472351,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.18802474439144135,
+          "final_joint_pos_abs_mean": 0.6073803901672363,
+          "final_joint_vel_abs_mean": 0.04642656445503235,
+          "final_policy_mean": 0.05908014252781868,
+          "final_policy_std": 0.283131867647171,
+          "final_reward_mean": 0.013153361156582832,
+          "final_root_ang_vel_norm_mean": 0.19297409057617188,
+          "final_root_height_mean": 0.5389002561569214,
+          "final_root_lin_vel_norm_mean": 0.24305790662765503,
+          "height_scan_hit_ratio": 1.0,
+          "height_scan_mean": 0.5389001965522766,
+          "height_scan_std": 3.973068669438362e-05
+        },
+        "sensor_implementation": "analytic-plane-raycast",
+        "sensor_scan_dim": 9
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "cart-double-pendulum": {
+      "contract": {
+        "cart_observation_dim": 4,
+        "output_signature": {
+          "final_cart_obs_mean": -0.12504903972148895,
+          "final_cart_obs_std": 0.49067679047584534,
+          "final_cart_reward_mean": 0.7326995134353638,
+          "final_pendulum_obs_mean": 0.008944233879446983,
+          "final_pendulum_obs_std": 0.6212518215179443,
+          "final_pendulum_reward_mean": 0.882621169090271
+        },
+        "pendulum_observation_dim": 3
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "cartpole": {
+      "contract": {
+        "observation_dim": 4,
+        "output_signature": {
+          "final_joint_pos_abs_mean": 0.20265334844589233,
+          "final_joint_vel_abs_mean": 0.3704187870025635,
+          "final_policy_mean": -0.030332110822200775,
+          "final_policy_std": 0.5067154765129089,
+          "final_reward_mean": 0.7401851415634155
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "h1-flat": {
+      "contract": {
+        "action_dim": 19,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 69,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.2627297639846802,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.1662605255842209,
+          "final_joint_pos_abs_mean": 0.25973454117774963,
+          "final_joint_vel_abs_mean": 0.0395796000957489,
+          "final_policy_mean": -0.0067887017503380775,
+          "final_policy_std": 0.15813685953617096,
+          "final_reward_mean": 0.024239663034677505,
+          "final_root_ang_vel_norm_mean": 0.1975303292274475,
+          "final_root_height_mean": 1.046764612197876,
+          "final_root_lin_vel_norm_mean": 0.09445567429065704
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "h1-flat-height-scan": {
+      "contract": {
+        "action_dim": 19,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 78,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.2627297639846802,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.1662605255842209,
+          "final_joint_pos_abs_mean": 0.25973454117774963,
+          "final_joint_vel_abs_mean": 0.0395796000957489,
+          "final_policy_mean": 0.11477513611316681,
+          "final_policy_std": 0.3679918944835663,
+          "final_reward_mean": 0.024239663034677505,
+          "final_root_ang_vel_norm_mean": 0.1975303292274475,
+          "final_root_height_mean": 1.046764612197876,
+          "final_root_lin_vel_norm_mean": 0.09445567429065704,
+          "height_scan_hit_ratio": 1.0,
+          "height_scan_mean": 1.0467644929885864,
+          "height_scan_std": 8.854498446453363e-05
+        },
+        "sensor_implementation": "analytic-plane-raycast",
+        "sensor_scan_dim": 9
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "quadcopter": {
+      "contract": {
+        "observation_dim": 12,
+        "output_signature": {
+          "final_distance_to_goal_mean": 1.8040850162506104,
+          "final_policy_mean": -0.09872022271156311,
+          "final_policy_std": 0.6022467017173767,
+          "final_reward_mean": 0.009660867042839527,
+          "final_root_height_mean": 1.018649935722351
+        },
+        "thrust_action": 0.2
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    }
+  },
+  "workflow": null
+}

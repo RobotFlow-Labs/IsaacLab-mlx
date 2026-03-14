@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -18,7 +19,12 @@ from typing import Any
 import mlx.core as mx
 
 from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
-from isaaclab.backends import detect_cpu_fallback, get_runtime_state
+from isaaclab.backends import (
+    build_benchmark_dashboard,
+    build_benchmark_trend,
+    detect_cpu_fallback,
+    get_runtime_state,
+)
 from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAnymalCFlatEnv,
@@ -61,12 +67,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quadcopter-thrust-action", type=float, default=0.2)
     parser.add_argument("--artifact-dir", type=Path, default=Path("logs/benchmarks/mlx"))
     parser.add_argument("--json-out", type=Path, default=None)
+    parser.add_argument("--dashboard-out", type=Path, default=None)
+    parser.add_argument("--trend-out", type=Path, default=None)
+    parser.add_argument("--hardware-label", type=str, default=None)
     return parser.parse_args()
 
 
 def _sync(values: list[mx.array]) -> None:
     """Force MLX execution for stable timing."""
     mx.eval(*values)
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _apple_chip() -> str | None:
+    """Resolve the local Apple Silicon chip label when available."""
+    if platform.system() != "Darwin":
+        return None
+    try:
+        return subprocess.check_output(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 
 
 def _make_benchmark_result(
@@ -140,6 +168,52 @@ def _sensor_output_signature(env: Any) -> dict[str, float]:
     }
 
 
+def _cartpole_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture a compact semantic signature for the cartpole slice."""
+    policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
+    reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
+    joint_pos, joint_vel = env.sim_backend.get_joint_state(None)
+    return {
+        "final_policy_mean": float(mx.mean(policy).item()),
+        "final_policy_std": float(mx.std(policy).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_joint_pos_abs_mean": float(mx.mean(mx.abs(joint_pos)).item()),
+        "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
+    }
+
+
+def _cart_double_pendulum_output_signature(trace: Any) -> dict[str, float]:
+    """Capture a compact semantic signature for the cart-double-pendulum slice."""
+    cart_obs = trace.observations[-1]["cart"] if trace.observations else trace.initial_observations["cart"]
+    pendulum_obs = trace.observations[-1]["pendulum"] if trace.observations else trace.initial_observations["pendulum"]
+    reward = trace.rewards[-1] if trace.rewards else {
+        "cart": mx.zeros((cart_obs.shape[0],), dtype=mx.float32),
+        "pendulum": mx.zeros((pendulum_obs.shape[0],), dtype=mx.float32),
+    }
+    return {
+        "final_cart_obs_mean": float(mx.mean(cart_obs).item()),
+        "final_cart_obs_std": float(mx.std(cart_obs).item()),
+        "final_pendulum_obs_mean": float(mx.mean(pendulum_obs).item()),
+        "final_pendulum_obs_std": float(mx.std(pendulum_obs).item()),
+        "final_cart_reward_mean": float(mx.mean(reward["cart"]).item()),
+        "final_pendulum_reward_mean": float(mx.mean(reward["pendulum"]).item()),
+    }
+
+
+def _quadcopter_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture a compact semantic signature for the quadcopter slice."""
+    policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
+    reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
+    distance_to_goal = mx.linalg.norm(env._desired_pos_w - env.sim_backend.root_pos_w, axis=1)
+    return {
+        "final_policy_mean": float(mx.mean(policy).item()),
+        "final_policy_std": float(mx.std(policy).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_root_height_mean": float(mx.mean(env.sim_backend.root_pos_w[:, 2]).item()),
+        "final_distance_to_goal_mean": float(mx.mean(distance_to_goal).item()),
+    }
+
+
 def resolve_requested_tasks(tasks: list[str] | None, task_group: str) -> tuple[str, ...]:
     """Resolve CLI benchmark selection to an ordered task tuple."""
     if tasks:
@@ -166,6 +240,7 @@ def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
         runtime_state=_env_runtime_state(env),
         extra={
             "observation_dim": env.cfg.observation_space,
+            "output_signature": _cartpole_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -194,6 +269,7 @@ def benchmark_cart_double_pendulum(num_envs: int, steps: int, seed: int) -> dict
         extra={
             "cart_observation_dim": env.cfg.observation_spaces["cart"],
             "pendulum_observation_dim": env.cfg.observation_spaces["pendulum"],
+            "output_signature": _cart_double_pendulum_output_signature(trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -220,6 +296,7 @@ def benchmark_quadcopter(num_envs: int, steps: int, seed: int, thrust_action: fl
         extra={
             "observation_dim": env.cfg.observation_space,
             "thrust_action": thrust_action,
+            "output_signature": _quadcopter_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -380,6 +457,7 @@ def benchmark_train_cartpole(
         "train_frames": frames,
         "train_frames_per_s": frames / elapsed_s,
         "checkpoint_path": result["checkpoint_path"],
+        "metadata_path": result["metadata_path"],
         "completed_episodes": result["completed_episodes"],
         "mean_recent_return": result["mean_recent_return"],
     }
@@ -402,11 +480,22 @@ def run_benchmarks(
 ) -> dict[str, Any]:
     """Run the requested benchmark suite and return the JSON payload."""
     results = {
+        "schema_version": 1,
         "platform": {
             "system": platform.system(),
             "machine": platform.machine(),
             "platform": platform.platform(),
             "python": sys.version.split()[0],
+            "apple_chip": _apple_chip(),
+        },
+        "parameters": {
+            "num_envs": num_envs,
+            "steps": steps,
+            "train_updates": train_updates,
+            "rollout_steps": rollout_steps,
+            "epochs_per_update": epochs_per_update,
+            "seed": seed,
+            "quadcopter_thrust_action": quadcopter_thrust_action,
         },
         "task_group": next((name for name, group in TASK_GROUPS.items() if group == tasks), "custom"),
         "tasks": list(tasks),
@@ -451,6 +540,10 @@ def main() -> int:
     args.artifact_dir.mkdir(parents=True, exist_ok=True)
     if args.json_out is None:
         args.json_out = args.artifact_dir / "benchmark-results.json"
+    if args.dashboard_out is None:
+        args.dashboard_out = args.json_out.with_name(f"{args.json_out.stem}-dashboard.json")
+    if args.trend_out is None:
+        args.trend_out = args.json_out.with_name(f"{args.json_out.stem}-trend.json")
     tasks = resolve_requested_tasks(args.tasks, args.task_group)
     results = run_benchmarks(
         tasks,
@@ -463,11 +556,14 @@ def main() -> int:
         quadcopter_thrust_action=args.quadcopter_thrust_action,
         artifact_dir=args.artifact_dir,
     )
+    dashboard = build_benchmark_dashboard(results, hardware_label=args.hardware_label)
+    trend = build_benchmark_trend(results, hardware_label=args.hardware_label)
 
     output = json.dumps(results, indent=2, sort_keys=True)
     print(output)
-    args.json_out.parent.mkdir(parents=True, exist_ok=True)
-    args.json_out.write_text(output + "\n", encoding="utf-8")
+    _write_json(args.json_out, results)
+    _write_json(args.dashboard_out, dashboard)
+    _write_json(args.trend_out, trend)
     return 0
 
 

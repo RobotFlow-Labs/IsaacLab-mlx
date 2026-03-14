@@ -235,6 +235,7 @@ jobs:
           source/isaaclab/test/backends/test_mac_sensor_raycast.py \
           source/isaaclab/test/backends/test_mac_stereo_depth.py \
           source/isaaclab/test/backends/test_mlx_task_cli.py \
+          source/isaaclab/test/backends/test_mac_semantic_drift.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab_rl/test/test_mlx_wrapper.py \
           source/isaaclab/test/backends/test_portability_utils.py \
@@ -367,10 +368,40 @@ jobs:
           --steps 64 \
           --json-out logs/benchmarks/mlx/sensor-smoke.json
 
+    - name: Run MLX full-suite dashboard smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+          --task-group full \
+          --num-envs 8 \
+          --steps 8 \
+          --train-updates 1 \
+          --rollout-steps 4 \
+          --epochs-per-update 1 \
+          --json-out logs/benchmarks/mlx/full-smoke.json
+
+    - name: Verify semantic baseline against full-suite smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/benchmarks/mlx/check_semantic_drift.py \
+          --results logs/benchmarks/mlx/full-smoke.json \
+          --baseline scripts/benchmarks/mlx/baselines/semantic-baseline.json \
+          --snapshot-out logs/benchmarks/mlx/full-smoke-semantic-snapshot.json \
+          --report-out logs/benchmarks/mlx/full-smoke-semantic-report.json
+
     - name: Verify benchmark artifact payload
       run: |
         test -f logs/benchmarks/mlx/smoke.json
+        test -f logs/benchmarks/mlx/smoke-dashboard.json
+        test -f logs/benchmarks/mlx/smoke-trend.json
         test -f logs/benchmarks/mlx/sensor-smoke.json
+        test -f logs/benchmarks/mlx/sensor-smoke-dashboard.json
+        test -f logs/benchmarks/mlx/sensor-smoke-trend.json
+        test -f logs/benchmarks/mlx/full-smoke.json
+        test -f logs/benchmarks/mlx/full-smoke-dashboard.json
+        test -f logs/benchmarks/mlx/full-smoke-trend.json
+        test -f logs/benchmarks/mlx/full-smoke-semantic-snapshot.json
+        test -f logs/benchmarks/mlx/full-smoke-semantic-report.json
         PYTHONPATH=.:source/isaaclab .venv/bin/python - <<'PY'
         import json
         from pathlib import Path
@@ -380,6 +411,11 @@ jobs:
         assert payload["cpu_fallback_detected"] is False
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
+        dashboard = json.loads(Path("logs/benchmarks/mlx/smoke-dashboard.json").read_text(encoding="utf-8"))
+        assert dashboard["summary"]["rollout_task_count"] == 5
+        assert dashboard["summary"]["training_task_count"] == 0
+        trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
+        assert trend["summary"]["task_count"] == 5
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
@@ -392,6 +428,14 @@ jobs:
             assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-plane-raycast"
             assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
         print(sensor_payload["tasks"])
+        full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
+        assert full_payload["task_group"] == "full"
+        full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
+        assert full_dashboard["summary"]["training_task_count"] == 1
+        full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
+        assert any(entry["kind"] == "training" for entry in full_trend["tasks"])
+        semantic_report = json.loads(Path("logs/benchmarks/mlx/full-smoke-semantic-report.json").read_text(encoding="utf-8"))
+        assert semantic_report["passed"] is True
         PY
 
     - name: Upload MLX smoke artifacts
@@ -401,3 +445,4 @@ jobs:
         name: mlx-macos-smoke-${{ github.run_id }}
         path: logs/benchmarks/mlx
         if-no-files-found: warn
+        retention-days: 14

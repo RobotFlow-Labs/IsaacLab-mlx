@@ -396,19 +396,24 @@ The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
+- a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
-- locomotion-only `output_signature` fields so hot-loop refactors can be compared on M-series Macs without relying on throughput numbers alone
+- rollout `output_signature` fields for control, locomotion, and sensor slices so semantic drift can be tracked without relying on throughput numbers alone
+- companion `*-dashboard.json` and `*-trend.json` artifacts for normalized MLX/mac regression reporting and M-series comparisons
 
-CI now preserves both benchmark JSON artifacts and a dedicated import-safety artifact proving the MLX/mac path can run without `isaacsim`, `omni`, `carb`, or `pxr` installed.
+CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety artifact proving the MLX/mac path can run without `isaacsim`, `omni`, `carb`, or `pxr` installed, and a nightly semantic drift report against the committed MLX/mac baseline in [`scripts/benchmarks/mlx/baselines/semantic-baseline.json`](scripts/benchmarks/mlx/baselines/semantic-baseline.json).
 
 ### Benchmark Expectations
 
 - `current-mac-native` is the stable public regression suite for the current MLX/mac task set.
 - `sensor-mac-native` is the stable regression suite for the first analytic height-scan/raycast slices: `anymal-c-flat-height-scan` and `h1-flat-height-scan`.
+- `full` is the normalized dashboard/trend suite used by CI when one artifact needs to cover rollout plus training health together.
 - CI benchmark smokes are regression signals, not public performance claims.
 - A benchmark run is only considered healthy when `cpu_fallback.detected == false`.
-- Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons. Do not compare against CI smoke numbers.
+- Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons and `logs/benchmarks/mlx/m5-baseline-trend.json` when you want a compact comparison payload across M-series machines. Do not compare against CI smoke numbers.
+- CI stores immutable `*-trend.json` artifacts per run; those are the retained history source for M-series regression review, not the raw smoke JSON.
+- Nightly semantic drift checks compare the deterministic rollout contracts in the committed baseline against a fresh `full` benchmark run. Throughput is intentionally excluded from that drift gate.
 - Backend-local camera validation currently lives in synthetic stereo smoke tests and optional host-specific hardware probes, not in the task benchmark suite.
 
 ## Kernel Inventory

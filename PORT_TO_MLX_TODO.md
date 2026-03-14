@@ -587,8 +587,12 @@ without pausing for replanning after every small success.
 
 ### MLX-RL-006
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Add multi-task benchmark/training dashboard output
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
+  - local `logs/benchmarks/mlx/full-smoke-dashboard.json`
+  - focused backend suite
 
 ## Phase G: CI And Release
 
@@ -618,8 +622,12 @@ without pausing for replanning after every small success.
 
 ### MLX-CI-004
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Add nightly drift checks against selected upstream task semantics
+- Validation:
+  - `.github/workflows/mlx-nightly-drift.yml`
+  - `source/isaaclab/test/backends/test_mac_semantic_drift.py`
+  - local `logs/benchmarks/mlx/full-smoke-semantic-report.json`
 
 ### MLX-CI-005
 
@@ -632,8 +640,12 @@ without pausing for replanning after every small success.
 
 ### MLX-CI-006
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Archive benchmark trend JSON for M-series comparisons
+- Validation:
+  - `.github/workflows/mlx-macos.yml`
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
+  - local `logs/benchmarks/mlx/full-smoke-trend.json`
 
 ## Phase H: Follow-On Compatibility
 

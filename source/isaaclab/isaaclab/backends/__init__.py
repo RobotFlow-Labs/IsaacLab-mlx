@@ -5,6 +5,12 @@
 
 """Runtime backend selection and capability helpers."""
 
+from .benchmark_reporting import (
+    build_benchmark_dashboard,
+    build_benchmark_trend,
+    build_semantic_drift_snapshot,
+    compare_semantic_drift,
+)
 from .kernel_compat import (
     add_forces_and_torques_at_position_mlx,
     detect_cpu_fallback,

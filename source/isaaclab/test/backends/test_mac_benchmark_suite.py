@@ -8,10 +8,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import sys
 from pathlib import Path
 
+from isaaclab.backends import build_benchmark_dashboard, build_benchmark_trend
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
@@ -74,7 +76,32 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
         assert benchmark["cpu_fallback"]["active_kernel_backend"] == "metal"
         assert "diagnostics" in benchmark
         assert benchmark["diagnostics"]["sim_backend"]["backend"] == "mac-sim"
-        if benchmark["task"] in {"anymal-c-flat", "h1-flat"}:
+        if benchmark["task"] == "cartpole":
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+            }
+        elif benchmark["task"] == "cart-double-pendulum":
+            assert benchmark["output_signature"].keys() == {
+                "final_cart_obs_mean",
+                "final_cart_obs_std",
+                "final_pendulum_obs_mean",
+                "final_pendulum_obs_std",
+                "final_cart_reward_mean",
+                "final_pendulum_reward_mean",
+            }
+        elif benchmark["task"] == "quadcopter":
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_root_height_mean",
+                "final_distance_to_goal_mean",
+            }
+        elif benchmark["task"] in {"anymal-c-flat", "h1-flat"}:
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
@@ -89,7 +116,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_applied_torque_abs_mean",
                 "final_contact_count",
             }
-            assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
+        assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
 
 
 def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
@@ -121,9 +148,11 @@ def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
 
 
 def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
-    """The benchmark CLI should persist its JSON payload for CI artifact upload."""
+    """The benchmark CLI should persist its JSON, dashboard, and trend payloads for CI artifact upload."""
     benchmark_module = _load_benchmark_module()
     output_path = tmp_path / "benchmark-results.json"
+    dashboard_path = tmp_path / "benchmark-results-dashboard.json"
+    trend_path = tmp_path / "benchmark-results-trend.json"
 
     monkeypatch.setattr(
         sys,
@@ -145,5 +174,44 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
 
     assert benchmark_module.main() == 0
     assert output_path.exists()
+    assert dashboard_path.exists()
+    assert trend_path.exists()
     payload = output_path.read_text(encoding="utf-8")
     assert '"task_group": "current-mac-native"' in payload
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    trend = json.loads(trend_path.read_text(encoding="utf-8"))
+    assert dashboard["summary"]["rollout_task_count"] == 5
+    assert dashboard["summary"]["training_task_count"] == 0
+    assert trend["summary"]["task_count"] == 5
+
+
+def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
+    """The reporting helpers should summarize mixed rollout and training benchmark suites."""
+    benchmark_module = _load_benchmark_module()
+
+    results = benchmark_module.run_benchmarks(
+        benchmark_module.resolve_requested_tasks(None, "full"),
+        num_envs=8,
+        steps=8,
+        train_updates=1,
+        rollout_steps=4,
+        epochs_per_update=1,
+        seed=13,
+        quadcopter_thrust_action=0.2,
+        artifact_dir=tmp_path,
+    )
+    dashboard = build_benchmark_dashboard(results, hardware_label="m5-max")
+    trend = build_benchmark_trend(results, hardware_label="m5-max")
+
+    assert dashboard["hardware_label"] == "m5-max"
+    assert dashboard["summary"]["rollout_task_count"] == 7
+    assert dashboard["summary"]["training_task_count"] == 1
+    assert dashboard["summary"]["fastest_rollout"] is not None
+    assert dashboard["summary"]["fastest_training"] is not None
+    assert {entry["task"] for entry in dashboard["tasks"]} == set(benchmark_module.resolve_requested_tasks(None, "full"))
+
+    trend_entries = {entry["task"]: entry for entry in trend["tasks"]}
+    assert trend_entries["train-cartpole"]["kind"] == "training"
+    assert trend_entries["train-cartpole"]["completed_episodes"] >= 0
+    assert trend_entries["cartpole"]["kind"] == "rollout"
+    assert trend_entries["cartpole"]["env_steps_per_s"] > 0.0
