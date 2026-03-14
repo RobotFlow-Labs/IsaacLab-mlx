@@ -39,11 +39,12 @@ jobs:
       run: uv venv --python 3.11 .venv
 
     - name: Install MLX smoke dependencies
-      run: uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+      run: uv pip install --python .venv/bin/python mlx pytest pytest-mock toml gymnasium
 
     - name: Run MLX backend smoke tests
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
           scripts/tools/test/test_bootstrap_isaac_sources.py \
           source/isaaclab/test/backends/test_runtime.py \
-          source/isaaclab/test/backends/test_mac_cartpole.py -q
+          source/isaaclab/test/backends/test_mac_cartpole.py \
+          source/isaaclab/test/backends/test_mac_cartpole_showcase.py -q

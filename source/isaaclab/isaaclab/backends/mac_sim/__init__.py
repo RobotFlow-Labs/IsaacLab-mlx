@@ -14,4 +14,22 @@ from .cartpole import (
     play_cartpole_policy,
     train_cartpole_policy,
 )
-
+from .showcase import (
+    SHOWCASE_CFGS,
+    BoxBoxEnvCfg,
+    BoxDiscreteEnvCfg,
+    BoxMultiDiscreteEnvCfg,
+    DictBoxEnvCfg,
+    DictDiscreteEnvCfg,
+    DictMultiDiscreteEnvCfg,
+    DiscreteBoxEnvCfg,
+    DiscreteDiscreteEnvCfg,
+    DiscreteMultiDiscreteEnvCfg,
+    MacCartpoleShowcaseEnv,
+    MultiDiscreteBoxEnvCfg,
+    MultiDiscreteDiscreteEnvCfg,
+    MultiDiscreteMultiDiscreteEnvCfg,
+    TupleBoxEnvCfg,
+    TupleDiscreteEnvCfg,
+    TupleMultiDiscreteEnvCfg,
+)

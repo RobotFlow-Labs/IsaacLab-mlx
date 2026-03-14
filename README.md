@@ -33,6 +33,7 @@ What works today:
 - lazy import boundaries so the macOS path fails explicitly instead of exploding on missing `omni.*`
 - reproducible source bootstrap script for upstream repositories
 - a runnable `MLX + mac-sim` cartpole vertical slice
+- cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces
 - MLX training, checkpoint save/load, and replay scripts
 - smoke tests for the backend seam and mac-native cartpole flow
 
@@ -91,7 +92,7 @@ This path is for Apple Silicon macOS.
 ```bash
 cd IsaacLab
 uv venv --python 3.11 .venv
-uv pip install --python .venv/bin/python mlx pytest pytest-mock toml
+uv pip install --python .venv/bin/python mlx pytest pytest-mock toml gymnasium
 ```
 
 ### 2. Train the MLX cartpole baseline
@@ -121,7 +122,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
-  source/isaaclab/test/backends/test_mac_cartpole.py -q
+  source/isaaclab/test/backends/test_mac_cartpole.py \
+  source/isaaclab/test/backends/test_mac_cartpole_showcase.py -q
 ```
 
 ## Runtime Selection
