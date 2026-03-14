@@ -18,6 +18,7 @@ import pytest
 from isaaclab.backends import UnsupportedBackendError, resolve_runtime_selection, set_runtime_selection
 
 SAFE_TASK_IDS = (
+    "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
     "Isaac-Cartpole-Direct-v0",
     "Isaac-Cart-Double-Pendulum-Direct-v0",
     "Isaac-Quadcopter-Direct-v0",
@@ -78,6 +79,26 @@ def test_parse_env_cfg_supports_mac_task_cfgs(monkeypatch):
 
     assert type(cfg).__name__ == "MacCartpoleEnvCfg"
     assert parsed_cfg.num_envs == 32
+
+
+def test_parse_env_cfg_supports_anymal_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the mac-native ANYmal-C config without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Velocity-Flat-Anymal-C-Direct-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Velocity-Flat-Anymal-C-Direct-v0", device="cpu", num_envs=24)
+
+    assert type(cfg).__name__ == "MacAnymalCFlatEnvCfg"
+    assert parsed_cfg.num_envs == 24
+    assert parsed_cfg.action_space == 12
+    assert parsed_cfg.observation_space == 48
 
 
 def test_parse_env_cfg_keeps_mac_config_loading_free_of_mlx_runtime(monkeypatch):

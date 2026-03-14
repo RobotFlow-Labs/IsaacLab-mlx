@@ -64,6 +64,7 @@ without pausing for replanning after every small success.
 - `DONE` shared mac-sim batched state primitives now back cartpole, cart-double-pendulum, and quadcopter
 - `DONE` reusable environment origin/grid helper now backs quadcopter root-state resets and goal sampling
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
+- `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
 
 ## Phase A: Import And Packaging Safety
 
@@ -331,27 +332,39 @@ without pausing for replanning after every small success.
 
 ### MLX-TASK-004
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-005`, `MLX-SIM-006`, `MLX-SIM-007`
 - Title: Port first quadruped locomotion task
 - Suggested target:
   - `Isaac-Velocity-Flat-Anymal-C-Direct-v0`
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_anymal_c.py`
+  - `source/isaaclab/test/backends/test_task_registry.py`
+  - `scripts/reinforcement_learning/mlx/play_anymal_c.py`
 
 ### MLX-TASK-005
 
-- Status: `BLOCKED`
+- Status: `DONE`
 - Depends on: `MLX-TASK-004`
 - Title: Add quadruped replay smoke and benchmark
+- Validation:
+  - `scripts/reinforcement_learning/mlx/play_anymal_c.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
+  - `logs/benchmarks/mlx/anymal-phase-c-smoke.json`
 
 ### MLX-TASK-006
 
-- Status: `BLOCKED`
+- Status: `DONE`
 - Depends on: `MLX-TASK-004`
 - Title: Add quadruped training smoke on MLX
+- Validation:
+  - `scripts/reinforcement_learning/mlx/train_anymal_c.py`
+  - `source/isaaclab/test/backends/test_mac_anymal_c.py`
+  - `.github/workflows/mlx-macos.yml`
 
 ### MLX-TASK-007
 
-- Status: `LATER`
+- Status: `READY`
 - Depends on: `MLX-TASK-004`
 - Title: Port first humanoid locomotion task
 

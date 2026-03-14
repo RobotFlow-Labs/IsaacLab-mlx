@@ -7,7 +7,7 @@
 
 from .contacts import BatchedContactSensorState
 from .diagnostics import mac_env_diagnostics
-from .env_cfgs import MacCartDoublePendulumEnvCfg, MacCartpoleEnvCfg, MacQuadcopterEnvCfg
+from .env_cfgs import MacAnymalCFlatEnvCfg, MacCartDoublePendulumEnvCfg, MacCartpoleEnvCfg, MacQuadcopterEnvCfg
 from .locomotion import (
     action_rate_l2,
     base_contact_termination,
@@ -22,6 +22,14 @@ from .reset_primitives import DeterministicResetSampler
 from .rollout import RolloutTrace, replay_actions, rollout_env
 from .state_primitives import BatchedArticulationState, BatchedRootState, EnvironmentOriginGrid
 from .terrain import MacPlaneTerrain
+from .anymal_c import (
+    MacAnymalCFlatEnv,
+    MacAnymalCFlatSimBackend,
+    MacAnymalCPolicy,
+    MacAnymalCTrainCfg,
+    play_anymal_c_policy,
+    train_anymal_c_policy,
+)
 from .cartpole import (
     MacCartpoleEnv,
     MacCartpolePolicy,

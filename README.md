@@ -36,6 +36,7 @@ What works today:
 - cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces
 - a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
 - a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
+- a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - MLX training, checkpoint save/load, and replay scripts
 - portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
@@ -84,7 +85,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, and quadcopter slices needed to prove the MLX training/inference path can run without CUDA.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, and a first ANYmal-C flat locomotion slice needed to prove the MLX training/inference path can run without CUDA.
 
 ### Kernel backend
 
@@ -205,16 +206,37 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --num-envs 64 --episodes 3 --episode-length-s 0.5 --max-steps 10000 --thrust-action 0.2 --no-random-actions
 ```
 
-### 6. Run the focused backend test suite
+### 6. Train and replay the ANYmal-C flat slice
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_anymal_c.py \
+  --num-envs 256 \
+  --updates 10 \
+  --rollout-steps 24 \
+  --epochs-per-update 2 \
+  --checkpoint logs/mlx/anymal_c_flat_policy.npz
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_anymal_c.py \
+  --checkpoint logs/mlx/anymal_c_flat_policy.npz \
+  --episodes 3
+```
+
+### 7. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_portability_utils.py \
+  source/isaaclab/test/backends/test_task_registry.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
+  source/isaaclab/test/backends/test_mac_anymal_c.py \
   source/isaaclab/test/backends/test_mac_quadcopter.py -q
 ```
 
@@ -253,7 +275,7 @@ Example:
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-  --tasks cartpole cart-double-pendulum quadcopter train-cartpole \
+  --tasks cartpole cart-double-pendulum quadcopter anymal-c-flat train-cartpole \
   --num-envs 256 \
   --steps 512 \
   --train-updates 20 \
@@ -274,10 +296,13 @@ Current implemented slices:
 - cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
 - cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
+- ANYmal-C flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
 - cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
 - cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
 - quadcopter replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_quadcopter.py`](scripts/reinforcement_learning/mlx/play_quadcopter.py)
+- ANYmal-C replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_anymal_c.py`](scripts/reinforcement_learning/mlx/play_anymal_c.py)
+- ANYmal-C trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_anymal_c.py`](scripts/reinforcement_learning/mlx/train_anymal_c.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -288,6 +313,7 @@ The cartpole path preserves the important upstream task semantics:
 - observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
 - cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
 - quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
+- ANYmal-C preserves a command-tracking locomotion observation layout with flat-terrain contacts, base-contact termination, and MLX PPO smoke coverage
 
 ## Bootstrapping Upstream Sources
 

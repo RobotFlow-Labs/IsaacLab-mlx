@@ -19,6 +19,8 @@ import mlx.core as mx
 
 from isaaclab.backends import get_runtime_state
 from isaaclab.backends.mac_sim import (
+    MacAnymalCFlatEnv,
+    MacAnymalCFlatEnvCfg,
     MacCartDoublePendulumEnv,
     MacCartDoublePendulumEnvCfg,
     MacCartpoleEnv,
@@ -31,7 +33,7 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
 )
 
-TASK_CHOICES = ("cartpole", "cart-double-pendulum", "quadcopter", "train-cartpole")
+TASK_CHOICES = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "train-cartpole")
 
 
 def parse_args() -> argparse.Namespace:
@@ -158,6 +160,31 @@ def benchmark_quadcopter(num_envs: int, steps: int, seed: int, thrust_action: fl
     )
 
 
+def benchmark_anymal_c_flat(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the ANYmal-C flat locomotion MLX env step loop."""
+    env = MacAnymalCFlatEnv(MacAnymalCFlatEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "anymal-c-flat",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=get_runtime_state(env.runtime),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_train_cartpole(
     num_envs: int,
     updates: int,
@@ -223,6 +250,8 @@ def main() -> int:
             benchmark = benchmark_cart_double_pendulum(args.num_envs, args.steps, args.seed)
         elif task == "quadcopter":
             benchmark = benchmark_quadcopter(args.num_envs, args.steps, args.seed, args.quadcopter_thrust_action)
+        elif task == "anymal-c-flat":
+            benchmark = benchmark_anymal_c_flat(args.num_envs, args.steps, args.seed)
         else:
             benchmark = benchmark_train_cartpole(
                 args.num_envs,
