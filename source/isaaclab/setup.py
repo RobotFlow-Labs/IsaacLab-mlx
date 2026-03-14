@@ -33,7 +33,7 @@ INSTALL_REQUIRES = [
     # image processing
     "transformers==4.57.6",
     "einops",  # needed for transformers, doesn't always auto-install
-    "warp-lang",
+    "warp-lang ; platform_system != 'Darwin'",
     # make sure this is consistent with isaac sim version
     "pillow==11.3.0",
     # livestream

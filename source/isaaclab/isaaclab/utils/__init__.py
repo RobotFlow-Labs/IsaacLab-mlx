@@ -27,6 +27,7 @@ _SEARCH_MODULES = (
 )
 
 __all__ = [*_EXPLICIT_EXPORTS.keys()]
+_OPTIONAL_IMPORT_PREFIXES = ("omni", "isaacsim", "warp", "torch", "carb", "pxr")
 
 
 def __getattr__(name: str):
@@ -38,7 +39,12 @@ def __getattr__(name: str):
         return value
 
     for module_name in _SEARCH_MODULES:
-        module = importlib.import_module(module_name, __name__)
+        try:
+            module = importlib.import_module(module_name, __name__)
+        except ModuleNotFoundError as exc:
+            if exc.name and exc.name.startswith(_OPTIONAL_IMPORT_PREFIXES):
+                continue
+            raise
         if hasattr(module, name):
             value = getattr(module, name)
             globals()[name] = value
