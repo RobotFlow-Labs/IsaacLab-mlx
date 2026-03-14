@@ -345,6 +345,13 @@ def _read_checkpoint_metadata(checkpoint_path: Path) -> dict[str, Any]:
     return json.loads(metadata_path.read_text(encoding="utf-8"))
 
 
+def _resolve_resume_hidden_dim(cfg: MacCartpoleTrainCfg) -> int:
+    if cfg.resume_from is None:
+        return cfg.hidden_dim
+    metadata = _read_checkpoint_metadata(Path(cfg.resume_from))
+    return int(metadata.get("hidden_dim", cfg.hidden_dim))
+
+
 def compute_rewards(
     rew_scale_alive: float,
     rew_scale_terminated: float,
@@ -407,6 +414,7 @@ def _ppo_loss(
 def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     """Train a discrete-action cartpole policy that drives the continuous upstream-style force input."""
 
+    cfg.hidden_dim = _resolve_resume_hidden_dim(cfg)
     mx.random.seed(cfg.env.seed)
     env = MacCartpoleEnv(cfg.env)
     model = MacCartpolePolicy(obs_dim=cfg.env.observation_space, hidden_dim=cfg.hidden_dim)

@@ -35,13 +35,20 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
 )
 
-TASK_CHOICES = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "h1-flat", "train-cartpole")
+CURRENT_MAC_NATIVE_TASKS = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "h1-flat")
+TRAINING_BENCHMARK_TASKS = ("train-cartpole",)
+TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + TRAINING_BENCHMARK_TASKS
+TASK_GROUPS = {
+    "current-mac-native": CURRENT_MAC_NATIVE_TASKS,
+    "full": TASK_CHOICES,
+}
 
 
 def parse_args() -> argparse.Namespace:
     """Parse benchmark arguments."""
     parser = argparse.ArgumentParser(description="Benchmark the MLX/mac-sim task slices.")
-    parser.add_argument("--tasks", nargs="+", choices=TASK_CHOICES, default=list(TASK_CHOICES))
+    parser.add_argument("--tasks", nargs="+", choices=TASK_CHOICES, default=None)
+    parser.add_argument("--task-group", choices=tuple(TASK_GROUPS), default="full")
     parser.add_argument("--num-envs", type=int, default=256)
     parser.add_argument("--steps", type=int, default=512)
     parser.add_argument("--train-updates", type=int, default=20)
@@ -92,6 +99,13 @@ def _env_runtime_state(env: Any) -> dict[str, Any]:
         runtime_state["sim_backend"] = getattr(sim_backend, "name", runtime_state["sim_backend"])
         runtime_state["capabilities"]["sim"] = sim_backend.capabilities.__dict__.copy()
     return runtime_state
+
+
+def resolve_requested_tasks(tasks: list[str] | None, task_group: str) -> tuple[str, ...]:
+    """Resolve CLI benchmark selection to an ordered task tuple."""
+    if tasks:
+        return tuple(tasks)
+    return TASK_GROUPS[task_group]
 
 
 def benchmark_cartpole(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
@@ -264,12 +278,19 @@ def benchmark_train_cartpole(
     return benchmark
 
 
-def main() -> int:
-    """Run the requested benchmarks and optionally write JSON output."""
-    args = parse_args()
-    args.artifact_dir.mkdir(parents=True, exist_ok=True)
-    if args.json_out is None:
-        args.json_out = args.artifact_dir / "benchmark-results.json"
+def run_benchmarks(
+    tasks: tuple[str, ...],
+    *,
+    num_envs: int,
+    steps: int,
+    train_updates: int,
+    rollout_steps: int,
+    epochs_per_update: int,
+    seed: int,
+    quadcopter_thrust_action: float,
+    artifact_dir: Path,
+) -> dict[str, Any]:
+    """Run the requested benchmark suite and return the JSON payload."""
     results = {
         "platform": {
             "system": platform.system(),
@@ -277,30 +298,54 @@ def main() -> int:
             "platform": platform.platform(),
             "python": sys.version.split()[0],
         },
+        "task_group": next((name for name, group in TASK_GROUPS.items() if group == tasks), "custom"),
+        "tasks": list(tasks),
         "benchmarks": [],
     }
 
-    for task in args.tasks:
+    for task in tasks:
         if task == "cartpole":
-            benchmark = benchmark_cartpole(args.num_envs, args.steps, args.seed)
+            benchmark = benchmark_cartpole(num_envs, steps, seed)
         elif task == "cart-double-pendulum":
-            benchmark = benchmark_cart_double_pendulum(args.num_envs, args.steps, args.seed)
+            benchmark = benchmark_cart_double_pendulum(num_envs, steps, seed)
         elif task == "quadcopter":
-            benchmark = benchmark_quadcopter(args.num_envs, args.steps, args.seed, args.quadcopter_thrust_action)
+            benchmark = benchmark_quadcopter(num_envs, steps, seed, quadcopter_thrust_action)
         elif task == "anymal-c-flat":
-            benchmark = benchmark_anymal_c_flat(args.num_envs, args.steps, args.seed)
+            benchmark = benchmark_anymal_c_flat(num_envs, steps, seed)
         elif task == "h1-flat":
-            benchmark = benchmark_h1_flat(args.num_envs, args.steps, args.seed)
+            benchmark = benchmark_h1_flat(num_envs, steps, seed)
         else:
             benchmark = benchmark_train_cartpole(
-                args.num_envs,
-                args.train_updates,
-                args.rollout_steps,
-                args.epochs_per_update,
-                args.seed,
-                args.artifact_dir,
+                num_envs,
+                train_updates,
+                rollout_steps,
+                epochs_per_update,
+                seed,
+                artifact_dir,
             )
         results["benchmarks"].append(benchmark)
+
+    return results
+
+
+def main() -> int:
+    """Run the requested benchmarks and optionally write JSON output."""
+    args = parse_args()
+    args.artifact_dir.mkdir(parents=True, exist_ok=True)
+    if args.json_out is None:
+        args.json_out = args.artifact_dir / "benchmark-results.json"
+    tasks = resolve_requested_tasks(args.tasks, args.task_group)
+    results = run_benchmarks(
+        tasks,
+        num_envs=args.num_envs,
+        steps=args.steps,
+        train_updates=args.train_updates,
+        rollout_steps=args.rollout_steps,
+        epochs_per_update=args.epochs_per_update,
+        seed=args.seed,
+        quadcopter_thrust_action=args.quadcopter_thrust_action,
+        artifact_dir=args.artifact_dir,
+    )
 
     output = json.dumps(results, indent=2, sort_keys=True)
     print(output)

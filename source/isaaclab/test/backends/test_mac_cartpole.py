@@ -94,7 +94,7 @@ def test_train_cartpole_resume_from_checkpoint(tmp_path: Path):
 
     resumed_cfg = MacCartpoleTrainCfg(
         env=MacCartpoleEnvCfg(num_envs=8, seed=29, episode_length_s=0.3),
-        hidden_dim=32,
+        hidden_dim=128,
         updates=1,
         rollout_steps=8,
         epochs_per_update=1,
@@ -105,6 +105,8 @@ def test_train_cartpole_resume_from_checkpoint(tmp_path: Path):
 
     assert resumed_result["resumed_from"] == str(first_checkpoint)
     assert resumed_checkpoint.exists()
+    resumed_metadata = json.loads(Path(resumed_result["metadata_path"]).read_text(encoding="utf-8"))
+    assert resumed_metadata["hidden_dim"] == 32
 
     episode_returns = play_cartpole_policy(
         str(resumed_checkpoint),

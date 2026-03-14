@@ -108,3 +108,37 @@ def test_train_and_play_h1_smoke(tmp_path: Path):
 
     assert len(episode_returns) == 1
     assert isinstance(episode_returns[0], float)
+
+
+def test_train_h1_resume_uses_checkpoint_hidden_dim(tmp_path: Path):
+    """Resuming H1 should preserve the checkpoint architecture instead of the new cfg hidden size."""
+    first_checkpoint = tmp_path / "h1_flat_policy_initial.npz"
+    resumed_checkpoint = tmp_path / "h1_flat_policy_resumed.npz"
+
+    initial_result = train_h1_policy(
+        MacH1TrainCfg(
+            env=MacH1FlatEnvCfg(num_envs=8, seed=29, episode_length_s=0.5),
+            hidden_dim=64,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            checkpoint_path=str(first_checkpoint),
+            eval_interval=1,
+        )
+    )
+    resumed_result = train_h1_policy(
+        MacH1TrainCfg(
+            env=MacH1FlatEnvCfg(num_envs=8, seed=29, episode_length_s=0.5),
+            hidden_dim=192,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            checkpoint_path=str(resumed_checkpoint),
+            resume_from=initial_result["checkpoint_path"],
+            eval_interval=1,
+        )
+    )
+
+    metadata = json.loads(Path(resumed_result["metadata_path"]).read_text(encoding="utf-8"))
+    assert resumed_result["resumed_from"] == initial_result["checkpoint_path"]
+    assert metadata["hidden_dim"] == 64

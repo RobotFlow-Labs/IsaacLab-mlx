@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Run the mac-native H1 flat slice with zero or checkpointed actions."""
+"""Run the mac-native H1 flat slice with random, zero, or checkpointed actions."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episode-length-s", type=float, default=20.0)
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--checkpoint", type=str, default=None)
+    parser.add_argument("--random-actions", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
 
 
@@ -41,8 +42,11 @@ def main() -> int:
     env.reset()
 
     completed: list[tuple[int, float]] = []
-    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
     for _ in range(args.max_steps):
+        if args.random_actions:
+            actions = mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+        else:
+            actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
         _, _, _, _, extras = env.step(actions)
         if not extras.get("completed_returns"):
             continue

@@ -253,6 +253,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_task_registry.py \
+  source/isaaclab/test/backends/test_mac_benchmark_suite.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
@@ -296,17 +297,16 @@ Example:
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-  --tasks cartpole cart-double-pendulum quadcopter anymal-c-flat h1-flat train-cartpole \
+  --task-group current-mac-native \
   --num-envs 256 \
   --steps 512 \
-  --train-updates 20 \
   --json-out logs/benchmarks/mlx/m5-baseline.json
 ```
 
 The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
-- cartpole `train_frames_per_s` for the first MLX training loop
+- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 
 ## Implemented MLX Vertical Slice

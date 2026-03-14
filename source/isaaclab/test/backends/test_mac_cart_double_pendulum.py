@@ -13,7 +13,7 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
-from isaaclab.backends.mac_sim import MacCartDoublePendulumEnv, MacCartDoublePendulumEnvCfg  # noqa: E402
+from isaaclab.backends.mac_sim import MacCartDoublePendulumEnv, MacCartDoublePendulumEnvCfg, replay_actions, rollout_env  # noqa: E402
 
 
 def _random_actions(num_envs: int) -> dict[str, list[list[float]]]:
@@ -66,3 +66,19 @@ def test_mac_cart_double_pendulum_termination_propagates_to_all_agents():
     assert bool(mx.all(terminated["pendulum"]).item())
     assert "completed_returns" in extras
     assert set(extras["completed_returns"].keys()) == {"cart", "pendulum"}
+
+
+def test_mac_cart_double_pendulum_rollout_replay_is_deterministic():
+    """Recorded MARL rollouts should replay identically with the same seed and action history."""
+    cfg = MacCartDoublePendulumEnvCfg(num_envs=4, seed=19, episode_length_s=0.3)
+    actions = _random_actions(cfg.num_envs)
+
+    env_a = MacCartDoublePendulumEnv(cfg)
+    trace_a = rollout_env(env_a, actions, steps=6)
+
+    env_b = MacCartDoublePendulumEnv(cfg)
+    trace_b = replay_actions(env_b, trace_a.actions)
+
+    assert trace_a.summary() == trace_b.summary()
+    assert bool(mx.allclose(trace_a.observations[-1]["cart"], trace_b.observations[-1]["cart"]).item())
+    assert bool(mx.allclose(trace_a.observations[-1]["pendulum"], trace_b.observations[-1]["pendulum"]).item())

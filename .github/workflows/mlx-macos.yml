@@ -163,6 +163,7 @@ jobs:
           source/isaaclab/test/backends/test_task_registry.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab/test/backends/test_portability_utils.py \
+          source/isaaclab/test/backends/test_mac_benchmark_suite.py \
           source/isaaclab/test/backends/test_mac_state_primitives.py \
           source/isaaclab/test/backends/test_mac_phase_b_support.py \
           source/isaaclab/test/backends/test_mac_cartpole.py \
@@ -214,7 +215,7 @@ jobs:
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
           scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-          --tasks cartpole cart-double-pendulum quadcopter anymal-c-flat h1-flat \
+          --task-group current-mac-native \
           --num-envs 64 \
           --steps 128 \
           --json-out logs/benchmarks/mlx/smoke.json

@@ -66,6 +66,8 @@ without pausing for replanning after every small success.
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 - `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
 - `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
+- `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
+- `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 
 ## Phase A: Import And Packaging Safety
 
@@ -397,13 +399,23 @@ without pausing for replanning after every small success.
 
 ### MLX-TASK-011
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Keep all current task slices benchmarked on every major substrate change
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
+  - `.github/workflows/mlx-macos.yml`
 
 ### MLX-TASK-012
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Keep checkpoint/replay contracts stable across all mac-native tasks
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_cartpole.py`
+  - `source/isaaclab/test/backends/test_mac_cart_double_pendulum.py`
+  - `source/isaaclab/test/backends/test_mac_quadcopter.py`
+  - `source/isaaclab/test/backends/test_mac_anymal_c.py`
+  - `source/isaaclab/test/backends/test_mac_h1.py`
 
 ## Phase D: Kernel Replacement
 

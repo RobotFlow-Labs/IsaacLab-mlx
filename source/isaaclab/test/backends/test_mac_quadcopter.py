@@ -13,7 +13,7 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
-from isaaclab.backends.mac_sim import MacQuadcopterEnv, MacQuadcopterEnvCfg  # noqa: E402
+from isaaclab.backends.mac_sim import MacQuadcopterEnv, MacQuadcopterEnvCfg, replay_actions, rollout_env  # noqa: E402
 
 
 def test_mac_quadcopter_reset_and_step_shapes():
@@ -78,3 +78,19 @@ def test_mac_quadcopter_root_state_io():
     assert mx.allclose(env.sim_backend.root_pos_w[[0, 2]], pose[:, :3]).item()
     assert mx.allclose(env.sim_backend.root_lin_vel_b[[0, 2]], velocity[:, :3]).item()
     assert mx.allclose(env.sim_backend.root_ang_vel_b[[0, 2]], velocity[:, 3:6]).item()
+
+
+def test_mac_quadcopter_rollout_replay_is_deterministic():
+    """Recorded quadcopter trajectories should replay identically with the same seed and actions."""
+    cfg = MacQuadcopterEnvCfg(num_envs=4, seed=19, episode_length_s=0.5)
+    actions = mx.zeros((cfg.num_envs, 4), dtype=mx.float32)
+    actions[:, 0] = 0.2
+
+    env_a = MacQuadcopterEnv(cfg)
+    trace_a = rollout_env(env_a, actions, steps=6)
+
+    env_b = MacQuadcopterEnv(cfg)
+    trace_b = replay_actions(env_b, trace_a.actions)
+
+    assert trace_a.summary() == trace_b.summary()
+    assert bool(mx.allclose(trace_a.observations[-1]["policy"], trace_b.observations[-1]["policy"]).item())
