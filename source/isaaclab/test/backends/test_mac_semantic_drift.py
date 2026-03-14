@@ -47,10 +47,12 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 7
+    assert snapshot["task_count"] == 10
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["anymal-c-flat"]["contract"]["hotpath"] == "mlx-compiled"
-    assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["sensor_implementation"] == "analytic-plane-raycast"
+    assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["sensor_implementation"] == "analytic-terrain-raycast"
+    assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
+    assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0
 
 

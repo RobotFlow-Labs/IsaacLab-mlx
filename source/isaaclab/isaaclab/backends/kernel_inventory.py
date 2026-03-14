@@ -9,7 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-CURRENT_MAC_NATIVE_TASKS = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "h1-flat")
+CURRENT_MAC_NATIVE_TASKS = (
+    "cartpole",
+    "cart-double-pendulum",
+    "quadcopter",
+    "anymal-c-flat",
+    "anymal-c-rough",
+    "h1-flat",
+    "franka-reach",
+    "franka-lift",
+)
 """Current benchmarked mac-native task slices that must stay in the MLX smoke suite."""
 
 

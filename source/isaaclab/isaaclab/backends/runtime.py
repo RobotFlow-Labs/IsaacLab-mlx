@@ -17,6 +17,14 @@ from dataclasses import dataclass
 from collections.abc import Sequence
 from typing import Any, Literal
 
+from .planner_compat import (
+    JointMotionPlan,
+    JointMotionPlanRequest,
+    PlannerWorldState,
+    interpolate_joint_motion,
+    interpolate_joint_motion_batch,
+)
+
 ComputeBackendName = Literal["torch-cuda", "mlx"]
 SimBackendName = Literal["isaacsim", "mac-sim"]
 KernelBackendName = Literal["warp", "metal", "cpu"]
@@ -591,6 +599,18 @@ class PlannerBackend(ABC):
     def state_dict(self) -> dict[str, Any]:
         """Return serializable backend state."""
 
+    def update_world_state(self, world_state: PlannerWorldState) -> PlannerWorldState:
+        """Update the planner world state."""
+        raise UnsupportedRuntimeFeatureError(f"Planner backend '{self.name}' does not implement world-state updates.")
+
+    def plan_joint_motion(self, request: JointMotionPlanRequest) -> JointMotionPlan:
+        """Plan a deterministic joint-space trajectory for a single request."""
+        raise UnsupportedRuntimeFeatureError(f"Planner backend '{self.name}' does not implement joint-space planning.")
+
+    def plan_joint_motion_batch(self, requests: Sequence[JointMotionPlanRequest]) -> tuple[JointMotionPlan, ...]:
+        """Plan deterministic joint-space trajectories for a request batch."""
+        raise UnsupportedRuntimeFeatureError(f"Planner backend '{self.name}' does not implement batched planning.")
+
 
 class IsaacSimPlannerBackend(PlannerBackend):
     """Planner backend for the upstream Isaac Sim path."""
@@ -603,21 +623,43 @@ class IsaacSimPlannerBackend(PlannerBackend):
     )
 
     def state_dict(self) -> dict[str, Any]:
-        return {"backend": self.name, "capabilities": self.capabilities.__dict__}
+        return {
+            "backend": self.name,
+            "capabilities": self.capabilities.__dict__,
+            "implementation": "curobo-compat-pending",
+        }
 
 
 class MacPlannerBackend(PlannerBackend):
-    """Placeholder planner backend for the mac-native path."""
+    """Planner compatibility backend for the mac-native path."""
 
     name: PlannerBackendName = "mac-planners"
     capabilities = PlannerCapabilities(
-        motion_generation=False,
+        motion_generation=True,
         inverse_kinematics=False,
-        batched_planning=False,
+        batched_planning=True,
     )
 
+    def __init__(self) -> None:
+        self.world_state = PlannerWorldState()
+
+    def update_world_state(self, world_state: PlannerWorldState) -> PlannerWorldState:
+        self.world_state = world_state
+        return self.world_state
+
+    def plan_joint_motion(self, request: JointMotionPlanRequest) -> JointMotionPlan:
+        return interpolate_joint_motion(request, planner_backend=self.name, world_state=self.world_state)
+
+    def plan_joint_motion_batch(self, requests: Sequence[JointMotionPlanRequest]) -> tuple[JointMotionPlan, ...]:
+        return interpolate_joint_motion_batch(tuple(requests), planner_backend=self.name, world_state=self.world_state)
+
     def state_dict(self) -> dict[str, Any]:
-        return {"backend": self.name, "capabilities": self.capabilities.__dict__}
+        return {
+            "backend": self.name,
+            "capabilities": self.capabilities.__dict__,
+            "implementation": "joint-space-linear-interpolation",
+            "world_state": self.world_state.state_dict(),
+        }
 
 
 class NullPlannerBackend(PlannerBackend):
@@ -631,7 +673,11 @@ class NullPlannerBackend(PlannerBackend):
     )
 
     def state_dict(self) -> dict[str, Any]:
-        return {"backend": self.name, "capabilities": self.capabilities.__dict__}
+        return {
+            "backend": self.name,
+            "capabilities": self.capabilities.__dict__,
+            "implementation": "disabled",
+        }
 
 
 def is_mlx_available() -> bool:

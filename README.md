@@ -37,14 +37,18 @@ What works today:
 - a runnable `MLX + mac-sim` cart-double-pendulum MARL slice with dict actions/observations/rewards
 - a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
+- a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
-- a first mac-native analytic raycast / height-scan sensor substrate for flat-terrain locomotion tasks
+- eval-ready `MLX + mac-sim` Franka reach and Franka cube-lift slices with deterministic analytic kinematics and lightweight grasp logic
+- a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i
 - a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
 - MLX training, checkpoint save/load, and replay scripts
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
 - a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, and explicit env-vs-policy action-space fields
+- a planner compatibility seam for `mac-planners` with deterministic joint-space interpolation and world-state updates
+- a plain ROS 2 compatibility bridge for JSONL message transport and optional `ros2 topic pub/echo` command construction without CUDA assumptions
 - portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
 - a maintained kernel inventory for the next Warp/CUDA families still blocking broader parity
@@ -93,7 +97,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat, with the task capability matrix below serving as the authoritative public support surface.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift, with the task capability matrix below serving as the authoritative public support surface.
 
 ### Kernel backend
 
@@ -137,11 +141,13 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, H1 flat |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
 | Apple Silicon + backend-local external stereo capture | Supported prototype | AVFoundation/UVC discovery plus raw stereo dump and MLX depth smoke; not Isaac Sim camera parity |
+| Apple Silicon + `mac-planners` planner seam | Supported prototype | Deterministic joint-space interpolation compatibility layer; not cuRobo parity |
+| Apple Silicon + plain ROS 2 message/process bridge | Supported prototype | JSONL bridge and optional `ros2` CLI command builder without CUDA/NITROS |
 | macOS RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
 | macOS planners / cuRobo / Isaac ROS CUDA transport | Reference-only / deferred | Not part of the current public MLX support surface |
 
@@ -161,7 +167,7 @@ On the mac path, configuration helpers such as `ViewerCfg`, `VisualizationMarker
 `remove_camera_configs`, `CameraCfg`, `RayCasterCfg`, and the lazy task registry stay available. Runtime-only
 Isaac Sim objects continue to fail through explicit backend checks when they are actually requested.
 For sensors specifically, the import-safe `isaaclab.sensors.camera` and `isaaclab.sensors.ray_caster` surfaces are
-currently config-oriented on macOS; the supported runtime sensor path today is the backend-local analytic height scan in
+currently config-oriented on macOS; the supported runtime sensor path today is the backend-local analytic terrain height scan in
 [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py).
 
 ### 1. Create the environment with `uv`
@@ -296,6 +302,14 @@ train_payload = train_mlx_task("anymal-c-flat", num_envs=128, updates=10)
 eval_payload = evaluate_mlx_task("h1-flat", num_envs=32, episodes=3)
 ```
 
+Additional eval/manual slices exposed through the same API:
+
+```python
+rough_payload = evaluate_mlx_task("anymal-c-rough", num_envs=32, episodes=2)
+reach_payload = evaluate_mlx_task("franka-reach", num_envs=32, episodes=2)
+lift_payload = evaluate_mlx_task("franka-lift", num_envs=32, episodes=2)
+```
+
 ### 9. Probe the backend-local mac camera path
 
 The fork now also ships backend-local macOS camera tools for external stereo devices. These do not depend on Isaac Sim or the Omniverse camera stack.
@@ -337,16 +351,22 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_sensor_raycast.py \
   source/isaaclab/test/backends/test_mac_stereo_depth.py \
   source/isaaclab/test/backends/test_mlx_task_cli.py \
+  source/isaaclab/test/backends/test_planner_compat.py \
+  source/isaaclab/test/backends/test_ros2_bridge.py \
   source/isaaclab_rl/test/test_import_safety.py \
   source/isaaclab_rl/test/test_mlx_wrapper.py \
   source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_benchmark_suite.py \
+  source/isaaclab/test/backends/test_mac_semantic_drift.py \
   source/isaaclab/test/backends/test_mac_state_primitives.py \
   source/isaaclab/test/backends/test_mac_phase_b_support.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
   source/isaaclab/test/backends/test_mac_anymal_c.py \
+  source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
+  source/isaaclab/test/backends/test_mac_franka_reach.py \
+  source/isaaclab/test/backends/test_mac_franka_lift.py \
   source/isaaclab/test/backends/test_mac_h1.py \
   source/isaaclab/test/backends/test_mac_quadcopter.py -q
 ```
@@ -395,7 +415,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
-- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
+- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, Franka reach, and Franka lift
 - a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
@@ -415,6 +435,41 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
 - CI stores immutable `*-trend.json` artifacts per run; those are the retained history source for M-series regression review, not the raw smoke JSON.
 - Nightly semantic drift checks compare the deterministic rollout contracts in the committed baseline against a fresh `full` benchmark run. Throughput is intentionally excluded from that drift gate.
 - Backend-local camera validation currently lives in synthetic stereo smoke tests and optional host-specific hardware probes, not in the task benchmark suite.
+
+## Planner And ROS Compatibility
+
+The current mac-native planner bridge is deliberately modest. `mac-planners` now exposes a deterministic joint-space interpolation seam that can accept world-state obstacles and produce serializable waypoint plans without relying on cuRobo or Isaac Sim:
+
+- [`source/isaaclab/isaaclab/backends/planner_compat.py`](source/isaaclab/isaaclab/backends/planner_compat.py)
+- [`scripts/tools/mac_planner_smoke.py`](scripts/tools/mac_planner_smoke.py)
+
+The current ROS 2 bridge is also intentionally plain. It focuses on message/process interoperability first, not NITROS or CUDA transport:
+
+- [`source/isaaclab/isaaclab/backends/ros2_compat.py`](source/isaaclab/isaaclab/backends/ros2_compat.py)
+- [`scripts/tools/ros2_bridge_smoke.py`](scripts/tools/ros2_bridge_smoke.py)
+
+Example planner smoke:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/tools/mac_planner_smoke.py \
+  logs/planner/mac-planner-smoke.json
+```
+
+Example ROS 2 bridge smoke:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/tools/ros2_bridge_smoke.py \
+  logs/hardware/ros2-bridge-smoke.jsonl \
+  --summary-out logs/hardware/ros2-bridge-smoke-summary.json
+```
+
+This is the current compatibility contract:
+
+- planner compatibility on macOS means serializable world updates plus deterministic joint-space plans
+- ROS compatibility on macOS means plain message/process interoperability first
+- CUDA stream transport, NITROS, and GXF remain future follow-on work
 
 ## Kernel Inventory
 
@@ -439,7 +494,10 @@ Current task capability matrix:
 | `Isaac-Cart-Double-Pendulum-Direct-v0` | No | Yes | `current-mac-native` | No | MARL dict observations/actions |
 | `Isaac-Quadcopter-Direct-v0` | No | Yes | `current-mac-native` | No | Root-state thrust/moment control |
 | `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain plus analytic terrain raycasts |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Reach-Franka-v0` | No | Yes | `current-mac-native` | No | Analytic joint-space reach slice, public eval/manual path |
+| `Isaac-Lift-Cube-Franka-v0` | No | Yes | `current-mac-native` | No | Analytic lift slice with lightweight grasp logic, public eval/manual path |
 
 Implementation entrypoints:
 
@@ -447,9 +505,10 @@ Implementation entrypoints:
 - cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
 - cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
-- ANYmal-C flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
+- ANYmal-C flat and rough locomotion environments in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
-- analytic plane raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
+- Franka reach/lift manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
+- analytic terrain raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
 - backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
 - backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
 - public MLX wrapper surface in [`source/isaaclab_rl/isaaclab_rl/mlx.py`](source/isaaclab_rl/isaaclab_rl/mlx.py)
@@ -468,8 +527,11 @@ The cartpole path preserves the important upstream task semantics:
 - cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
 - quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
 - ANYmal-C preserves a command-tracking locomotion observation layout with flat-terrain contacts, base-contact termination, and MLX PPO smoke coverage
+- ANYmal-C rough preserves the same command-tracking layout while swapping in procedural wave terrain and analytic terrain raycasts for deterministic rough-terrain evaluation
 - H1 flat preserves a 19-DOF command-driven locomotion observation layout with contact-aware reward terms, base-contact termination, and MLX PPO smoke coverage
-- the first mac-native sensor slice is an analytic plane raycast / height-scan path for flat-terrain locomotion benchmarks
+- Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics suitable for eval/manual bring-up
+- Franka lift preserves deterministic cube placement, lightweight grasp state, and explicit lift-success semantics suitable for eval/manual bring-up
+- the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows correspond to `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
 - the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 

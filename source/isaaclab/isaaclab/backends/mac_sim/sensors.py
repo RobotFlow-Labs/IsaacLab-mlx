@@ -61,10 +61,10 @@ class MacPlaneRaycastSensor:
             directions = mx.array(directions_w, dtype=mx.float32).reshape(origins.shape)
 
         downward = directions[:, 2] < -1e-6
-        plane_height = self.terrain.sample_heights(origins)
+        plane_height = self.terrain.sample_heights(origins, env_ids=env_ids)
         distances = (plane_height - origins[:, 2]) / directions[:, 2]
         hit_points = origins + directions * distances[:, None]
-        normals = self.terrain.surface_normals(hit_points)
+        normals = self.terrain.surface_normals(hit_points, env_ids=env_ids)
         within_distance = (distances >= 0.0) & (distances <= self.max_distance)
         within_bounds = ~self.terrain.out_of_bounds(hit_points, env_ids=env_ids)
         hits = downward & within_distance & within_bounds
@@ -102,7 +102,8 @@ class MacPlaneRaycastSensor:
 
         return {
             "backend": "mac-sensors",
-            "implementation": "analytic-plane-raycast",
+            "implementation": "analytic-terrain-raycast",
+            "terrain_type": self.terrain.state_dict()["type"],
             "scan_dim": self.scan_dim,
             "max_distance": self.max_distance,
         }

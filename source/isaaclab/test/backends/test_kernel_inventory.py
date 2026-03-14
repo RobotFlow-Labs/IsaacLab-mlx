@@ -19,7 +19,10 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "cart-double-pendulum",
         "quadcopter",
         "anymal-c-flat",
+        "anymal-c-rough",
         "h1-flat",
+        "franka-reach",
+        "franka-lift",
     )
 
 

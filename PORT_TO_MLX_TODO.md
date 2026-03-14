@@ -66,11 +66,14 @@ without pausing for replanning after every small success.
 - `DONE` Phase B substrate now includes deterministic reset samplers, flat-terrain primitives, contact approximation buffers, contact-oriented locomotion utilities, and shared rollout/replay helpers
 - `DONE` Phase C now includes a first quadruped locomotion slice for `Isaac-Velocity-Flat-Anymal-C-Direct-v0` with replay smoke, benchmark smoke, and MLX PPO train/play scripts
 - `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
+- `DONE` First mac-native manipulation slices landed for `Isaac-Reach-Franka-v0` and `Isaac-Lift-Cube-Franka-v0` with lazy registry wiring, public MLX wrapper support, benchmark coverage, and focused backend tests
+- `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
 - `DONE` Shared MLX task CLIs now cover train and replay/eval flows across the current mac-native slices
 - `DONE` CI now has a dedicated import-safety lane plus benchmark artifact validation for the MLX/mac path
+- `DONE` Planner and ROS compatibility prototypes now exist as explicit backend seams with software smokes, backend tests, and capability-gated docs
 
 ## Phase A: Import And Packaging Safety
 
@@ -384,21 +387,42 @@ without pausing for replanning after every small success.
 
 ### MLX-TASK-008
 
-- Status: `LATER`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Port first manipulation reach task
+- Suggested target:
+  - `Isaac-Reach-Franka-v0`
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_franka_reach.py`
+  - `source/isaaclab/test/backends/test_task_registry.py`
+  - `source/isaaclab_rl/test/test_mlx_wrapper.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-TASK-009
 
-- Status: `LATER`
+- Status: `DONE`
 - Depends on: `MLX-TASK-008`
 - Title: Port first manipulation lift task
+- Suggested target:
+  - `Isaac-Lift-Cube-Franka-v0`
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_franka_lift.py`
+  - `source/isaaclab/test/backends/test_task_registry.py`
+  - `source/isaaclab_rl/test/test_mlx_wrapper.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-TASK-010
 
-- Status: `LATER`
+- Status: `DONE`
 - Depends on: `MLX-SENSOR-001`
 - Title: Port first raycast-driven task
+- Suggested target:
+  - `Isaac-Velocity-Rough-Anymal-C-Direct-v0`
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_anymal_c_rough.py`
+  - `source/isaaclab/test/backends/test_task_registry.py`
+  - `source/isaaclab_rl/test/test_mlx_wrapper.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-TASK-011
 
@@ -474,18 +498,30 @@ without pausing for replanning after every small success.
 
 ### MLX-KERNEL-006
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Inventory raycast kernels for future sensor port
+- Validation:
+  - `source/isaaclab/isaaclab/backends/kernel_inventory.py`
+  - `source/isaaclab/test/backends/test_kernel_inventory.py`
 
 ### MLX-KERNEL-007
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Inventory camera/tiled-camera reshape kernels
+- Validation:
+  - `source/isaaclab/isaaclab/backends/kernel_inventory.py`
+  - `source/isaaclab/test/backends/test_kernel_inventory.py`
 
 ### MLX-KERNEL-008
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Create a shared kernel-compat layer instead of scattered replacements
+- Progress:
+  - shared compatibility surface lives in `source/isaaclab/isaaclab/backends/kernel_compat.py`
+  - follow-on backend-aware wiring into remaining upstream Warp call sites stays separate from this substrate task
+- Validation:
+  - `source/isaaclab/isaaclab/backends/kernel_compat.py`
+  - `source/isaaclab/test/backends/test_kernel_compat.py`
 
 ## Phase E: Sensors
 
@@ -651,48 +687,74 @@ without pausing for replanning after every small success.
 
 ### MLX-ROS-001
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Define planner compatibility seam to replace cuRobo progressively
+- Validation:
+  - `source/isaaclab/test/backends/test_runtime.py`
+  - `source/isaaclab/test/backends/test_planner_compat.py`
+  - local `logs/planner/mac-planner-smoke.json`
 
 ### MLX-ROS-002
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Start plain ROS 2 process/message interoperability without CUDA assumptions
+- Validation:
+  - `source/isaaclab/test/backends/test_ros2_bridge.py`
+  - `.github/workflows/mlx-macos.yml`
+  - local `logs/hardware/ros2-bridge-smoke-summary.json`
 
 ### MLX-ROS-003
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Document future CPU/Metal transport path for Isaac ROS compatibility
+- Validation:
+  - `README.md`
+  - `.github/workflows/mlx-macos.yml`
+  - focused backend suite
 
 ## Continuous Work Queue
 
-This queue exists so work can continue without waiting for a new plan:
+This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
-- If `MLX-IMPORT-003` is incomplete, keep taking the next import blocker from `isaaclab.sim`.
-- If `MLX-IMPORT-003` is complete, move directly to `MLX-IMPORT-004`.
-- Once the import-safety pass stops yielding high-value wins, start `MLX-SIM-001`.
-- Once `MLX-SIM-003` is complete, immediately start `MLX-TASK-004`.
+- Hardware-validate the backend-local stereo path against live ZED/ZED 2i capture once the camera is free, then retain a host-local probe artifact.
+- Port the first trainable manipulation slice so at least one Franka task moves from eval-only to checkpointed MLX training.
+- Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
+- Expand rough-terrain parity beyond ANYmal-C with one additional locomotion task that depends on terrain queries.
+- Grow the planner/ROS prototypes carefully: world-state richer obstacles first, then optional process/message interoperability layers that still avoid CUDA/NITROS assumptions.
 
 ## Validation Commands
 
 ```bash
 PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
+  scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab_rl/test/test_import_safety.py \
+  source/isaaclab_rl/test/test_mlx_wrapper.py \
   source/isaaclab/test/backends/test_runtime.py \
+  source/isaaclab/test/backends/test_task_registry.py \
+  source/isaaclab/test/backends/test_kernel_inventory.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
   source/isaaclab/test/backends/test_mac_hotpath.py \
+  source/isaaclab/test/backends/test_planner_compat.py \
+  source/isaaclab/test/backends/test_ros2_bridge.py \
+  source/isaaclab/test/backends/test_mac_benchmark_suite.py \
+  source/isaaclab/test/backends/test_mac_semantic_drift.py \
   source/isaaclab/test/backends/test_portability_utils.py \
+  source/isaaclab/test/backends/test_mac_state_primitives.py \
+  source/isaaclab/test/backends/test_mac_phase_b_support.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
   source/isaaclab/test/backends/test_mac_quadcopter.py \
   source/isaaclab/test/backends/test_mac_anymal_c.py \
+  source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
+  source/isaaclab/test/backends/test_mac_franka_reach.py \
+  source/isaaclab/test/backends/test_mac_franka_lift.py \
   source/isaaclab/test/backends/test_mac_h1.py -q
 ```
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/benchmarks/mlx/benchmark_mac_tasks.py \
-  --task-group current-mac-native \
+  --task-group full \
   --json-out logs/benchmarks/mlx/smoke.json
 ```

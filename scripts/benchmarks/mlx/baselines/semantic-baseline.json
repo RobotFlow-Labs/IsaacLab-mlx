@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T17:40:26Z",
+  "generated_at": "2026-03-14T19:02:52Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 7,
+  "task_count": 10,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -70,7 +70,38 @@
           "height_scan_mean": 0.5389001965522766,
           "height_scan_std": 3.973068669438362e-05
         },
-        "sensor_implementation": "analytic-plane-raycast",
+        "sensor_implementation": "analytic-terrain-raycast",
+        "sensor_scan_dim": 9
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "anymal-c-rough": {
+      "contract": {
+        "action_dim": 12,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 57,
+        "output_signature": {
+          "final_applied_torque_abs_mean": 0.3008396029472351,
+          "final_contact_count": 0.0,
+          "final_joint_acc_abs_mean": 0.18802474439144135,
+          "final_joint_pos_abs_mean": 0.6073803901672363,
+          "final_joint_vel_abs_mean": 0.04642656445503235,
+          "final_policy_mean": 0.07012787461280823,
+          "final_policy_std": 0.30269795656204224,
+          "final_reward_mean": 0.016229795292019844,
+          "final_root_ang_vel_norm_mean": 0.19297409057617188,
+          "final_root_height_mean": 0.6089001893997192,
+          "final_root_lin_vel_norm_mean": 0.24305792152881622,
+          "height_scan_hit_ratio": 1.0,
+          "height_scan_mean": 0.6088691353797913,
+          "height_scan_std": 0.03643650561571121
+        },
+        "sensor_implementation": "analytic-terrain-raycast",
         "sensor_scan_dim": 9
       },
       "cpu_fallback": false,
@@ -109,6 +140,50 @@
           "final_policy_mean": -0.030332110822200775,
           "final_policy_std": 0.5067154765129089,
           "final_reward_mean": 0.7401851415634155
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-lift": {
+      "contract": {
+        "action_dim": 8,
+        "observation_dim": 27,
+        "output_signature": {
+          "final_cube_distance_mean": 0.48122885823249817,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.5087604522705078,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.6494815945625305,
+          "final_joint_vel_abs_mean": 0.03345862030982971,
+          "final_policy_mean": 0.04495088383555412,
+          "final_policy_std": 0.5831705331802368,
+          "final_reward_mean": 0.0005667085642926395
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-reach": {
+      "contract": {
+        "action_dim": 7,
+        "observation_dim": 23,
+        "output_signature": {
+          "final_ee_height_mean": 0.5111044049263,
+          "final_joint_pos_abs_mean": 0.7314602136611938,
+          "final_joint_vel_abs_mean": 0.03297046944499016,
+          "final_policy_mean": 0.06484701484441757,
+          "final_policy_std": 0.6263383626937866,
+          "final_reward_mean": 0.0032317712903022766,
+          "final_target_distance_mean": 0.2649034261703491
         }
       },
       "cpu_fallback": false,
@@ -165,7 +240,7 @@
           "height_scan_mean": 1.0467644929885864,
           "height_scan_std": 8.854498446453363e-05
         },
-        "sensor_implementation": "analytic-plane-raycast",
+        "sensor_implementation": "analytic-terrain-raycast",
         "sensor_scan_dim": 9
       },
       "cpu_fallback": false,

@@ -17,6 +17,34 @@ def _isaacsim_only_kwargs(**kwargs):
 
 MAC_SAFE_TASK_SPECS = (
     {
+        "id": "Isaac-Reach-Franka-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Reach-Franka-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Lift-Cube-Franka-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaLiftEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Lift-Cube-Franka-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaLiftEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Velocity-Flat-H1-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacH1FlatEnv",
         "kwargs": {
@@ -28,6 +56,13 @@ MAC_SAFE_TASK_SPECS = (
         "entry_point": "isaaclab.backends.mac_sim:MacAnymalCFlatEnv",
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacAnymalCFlatEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Velocity-Rough-Anymal-C-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacAnymalCRoughEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacAnymalCRoughEnvCfg",
         },
     },
     {

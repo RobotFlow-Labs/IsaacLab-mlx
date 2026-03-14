@@ -38,7 +38,10 @@ def test_current_mac_native_benchmark_group_is_stable():
         "cart-double-pendulum",
         "quadcopter",
         "anymal-c-flat",
+        "anymal-c-rough",
         "h1-flat",
+        "franka-reach",
+        "franka-lift",
     )
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
     assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
@@ -101,9 +104,9 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_root_height_mean",
                 "final_distance_to_goal_mean",
             }
-        elif benchmark["task"] in {"anymal-c-flat", "h1-flat"}:
+        elif benchmark["task"] in {"anymal-c-flat", "anymal-c-rough", "h1-flat"}:
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
-            assert benchmark["output_signature"].keys() == {
+            expected = {
                 "final_policy_mean",
                 "final_policy_std",
                 "final_reward_mean",
@@ -115,6 +118,31 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_joint_acc_abs_mean",
                 "final_applied_torque_abs_mean",
                 "final_contact_count",
+            }
+            if benchmark["task"] == "anymal-c-rough":
+                expected |= {"height_scan_hit_ratio", "height_scan_mean", "height_scan_std"}
+            assert benchmark["output_signature"].keys() == expected
+        elif benchmark["task"] == "franka-reach":
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_target_distance_mean",
+            }
+        elif benchmark["task"] == "franka-lift":
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_cube_distance_mean",
+                "final_cube_height_mean",
+                "final_grasp_ratio",
             }
         assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
 
@@ -141,7 +169,7 @@ def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
 
     for benchmark in results["benchmarks"]:
         assert benchmark["sensor_scan_dim"] == 9
-        assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-plane-raycast"
+        assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-terrain-raycast"
         assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
         assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
         assert benchmark["output_signature"]["height_scan_mean"] > 0.0
@@ -180,9 +208,9 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     assert '"task_group": "current-mac-native"' in payload
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
     trend = json.loads(trend_path.read_text(encoding="utf-8"))
-    assert dashboard["summary"]["rollout_task_count"] == 5
+    assert dashboard["summary"]["rollout_task_count"] == 8
     assert dashboard["summary"]["training_task_count"] == 0
-    assert trend["summary"]["task_count"] == 5
+    assert trend["summary"]["task_count"] == 8
 
 
 def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
@@ -204,7 +232,7 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     trend = build_benchmark_trend(results, hardware_label="m5-max")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 7
+    assert dashboard["summary"]["rollout_task_count"] == 10
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None

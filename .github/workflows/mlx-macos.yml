@@ -235,6 +235,8 @@ jobs:
           source/isaaclab/test/backends/test_mac_sensor_raycast.py \
           source/isaaclab/test/backends/test_mac_stereo_depth.py \
           source/isaaclab/test/backends/test_mlx_task_cli.py \
+          source/isaaclab/test/backends/test_planner_compat.py \
+          source/isaaclab/test/backends/test_ros2_bridge.py \
           source/isaaclab/test/backends/test_mac_semantic_drift.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab_rl/test/test_mlx_wrapper.py \
@@ -247,6 +249,9 @@ jobs:
           source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
           source/isaaclab/test/backends/test_mac_quadcopter.py \
           source/isaaclab/test/backends/test_mac_anymal_c.py \
+          source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
+          source/isaaclab/test/backends/test_mac_franka_reach.py \
+          source/isaaclab/test/backends/test_mac_franka_lift.py \
           source/isaaclab/test/backends/test_mac_h1.py -q
 
     - name: Run MLX cart-double-pendulum smoke script
@@ -270,6 +275,13 @@ jobs:
           --task anymal-c-flat \
           --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
 
+    - name: Run MLX ANYmal-C rough smoke script
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task anymal-c-rough \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
+
     - name: Run MLX ANYmal-C flat training smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -285,6 +297,20 @@ jobs:
           --task h1-flat \
           --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 256 --no-random-actions
 
+    - name: Run MLX Franka reach smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task franka-reach \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
+
+    - name: Run MLX Franka lift smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task franka-lift \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
+
     - name: Run MLX H1 flat training smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -299,12 +325,14 @@ jobs:
         from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks
 
         assert "h1-flat" in list_mlx_tasks()
+        assert "franka-reach" in list_mlx_tasks()
+        assert "franka-lift" in list_mlx_tasks()
         payload = evaluate_mlx_task(
-            "h1-flat",
+            "franka-reach",
             num_envs=8,
             episodes=1,
             episode_length_s=0.5,
-            max_steps=256,
+            max_steps=512,
             random_actions=False,
             seed=31,
         )
@@ -349,6 +377,24 @@ jobs:
         test -f logs/hardware/synthetic_depth/left_rgb.png
         test -f logs/hardware/synthetic_depth/right_rgb.png
         test -f logs/hardware/synthetic_depth/disparity.png
+
+    - name: Run mac planner compatibility smoke
+      run: |
+        mkdir -p logs/planner
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/tools/mac_planner_smoke.py \
+          logs/planner/mac-planner-smoke.json
+        test -f logs/planner/mac-planner-smoke.json
+
+    - name: Run ROS 2 bridge smoke
+      run: |
+        mkdir -p logs/hardware
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/tools/ros2_bridge_smoke.py \
+          logs/hardware/ros2-bridge-smoke.jsonl \
+          --summary-out logs/hardware/ros2-bridge-smoke-summary.json
+        test -f logs/hardware/ros2-bridge-smoke.jsonl
+        test -f logs/hardware/ros2-bridge-smoke-summary.json
 
     - name: Run MLX benchmark smoke
       run: |
@@ -416,6 +462,12 @@ jobs:
         assert dashboard["summary"]["training_task_count"] == 0
         trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
         assert trend["summary"]["task_count"] == 5
+        planner_payload = json.loads(Path("logs/planner/mac-planner-smoke.json").read_text(encoding="utf-8"))
+        assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
+        assert planner_payload["plan"]["waypoint_count"] == 6
+        ros_payload = json.loads(Path("logs/hardware/ros2-bridge-smoke-summary.json").read_text(encoding="utf-8"))
+        assert ros_payload["message_count"] == 2
+        assert ros_payload["pub_command"][:3] == ["ros2", "topic", "pub"]
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False

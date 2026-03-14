@@ -27,7 +27,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .contacts import BatchedContactSensorState
-from .env_cfgs import MacAnymalCFlatEnvCfg
+from .env_cfgs import MacAnymalCFlatEnvCfg, MacAnymalCRoughEnvCfg
 from .hotpath import (
     HOTPATH_BACKEND,
     anymal_body_positions_hotpath,
@@ -57,7 +57,7 @@ from .ppo_training import (
 from .reset_primitives import DeterministicResetSampler
 from .sensors import MacPlaneRaycastSensor
 from .state_primitives import BatchedArticulationState, BatchedRootState
-from .terrain import MacPlaneTerrain
+from .terrain import MacPlaneTerrain, MacWaveTerrain
 
 BODY_NAMES = (
     "base",
@@ -133,11 +133,22 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
         self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
-        self.terrain = MacPlaneTerrain(
-            cfg.num_envs,
-            env_spacing=cfg.env_spacing,
-            tile_size=cfg.terrain_tile_size,
-        )
+        if getattr(cfg, "terrain_type", "plane") == "wave":
+            self.terrain = MacWaveTerrain(
+                cfg.num_envs,
+                env_spacing=cfg.env_spacing,
+                tile_size=cfg.terrain_tile_size,
+                border_width=cfg.terrain_border_width,
+                amplitude=cfg.terrain_height_amplitude,
+                wavelength=cfg.terrain_wavelength,
+            )
+        else:
+            self.terrain = MacPlaneTerrain(
+                cfg.num_envs,
+                env_spacing=cfg.env_spacing,
+                tile_size=cfg.terrain_tile_size,
+                border_width=cfg.terrain_border_width,
+            )
         self.root_state = BatchedRootState(cfg.num_envs, origin_grid=self.terrain.origin_grid)
         self.joint_state = BatchedArticulationState(cfg.num_envs, num_joints=cfg.action_space)
         self.default_joint_pos = mx.array(cfg.default_joint_pos, dtype=mx.float32).reshape((1, cfg.action_space))
@@ -573,6 +584,13 @@ class MacAnymalCFlatEnv:
         self.episode_length_buf[ids] = 0
         for value in self._episode_sums.values():
             value[ids] = 0.0
+
+
+class MacAnymalCRoughEnv(MacAnymalCFlatEnv):
+    """A vectorized rough ANYmal-C locomotion environment with height-scan observations."""
+
+    def __init__(self, cfg: MacAnymalCRoughEnvCfg | None = None):
+        super().__init__(cfg or MacAnymalCRoughEnvCfg())
 
 
 class MacAnymalCPolicy(nn.Module):

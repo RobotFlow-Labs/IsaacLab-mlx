@@ -29,11 +29,17 @@ from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
+    MacAnymalCRoughEnv,
+    MacAnymalCRoughEnvCfg,
     MacCartDoublePendulumEnv,
     MacCartDoublePendulumEnvCfg,
     MacCartpoleEnv,
     MacCartpoleEnvCfg,
     MacCartpoleTrainCfg,
+    MacFrankaLiftEnv,
+    MacFrankaLiftEnvCfg,
+    MacFrankaReachEnv,
+    MacFrankaReachEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
     MacQuadcopterEnv,
@@ -214,6 +220,31 @@ def _quadcopter_output_signature(env: Any, trace: Any) -> dict[str, float]:
     }
 
 
+def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture compact semantic signatures for the mac-native Franka tasks."""
+
+    policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
+    reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
+    joint_pos, joint_vel = env.sim_backend.get_joint_state(None)
+    payload = {
+        "final_policy_mean": float(mx.mean(policy).item()),
+        "final_policy_std": float(mx.std(policy).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_joint_pos_abs_mean": float(mx.mean(mx.abs(joint_pos)).item()),
+        "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
+        "final_ee_height_mean": float(mx.mean(env.sim_backend.ee_pos_w[:, 2]).item()),
+    }
+    if hasattr(env.sim_backend, "cube_pos_w"):
+        payload["final_cube_distance_mean"] = float(
+            mx.mean(mx.linalg.norm(env.sim_backend.cube_pos_w - env.sim_backend.ee_pos_w, axis=1)).item()
+        )
+        payload["final_cube_height_mean"] = float(mx.mean(env.sim_backend.cube_pos_w[:, 2]).item())
+        payload["final_grasp_ratio"] = float(mx.mean(env.sim_backend.grasped.astype(mx.float32)).item())
+    elif hasattr(env.sim_backend, "target_pos_w"):
+        payload["final_target_distance_mean"] = float(mx.mean(env.sim_backend.goal_distance()).item())
+    return payload
+
+
 def resolve_requested_tasks(tasks: list[str] | None, task_group: str) -> tuple[str, ...]:
     """Resolve CLI benchmark selection to an ordered task tuple."""
     if tasks:
@@ -323,6 +354,88 @@ def benchmark_anymal_c_flat(num_envs: int, steps: int, seed: int) -> dict[str, A
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _locomotion_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_anymal_c_rough(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the rough ANYmal-C locomotion MLX env step loop."""
+
+    env = MacAnymalCRoughEnv(MacAnymalCRoughEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "anymal-c-rough",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.observation_space,
+            "action_dim": env.cfg.action_space,
+            "sensor_scan_dim": env.height_scan_dim,
+            "output_signature": _locomotion_output_signature(env, trace) | _sensor_output_signature(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_franka_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka reach MLX env step loop."""
+
+    env = MacFrankaReachEnv(MacFrankaReachEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-reach",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_franka_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka lift MLX env step loop."""
+
+    env = MacFrankaLiftEnv(MacFrankaLiftEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-lift",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -511,8 +624,14 @@ def run_benchmarks(
             benchmark = benchmark_quadcopter(num_envs, steps, seed, quadcopter_thrust_action)
         elif task == "anymal-c-flat":
             benchmark = benchmark_anymal_c_flat(num_envs, steps, seed)
+        elif task == "anymal-c-rough":
+            benchmark = benchmark_anymal_c_rough(num_envs, steps, seed)
         elif task == "h1-flat":
             benchmark = benchmark_h1_flat(num_envs, steps, seed)
+        elif task == "franka-reach":
+            benchmark = benchmark_franka_reach(num_envs, steps, seed)
+        elif task == "franka-lift":
+            benchmark = benchmark_franka_lift(num_envs, steps, seed)
         elif task == "anymal-c-flat-height-scan":
             benchmark = benchmark_anymal_c_flat_height_scan(num_envs, steps, seed)
         elif task == "h1-flat-height-scan":

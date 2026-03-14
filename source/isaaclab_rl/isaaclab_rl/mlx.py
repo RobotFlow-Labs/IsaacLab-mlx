@@ -16,11 +16,17 @@ from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
 from isaaclab.backends.mac_sim import (
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
+    MacAnymalCRoughEnv,
+    MacAnymalCRoughEnvCfg,
     MacAnymalCTrainCfg,
     MacCartDoublePendulumEnv,
     MacCartDoublePendulumEnvCfg,
     MacCartpoleEnvCfg,
     MacCartpoleTrainCfg,
+    MacFrankaLiftEnv,
+    MacFrankaLiftEnvCfg,
+    MacFrankaReachEnv,
+    MacFrankaReachEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
     MacH1TrainCfg,
@@ -54,6 +60,9 @@ MLX_TASK_SPECS = {
     "cart-double-pendulum": MlxTaskSpec("cart-double-pendulum", False, None, None),
     "quadcopter": MlxTaskSpec("quadcopter", False, None, None),
     "anymal-c-flat": MlxTaskSpec("anymal-c-flat", True, "logs/mlx/anymal_c_flat_policy.npz", 128, 0.35),
+    "anymal-c-rough": MlxTaskSpec("anymal-c-rough", False, None, None),
+    "franka-reach": MlxTaskSpec("franka-reach", False, None, None),
+    "franka-lift": MlxTaskSpec("franka-lift", False, None, None),
     "h1-flat": MlxTaskSpec("h1-flat", True, "logs/mlx/h1_flat_policy.npz", 192, 0.28),
 }
 
@@ -265,6 +274,96 @@ def evaluate_mlx_task(
             }
         cfg = MacH1FlatEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacH1FlatEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "anymal-c-rough":
+        if checkpoint is not None:
+            raise ValueError("Task 'anymal-c-rough' does not expose checkpoint replay on the public MLX wrapper.")
+        cfg = MacAnymalCRoughEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacAnymalCRoughEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "franka-reach":
+        if checkpoint is not None:
+            raise ValueError("Task 'franka-reach' does not expose checkpoint replay on the public MLX wrapper.")
+        cfg = MacFrankaReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacFrankaReachEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "franka-lift":
+        if checkpoint is not None:
+            raise ValueError("Task 'franka-lift' does not expose checkpoint replay on the public MLX wrapper.")
+        cfg = MacFrankaLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacFrankaLiftEnv(cfg)
         mx.random.seed(seed)
         env.reset()
         completed: list[dict[str, Any]] = []

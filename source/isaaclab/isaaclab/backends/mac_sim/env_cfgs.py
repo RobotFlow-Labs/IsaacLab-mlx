@@ -12,6 +12,18 @@ from typing import Any
 
 from isaaclab.utils.configclass import configclass
 
+ROUGH_HEIGHT_SCAN_OFFSETS: tuple[tuple[float, float], ...] = (
+    (-0.35, -0.35),
+    (-0.35, 0.0),
+    (-0.35, 0.35),
+    (0.0, -0.35),
+    (0.0, 0.0),
+    (0.0, 0.35),
+    (0.35, -0.35),
+    (0.35, 0.0),
+    (0.35, 0.35),
+)
+
 
 @configclass
 class MacCartpoleEnvCfg:
@@ -132,7 +144,11 @@ class MacAnymalCFlatEnvCfg:
     state_space: int = 0
 
     env_spacing: float = 4.0
+    terrain_type: str = "plane"
     terrain_tile_size: tuple[float, float] = (4.0, 4.0)
+    terrain_border_width: float = 0.0
+    terrain_height_amplitude: float = 0.0
+    terrain_wavelength: tuple[float, float] = (1.0, 1.0)
     default_root_height: float = 0.55
     min_root_height: float = 0.18
     height_scan_enabled: bool = False
@@ -190,6 +206,26 @@ class MacAnymalCFlatEnvCfg:
     flat_orientation_reward_scale: float = -5.0
 
     seed: int = 42
+
+
+@configclass
+class MacAnymalCRoughEnvCfg(MacAnymalCFlatEnvCfg):
+    """Configuration aligned with the upstream rough ANYmal-C task at a semantic level."""
+
+    terrain_type: str = "wave"
+    terrain_tile_size: tuple[float, float] = (5.0, 5.0)
+    terrain_border_width: float = 0.15
+    terrain_height_amplitude: float = 0.06
+    terrain_wavelength: tuple[float, float] = (1.4, 1.0)
+    default_root_height: float = 0.62
+    min_root_height: float = 0.22
+    height_scan_enabled: bool = True
+    height_scan_offsets: tuple[tuple[float, float], ...] = ROUGH_HEIGHT_SCAN_OFFSETS
+    height_scan_max_distance: float = 2.5
+    lin_vel_reward_scale: float = 1.15
+    yaw_rate_reward_scale: float = 0.65
+    z_vel_reward_scale: float = -2.5
+    flat_orientation_reward_scale: float = -6.0
 
 
 @configclass
@@ -281,3 +317,65 @@ class MacH1FlatEnvCfg:
     joint_accel_reward_scale: float = -1.25e-7
 
     seed: int = 42
+
+
+@configclass
+class MacFrankaReachEnvCfg:
+    """Configuration for the first mac-native Franka reach slice."""
+
+    num_envs: int = 256
+    sim_dt: float = 1.0 / 120.0
+    decimation: int = 2
+    episode_length_s: float = 6.0
+    action_space: int = 7
+    observation_space: int = 23
+    state_space: int = 0
+
+    action_scale: float = 0.35
+    action_rate_penalty_scale: float = -0.01
+    joint_vel_penalty_scale: float = -0.0005
+    reach_reward_scale: float = 1.25
+    success_bonus: float = 2.0
+    success_threshold: float = 0.06
+    distance_reward_gain: float = 7.5
+
+    joint_stiffness: float = 14.0
+    joint_damping: float = 3.0
+    joint_inertia: float = 1.1
+    joint_reset_noise: float = 0.05
+    default_joint_pos: tuple[float, ...] = (0.0, -0.55, 0.0, -2.1, 0.0, 1.65, 0.75)
+    joint_lower_limits: tuple[float, ...] = (-2.6, -1.8, -2.6, -3.0, -2.6, -0.1, -2.6)
+    joint_upper_limits: tuple[float, ...] = (2.6, 1.8, 2.6, -0.05, 2.6, 3.5, 2.6)
+
+    target_x_range: tuple[float, float] = (0.42, 0.72)
+    target_y_range: tuple[float, float] = (-0.24, 0.24)
+    target_z_range: tuple[float, float] = (0.18, 0.42)
+
+    seed: int = 42
+
+
+@configclass
+class MacFrankaLiftEnvCfg(MacFrankaReachEnvCfg):
+    """Configuration for the first mac-native Franka cube-lift slice."""
+
+    action_space: int = 8
+    observation_space: int = 27
+    episode_length_s: float = 8.0
+
+    action_scale: float = 0.28
+    gripper_action_scale: float = 0.03
+    default_joint_pos: tuple[float, ...] = (0.0, -0.55, 0.0, -2.1, 0.0, 1.65, 0.75, 0.04)
+    joint_lower_limits: tuple[float, ...] = (-2.6, -1.8, -2.6, -3.0, -2.6, -0.1, -2.6, 0.0)
+    joint_upper_limits: tuple[float, ...] = (2.6, 1.8, 2.6, -0.05, 2.6, 3.5, 2.6, 0.08)
+
+    cube_x_range: tuple[float, float] = (0.48, 0.66)
+    cube_y_range: tuple[float, float] = (-0.12, 0.12)
+    table_height: float = 0.04
+    grasp_distance_threshold: float = 0.07
+    gripper_closed_threshold: float = 0.03
+    grasp_offset_z: float = 0.055
+    lift_success_height: float = 0.20
+
+    grasp_reward_scale: float = 0.5
+    lift_reward_scale: float = 4.0
+    lift_success_bonus: float = 4.0

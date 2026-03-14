@@ -23,11 +23,14 @@ from isaaclab.backends import (
     IsaacSimBackend,
     IsaacSimPlannerBackend,
     IsaacSimSensorBackend,
+    JointMotionPlanRequest,
     MlxComputeBackend,
     MacPlannerBackend,
     MacSensorBackend,
     MacSimBackend,
     MetalKernelBackend,
+    PlannerWorldObstacle,
+    PlannerWorldState,
     TorchCudaComputeBackend,
     ENV_COMPUTE_BACKEND,
     ENV_KERNEL_BACKEND,
@@ -215,6 +218,26 @@ def test_create_planner_backend_follows_runtime():
 
     assert isinstance(upstream, IsaacSimPlannerBackend)
     assert isinstance(mac, MacPlannerBackend)
+    assert mac.capabilities.motion_generation is True
+    assert mac.capabilities.batched_planning is True
+    assert mac.capabilities.inverse_kinematics is False
+    world_state = mac.update_world_state(
+        PlannerWorldState(
+            obstacles=(PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),),
+        )
+    )
+    request = JointMotionPlanRequest(
+        joint_names=("joint_1", "joint_2"),
+        start_positions=(0.0, -1.0),
+        goal_positions=(1.0, 1.0),
+        num_waypoints=5,
+    )
+    plan = mac.plan_joint_motion(request)
+
+    assert world_state.state_dict()["obstacle_count"] == 1
+    assert plan.waypoints[0] == (0.0, -1.0)
+    assert plan.waypoints[-1] == (1.0, 1.0)
+    assert mac.state_dict()["implementation"] == "joint-space-linear-interpolation"
 
 
 def test_create_cpu_kernel_backend():

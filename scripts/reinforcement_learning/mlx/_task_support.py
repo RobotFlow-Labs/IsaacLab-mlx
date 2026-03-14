@@ -24,7 +24,10 @@ TASK_PREFIXES = {
     "cart-double-pendulum": "mlx-cart-double-pendulum",
     "quadcopter": "mlx-quadcopter",
     "anymal-c-flat": "mlx-anymal-c-flat",
+    "anymal-c-rough": "mlx-anymal-c-rough",
     "h1-flat": "mlx-h1-flat",
+    "franka-reach": "mlx-franka-reach",
+    "franka-lift": "mlx-franka-lift",
 }
 
 

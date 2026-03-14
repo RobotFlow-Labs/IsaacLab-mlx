@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import math
 from typing import Any
 
 import mlx.core as mx
@@ -43,13 +44,15 @@ class MacPlaneTerrain:
         positions[:, 2] = positions[:, 2] + self.origin_height
         return positions
 
-    def sample_heights(self, positions_w: Any) -> mx.array:
+    def sample_heights(self, positions_w: Any, *, env_ids: Sequence[int] | None = None) -> mx.array:
         """Return terrain height at world positions."""
+        del env_ids
         positions = mx.array(positions_w, dtype=mx.float32).reshape((-1, 3))
         return mx.full((positions.shape[0],), self.origin_height, dtype=mx.float32)
 
-    def surface_normals(self, positions_w: Any) -> mx.array:
+    def surface_normals(self, positions_w: Any, *, env_ids: Sequence[int] | None = None) -> mx.array:
         """Return terrain surface normals at world positions."""
+        del env_ids
         positions = mx.array(positions_w, dtype=mx.float32).reshape((-1, 3))
         normal = mx.array([0.0, 0.0, 1.0], dtype=mx.float32)
         return mx.broadcast_to(normal.reshape((1, 3)), positions.shape)
@@ -98,3 +101,79 @@ class MacPlaneTerrain:
             "origin_height": self.origin_height,
             "env_spacing": self.origin_grid.spacing,
         }
+
+
+class MacWaveTerrain(MacPlaneTerrain):
+    """Procedural sinusoidal terrain used for the first raycast-driven locomotion slice."""
+
+    def __init__(
+        self,
+        num_envs: int,
+        *,
+        env_spacing: float,
+        tile_size: tuple[float, float] = (5.0, 5.0),
+        border_width: float = 0.0,
+        origin_height: float = 0.0,
+        amplitude: float = 0.05,
+        wavelength: tuple[float, float] = (1.4, 1.0),
+    ):
+        super().__init__(
+            num_envs,
+            env_spacing=env_spacing,
+            tile_size=tile_size,
+            border_width=border_width,
+            origin_height=origin_height,
+        )
+        self.amplitude = amplitude
+        self.wavelength = wavelength
+
+    def _relative_xy(
+        self,
+        positions_w: Any,
+        *,
+        env_ids: Sequence[int] | None = None,
+    ) -> tuple[mx.array, mx.array]:
+        positions = mx.array(positions_w, dtype=mx.float32).reshape((-1, 3))
+        rows = positions.shape[0]
+        if env_ids is None:
+            if rows != self.num_envs:
+                raise ValueError("env_ids must be provided when positions do not cover every environment.")
+            ids = mx.arange(self.num_envs, dtype=mx.int32)
+        else:
+            ids = env_ids_to_array(env_ids, self.num_envs)
+            if len(ids) != rows:
+                raise ValueError("env_ids length must match the number of queried positions.")
+        origins = self.env_origins[ids]
+        rel_xy = positions[:, :2] - origins[:, :2]
+        return rel_xy, ids
+
+    def sample_heights(self, positions_w: Any, *, env_ids: Sequence[int] | None = None) -> mx.array:
+        """Return wave terrain heights at world positions."""
+
+        rel_xy, _ = self._relative_xy(positions_w, env_ids=env_ids)
+        phase_x = rel_xy[:, 0] * (2.0 * math.pi / self.wavelength[0])
+        phase_y = rel_xy[:, 1] * (2.0 * math.pi / self.wavelength[1])
+        heights = self.origin_height + self.amplitude * mx.sin(phase_x) * mx.cos(phase_y)
+        return heights.astype(mx.float32)
+
+    def surface_normals(self, positions_w: Any, *, env_ids: Sequence[int] | None = None) -> mx.array:
+        """Return analytic wave terrain normals at world positions."""
+
+        rel_xy, _ = self._relative_xy(positions_w, env_ids=env_ids)
+        phase_x = rel_xy[:, 0] * (2.0 * math.pi / self.wavelength[0])
+        phase_y = rel_xy[:, 1] * (2.0 * math.pi / self.wavelength[1])
+        dh_dx = self.amplitude * (2.0 * math.pi / self.wavelength[0]) * mx.cos(phase_x) * mx.cos(phase_y)
+        dh_dy = -self.amplitude * (2.0 * math.pi / self.wavelength[1]) * mx.sin(phase_x) * mx.sin(phase_y)
+        normals = mx.stack((-dh_dx, -dh_dy, mx.ones_like(dh_dx)), axis=-1)
+        return normals / mx.linalg.norm(normals, axis=-1, keepdims=True)
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload.update(
+            {
+                "type": "wave",
+                "amplitude": self.amplitude,
+                "wavelength": list(self.wavelength),
+            }
+        )
+        return payload

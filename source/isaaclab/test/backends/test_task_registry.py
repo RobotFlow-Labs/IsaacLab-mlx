@@ -18,8 +18,11 @@ import pytest
 from isaaclab.backends import UnsupportedBackendError, resolve_runtime_selection, set_runtime_selection
 
 SAFE_TASK_IDS = (
+    "Isaac-Reach-Franka-v0",
+    "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
+    "Isaac-Velocity-Rough-Anymal-C-Direct-v0",
     "Isaac-Cartpole-Direct-v0",
     "Isaac-Cart-Double-Pendulum-Direct-v0",
     "Isaac-Quadcopter-Direct-v0",
@@ -102,6 +105,26 @@ def test_parse_env_cfg_supports_anymal_task_cfg(monkeypatch):
     assert parsed_cfg.observation_space == 48
 
 
+def test_parse_env_cfg_supports_anymal_rough_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the mac-native rough ANYmal-C config without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Velocity-Rough-Anymal-C-Direct-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Velocity-Rough-Anymal-C-Direct-v0", device="cpu", num_envs=10)
+
+    assert type(cfg).__name__ == "MacAnymalCRoughEnvCfg"
+    assert parsed_cfg.num_envs == 10
+    assert parsed_cfg.height_scan_enabled is True
+    assert parsed_cfg.terrain_type == "wave"
+
+
 def test_parse_env_cfg_supports_h1_task_cfg(monkeypatch):
     """parse_env_cfg should resolve the mac-native H1 config without Isaac Sim imports."""
     task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
@@ -120,6 +143,28 @@ def test_parse_env_cfg_supports_h1_task_cfg(monkeypatch):
     assert parsed_cfg.num_envs == 12
     assert parsed_cfg.action_space == 19
     assert parsed_cfg.observation_space == 69
+
+
+def test_parse_env_cfg_supports_franka_reach_and_lift_task_cfgs(monkeypatch):
+    """parse_env_cfg should resolve mac-native Franka manipulation configs without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-v0", device="cpu", num_envs=6)
+    lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-v0", device="cpu", num_envs=5)
+
+    assert type(reach_cfg).__name__ == "MacFrankaReachEnvCfg"
+    assert reach_cfg.num_envs == 6
+    assert reach_cfg.action_space == 7
+    assert type(lift_cfg).__name__ == "MacFrankaLiftEnvCfg"
+    assert lift_cfg.num_envs == 5
+    assert lift_cfg.action_space == 8
 
 
 def test_parse_env_cfg_reasserts_mac_safe_h1_registration_after_runtime_switch(monkeypatch):

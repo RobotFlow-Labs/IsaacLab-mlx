@@ -83,7 +83,10 @@ class BatchedContactSensorState:
         body_pos_w = mx.array(body_pos_w, dtype=mx.float32).reshape((rows, len(self.body_names), 3))
         body_vel_w = mx.array(body_vel_w, dtype=mx.float32).reshape((rows, len(self.body_names), 3))
 
-        terrain_heights = terrain.sample_heights(body_pos_w.reshape((-1, 3))).reshape((rows, len(self.body_names)))
+        flat_env_ids = [int(env_id) for env_id in ids.tolist() for _ in range(len(self.body_names))]
+        terrain_heights = terrain.sample_heights(body_pos_w.reshape((-1, 3)), env_ids=flat_env_ids).reshape(
+            (rows, len(self.body_names))
+        )
         current_contact, first_contact, history, last_air_time, air_time = contact_update_hotpath(
             body_pos_w,
             body_vel_w,

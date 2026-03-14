@@ -77,6 +77,24 @@ def test_shared_task_cli_evaluates_h1_manual_slice():
     assert payload["completed"][0]["length"] > 0
 
 
+def test_shared_task_cli_evaluates_franka_reach_manual_slice():
+    payload = evaluate_mlx_task(
+        "franka-reach",
+        num_envs=8,
+        episodes=1,
+        seed=19,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+    )
+
+    assert payload["task"] == "franka-reach"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_requested"] == 1
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
 def test_shared_task_cli_writes_json_safe_train_payload(tmp_path: Path):
     module = _load_task_support_module()
     checkpoint_path = tmp_path / "cartpole_wrapper_policy.npz"
