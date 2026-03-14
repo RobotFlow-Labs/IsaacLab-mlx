@@ -6,7 +6,7 @@
 """Configuration for the ray-cast sensor."""
 
 from dataclasses import MISSING
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import RAY_CASTER_MARKER_CFG
@@ -14,7 +14,9 @@ from isaaclab.utils import configclass
 
 from ..sensor_base_cfg import SensorBaseCfg
 from .patterns.patterns_cfg import PatternBaseCfg
-from .ray_caster import RayCaster
+
+if TYPE_CHECKING:
+    from .ray_caster import RayCaster
 
 
 @configclass
@@ -30,7 +32,7 @@ class RayCasterCfg(SensorBaseCfg):
         rot: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
         """Quaternion rotation (w, x, y, z) w.r.t. the parent frame. Defaults to (1.0, 0.0, 0.0, 0.0)."""
 
-    class_type: type = RayCaster
+    class_type: type | str = "isaaclab.sensors.ray_caster.ray_caster:RayCaster"
 
     mesh_prim_paths: list[str] = MISSING
     """The list of mesh primitive paths to ray cast against.

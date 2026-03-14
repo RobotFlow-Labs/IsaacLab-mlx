@@ -12,7 +12,11 @@ import isaaclab.utils.sensors as sensor_utils
 from isaaclab.sim.spawners.spawner_cfg import SpawnerCfg
 from isaaclab.utils import configclass
 
-from . import sensors
+
+def _spawn_camera(*args, **kwargs):
+    from .sensors import spawn_camera
+
+    return spawn_camera(*args, **kwargs)
 
 
 @configclass
@@ -26,7 +30,7 @@ class PinholeCameraCfg(SpawnerCfg):
         world unit is Meter s.t. all of these values are set in cm.
     """
 
-    func: Callable = sensors.spawn_camera
+    func: Callable = _spawn_camera
 
     projection_type: str = "pinhole"
     """Type of projection to use for the camera. Defaults to "pinhole".
@@ -172,7 +176,7 @@ class FisheyeCameraCfg(PinholeCameraCfg):
     .. _fish-eye camera: https://en.wikipedia.org/wiki/Fisheye_lens
     """
 
-    func: Callable = sensors.spawn_camera
+    func: Callable = _spawn_camera
 
     projection_type: Literal[
         "fisheyePolynomial",

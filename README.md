@@ -134,11 +134,12 @@ Warp, or torch installed:
 - `isaaclab.utils.io`, `isaaclab.utils.noise`, `isaaclab.utils.types`, `isaaclab.utils.modifiers`, `isaaclab.utils.interpolation`
 - `isaaclab.markers`, `isaaclab.markers.config`
 - `isaaclab.devices.openxr`
+- `isaaclab.sensors.camera`, `isaaclab.sensors.ray_caster`, `isaaclab.sensors.ray_caster.patterns`
 - `isaaclab_tasks`, `isaaclab_rl.sb3`, `isaaclab_rl.skrl`
 
 On the mac path, configuration helpers such as `ViewerCfg`, `VisualizationMarkersCfg`, `XrCfg`,
-`remove_camera_configs`, and the lazy task registry stay available. Runtime-only Isaac Sim objects continue to
-fail through explicit backend checks when they are actually requested.
+`remove_camera_configs`, `CameraCfg`, `RayCasterCfg`, and the lazy task registry stay available. Runtime-only
+Isaac Sim objects continue to fail through explicit backend checks when they are actually requested.
 
 ### 1. Create the environment with `uv`
 
@@ -472,6 +473,7 @@ Common current pitfalls:
 
 - If `mlx` is missing, install it into the active `uv` environment.
 - If imports fail on `omni.*` or `isaacsim.*`, you are probably invoking an upstream Isaac Sim path rather than the `mac-sim` path.
+- If you import `isaaclab.sensors.camera` or `isaaclab.sensors.ray_caster` on `mac-sim`, config helpers are available but runtime exports like `Camera`, `RayCaster`, and `spawn_camera` should fail explicitly with `sim-backend=isaacsim`.
 - If you use `AppLauncher` with `--sim-backend mac-sim`, it runs in bootstrap mode and returns a placeholder app object. Use the dedicated MLX scripts for environment stepping/training.
 - If a task depends on cameras, Warp, cuRobo, or Omniverse-only features, it should currently be treated as unsupported on the macOS path.
 

@@ -15,15 +15,59 @@ Corresponding camera implementations are also provided for each of the sensor im
 the same ray-casting operations as the sensor implementations, but return the results as images.
 """
 
-from . import patterns
-from .multi_mesh_ray_caster import MultiMeshRayCaster
-from .multi_mesh_ray_caster_camera import MultiMeshRayCasterCamera
-from .multi_mesh_ray_caster_camera_cfg import MultiMeshRayCasterCameraCfg
-from .multi_mesh_ray_caster_camera_data import MultiMeshRayCasterCameraData
-from .multi_mesh_ray_caster_cfg import MultiMeshRayCasterCfg
-from .multi_mesh_ray_caster_data import MultiMeshRayCasterData
-from .ray_caster import RayCaster
-from .ray_caster_camera import RayCasterCamera
-from .ray_caster_camera_cfg import RayCasterCameraCfg
-from .ray_caster_cfg import RayCasterCfg
-from .ray_caster_data import RayCasterData
+from __future__ import annotations
+
+import importlib
+
+from isaaclab.backends import UnsupportedBackendError, current_runtime
+
+_SAFE_EXPORTS = {
+    "MultiMeshRayCasterCameraCfg": (".multi_mesh_ray_caster_camera_cfg", "MultiMeshRayCasterCameraCfg"),
+    "MultiMeshRayCasterCfg": (".multi_mesh_ray_caster_cfg", "MultiMeshRayCasterCfg"),
+    "RayCasterCameraCfg": (".ray_caster_camera_cfg", "RayCasterCameraCfg"),
+    "RayCasterCfg": (".ray_caster_cfg", "RayCasterCfg"),
+}
+_SAFE_MODULES = {
+    "patterns": ".patterns",
+}
+_ISAACSIM_EXPORTS = {
+    "MultiMeshRayCaster": (".multi_mesh_ray_caster", "MultiMeshRayCaster"),
+    "MultiMeshRayCasterCamera": (".multi_mesh_ray_caster_camera", "MultiMeshRayCasterCamera"),
+    "MultiMeshRayCasterCameraData": (".multi_mesh_ray_caster_camera_data", "MultiMeshRayCasterCameraData"),
+    "MultiMeshRayCasterData": (".multi_mesh_ray_caster_data", "MultiMeshRayCasterData"),
+    "RayCaster": (".ray_caster", "RayCaster"),
+    "RayCasterCamera": (".ray_caster_camera", "RayCasterCamera"),
+    "RayCasterData": (".ray_caster_data", "RayCasterData"),
+}
+
+__all__ = [*_SAFE_EXPORTS.keys(), *_SAFE_MODULES.keys(), *_ISAACSIM_EXPORTS.keys()]
+
+
+def __getattr__(name: str):
+    target = _SAFE_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
+
+    safe_module = _SAFE_MODULES.get(name)
+    if safe_module is not None:
+        module = importlib.import_module(safe_module, __name__)
+        globals()[name] = module
+        return module
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.sensors.ray_caster.{name}` currently requires `sim-backend=isaacsim`."
+            " Ray-caster configs stay import-safe on `mac-sim`, while runtime ray-cast sensors remain Isaac Sim only."
+        )
+
+    target = _ISAACSIM_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

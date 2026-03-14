@@ -4,13 +4,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import MISSING
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from isaaclab.sim import FisheyeCameraCfg, PinholeCameraCfg
+from isaaclab.sim.spawners.sensors.sensors_cfg import FisheyeCameraCfg, PinholeCameraCfg
 from isaaclab.utils import configclass
 
 from ..sensor_base_cfg import SensorBaseCfg
-from .camera import Camera
+
+if TYPE_CHECKING:
+    from .camera import Camera
 
 
 @configclass
@@ -37,7 +39,7 @@ class CameraCfg(SensorBaseCfg):
 
         """
 
-    class_type: type = Camera
+    class_type: type | str = "isaaclab.sensors.camera.camera:Camera"
 
     offset: OffsetCfg = OffsetCfg()
     """The offset pose of the sensor's frame from the sensor's parent frame. Defaults to identity.

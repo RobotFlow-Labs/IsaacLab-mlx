@@ -32,6 +32,7 @@ from isaaclab.sim import SimulationContext
 from isaaclab.sim.utils.stage import get_current_stage, get_current_stage_id
 from isaaclab.sim.views import XformPrimView
 from isaaclab.terrains import TerrainImporter, TerrainImporterCfg
+from isaaclab.utils.string import string_to_callable
 from isaaclab.utils.version import get_isaac_sim_version
 
 # Note: This is a temporary import for the VisuoTactileSensorCfg class.
@@ -734,6 +735,10 @@ class InteractiveScene:
             # resolve regex
             if hasattr(asset_cfg, "prim_path"):
                 asset_cfg.prim_path = asset_cfg.prim_path.format(ENV_REGEX_NS=self.env_regex_ns)
+            if hasattr(asset_cfg, "class_type") and isinstance(asset_cfg.class_type, str):
+                asset_cfg.class_type = string_to_callable(asset_cfg.class_type)
+            if hasattr(asset_cfg, "spawn") and asset_cfg.spawn is not None and isinstance(asset_cfg.spawn.func, str):
+                asset_cfg.spawn.func = string_to_callable(asset_cfg.spawn.func)
             # create asset
             if isinstance(asset_cfg, TerrainImporterCfg):
                 # terrains are special entities since they define environment origins

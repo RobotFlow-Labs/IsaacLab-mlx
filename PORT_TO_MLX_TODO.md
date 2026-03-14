@@ -511,7 +511,7 @@ without pausing for replanning after every small success.
 
 ### MLX-SENSOR-005
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Ensure unsupported camera/RTX features fail explicitly via capability checks
 
 ### MLX-SENSOR-006

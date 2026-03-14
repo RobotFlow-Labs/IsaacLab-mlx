@@ -284,11 +284,24 @@ def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: p
     sys.modules.pop("isaaclab.devices.openxr.xr_cfg", None)
     sys.modules.pop("isaaclab.devices.openxr.retargeters", None)
     sys.modules.pop("isaaclab.devices.openxr.retargeters.manipulator", None)
+    sys.modules.pop("isaaclab.sensors.camera", None)
+    sys.modules.pop("isaaclab.sensors.camera.camera_cfg", None)
+    sys.modules.pop("isaaclab.sensors.camera.tiled_camera_cfg", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.ray_caster_cfg", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.multi_mesh_ray_caster_cfg", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.ray_caster_camera_cfg", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.multi_mesh_ray_caster_camera_cfg", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.patterns", None)
+    sys.modules.pop("isaaclab.sensors.ray_caster.patterns.patterns_cfg", None)
+    sys.modules.pop("isaaclab.sim.spawners.sensors", None)
+    sys.modules.pop("isaaclab.sim.spawners.sensors.sensors_cfg", None)
     real_import = builtins.__import__
 
     def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "torch":
-            raise ModuleNotFoundError("No module named 'torch'")
+        blocked = ("torch", "warp", "carb", "omni", "pxr")
+        if name.startswith(blocked):
+            raise ModuleNotFoundError(f"No module named '{name.split('.', 1)[0]}'")
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", guarded_import)
@@ -304,6 +317,13 @@ def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: p
     openxr_mod = importlib.import_module("isaaclab.devices.openxr")
     retargeters_mod = importlib.import_module("isaaclab.devices.openxr.retargeters")
     manipulator_retargeters = importlib.import_module("isaaclab.devices.openxr.retargeters.manipulator")
+    camera_mod = importlib.import_module("isaaclab.sensors.camera")
+    ray_caster_mod = importlib.import_module("isaaclab.sensors.ray_caster")
+    camera_cfg_mod = importlib.import_module("isaaclab.sensors.camera.camera_cfg")
+    ray_caster_cfg_mod = importlib.import_module("isaaclab.sensors.ray_caster.ray_caster_cfg")
+    ray_caster_camera_cfg_mod = importlib.import_module("isaaclab.sensors.ray_caster.ray_caster_camera_cfg")
+    patterns_mod = importlib.import_module("isaaclab.sensors.ray_caster.patterns")
+    sim_sensor_spawners = importlib.import_module("isaaclab.sim.spawners.sensors")
 
     assert envs.ViewerCfg.__name__ == "ViewerCfg"
     assert noise.NoiseModelCfg.__name__ == "NoiseModelCfg"
@@ -318,6 +338,36 @@ def test_mac_runtime_can_load_shared_config_helpers_without_torch(monkeypatch: p
     assert callable(openxr_mod.remove_camera_configs)
     assert retargeters_mod.__name__.endswith(".retargeters")
     assert manipulator_retargeters.__name__.endswith(".manipulator")
+    assert camera_mod.CameraCfg.__name__ == "CameraCfg"
+    assert camera_mod.TiledCameraCfg.__name__ == "TiledCameraCfg"
+    assert camera_cfg_mod.CameraCfg.__name__ == "CameraCfg"
+    assert ray_caster_mod.RayCasterCfg.__name__ == "RayCasterCfg"
+    assert ray_caster_mod.MultiMeshRayCasterCfg.__name__ == "MultiMeshRayCasterCfg"
+    assert ray_caster_cfg_mod.RayCasterCfg.__name__ == "RayCasterCfg"
+    assert ray_caster_camera_cfg_mod.RayCasterCameraCfg.__name__ == "RayCasterCameraCfg"
+    assert patterns_mod.PinholeCameraPatternCfg.__name__ == "PinholeCameraPatternCfg"
+    assert sim_sensor_spawners.PinholeCameraCfg.__name__ == "PinholeCameraCfg"
+
+
+def test_mac_sim_sensor_subpackages_gate_runtime_exports():
+    """Sensor subpackages should import on mac-sim and fail explicitly when runtime exports are accessed."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    camera_mod = importlib.import_module("isaaclab.sensors.camera")
+    ray_caster_mod = importlib.import_module("isaaclab.sensors.ray_caster")
+    sim_sensor_spawners = importlib.import_module("isaaclab.sim.spawners.sensors")
+
+    assert camera_mod.CameraCfg.__name__ == "CameraCfg"
+    assert ray_caster_mod.RayCasterCfg.__name__ == "RayCasterCfg"
+    assert sim_sensor_spawners.PinholeCameraCfg.__name__ == "PinholeCameraCfg"
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = camera_mod.Camera
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = camera_mod.utils
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = ray_caster_mod.RayCaster
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = sim_sensor_spawners.spawn_camera
 
 
 def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):

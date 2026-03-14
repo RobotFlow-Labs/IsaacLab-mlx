@@ -9,7 +9,6 @@ import logging
 
 from isaaclab.utils import configclass
 
-from .multi_mesh_ray_caster_camera import MultiMeshRayCasterCamera
 from .multi_mesh_ray_caster_cfg import MultiMeshRayCasterCfg
 from .ray_caster_camera_cfg import RayCasterCameraCfg
 
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 class MultiMeshRayCasterCameraCfg(RayCasterCameraCfg, MultiMeshRayCasterCfg):
     """Configuration for the multi-mesh ray-cast camera sensor."""
 
-    class_type: type = MultiMeshRayCasterCamera
+    class_type: type | str = "isaaclab.sensors.ray_caster.multi_mesh_ray_caster_camera:MultiMeshRayCasterCamera"
 
     def __post_init__(self):
         super().__post_init__()

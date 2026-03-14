@@ -9,20 +9,46 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import MISSING
-from typing import Literal
-
-import torch
+from typing import TYPE_CHECKING, Any, Literal
 
 from isaaclab.utils import configclass
 
-from . import patterns
+if TYPE_CHECKING:
+    import torch
+
+
+def _grid_pattern(*args, **kwargs):
+    from .patterns import grid_pattern
+
+    return grid_pattern(*args, **kwargs)
+
+
+def _pinhole_camera_pattern(*args, **kwargs):
+    from .patterns import pinhole_camera_pattern
+
+    return pinhole_camera_pattern(*args, **kwargs)
+
+
+def _bpearl_pattern(*args, **kwargs):
+    from .patterns import bpearl_pattern
+
+    return bpearl_pattern(*args, **kwargs)
+
+
+def _lidar_pattern(*args, **kwargs):
+    from .patterns import lidar_pattern
+
+    return lidar_pattern(*args, **kwargs)
+
+
+PatternResult = tuple["torch.Tensor", "torch.Tensor"] if TYPE_CHECKING else tuple[Any, Any]
 
 
 @configclass
 class PatternBaseCfg:
     """Base configuration for a pattern."""
 
-    func: Callable[[PatternBaseCfg, str], tuple[torch.Tensor, torch.Tensor]] = MISSING
+    func: Callable[..., PatternResult] = MISSING
     """Function to generate the pattern.
 
     The function should take in the configuration and the device name as arguments. It should return
@@ -41,7 +67,7 @@ class GridPatternCfg(PatternBaseCfg):
 
     """
 
-    func: Callable = patterns.grid_pattern
+    func: Callable[..., PatternResult] = _grid_pattern
 
     resolution: float = MISSING
     """Grid resolution (in meters)."""
@@ -79,7 +105,7 @@ class PinholeCameraPatternCfg(PatternBaseCfg):
         https://docs.omniverse.nvidia.com/materials-and-rendering/latest/cameras.html
     """
 
-    func: Callable = patterns.pinhole_camera_pattern
+    func: Callable[..., PatternResult] = _pinhole_camera_pattern
 
     focal_length: float = 24.0
     """Perspective focal length (in cm). Defaults to 24.0cm.
@@ -177,7 +203,7 @@ class PinholeCameraPatternCfg(PatternBaseCfg):
 class BpearlPatternCfg(PatternBaseCfg):
     """Configuration for the Bpearl pattern for ray-casting."""
 
-    func: Callable = patterns.bpearl_pattern
+    func: Callable[..., PatternResult] = _bpearl_pattern
 
     horizontal_fov: float = 360.0
     """Horizontal field of view (in degrees). Defaults to 360.0."""
@@ -204,7 +230,7 @@ class BpearlPatternCfg(PatternBaseCfg):
 class LidarPatternCfg(PatternBaseCfg):
     """Configuration for the LiDAR pattern for ray-casting."""
 
-    func: Callable = patterns.lidar_pattern
+    func: Callable[..., PatternResult] = _lidar_pattern
 
     channels: int = MISSING
     """Number of Channels (Beams). Determines the vertical resolution of the LiDAR sensor."""
