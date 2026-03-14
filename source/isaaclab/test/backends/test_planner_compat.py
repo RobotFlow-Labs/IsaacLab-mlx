@@ -36,6 +36,7 @@ def test_interpolate_joint_motion_returns_inclusive_endpoints():
     assert plan.waypoints[0] == (0.0, -1.0)
     assert plan.waypoints[2] == pytest.approx((0.5, 0.0))
     assert plan.waypoints[-1] == (1.0, 1.0)
+    assert plan.waypoint_times_s == pytest.approx((0.0, 0.5, 1.0, 1.5, 2.0))
 
 
 def test_mac_planner_backend_tracks_world_state_and_batch_plans():
@@ -44,7 +45,16 @@ def test_mac_planner_backend_tracks_world_state_and_batch_plans():
     world_state = PlannerWorldState(
         obstacles=(
             PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),
-            PlannerWorldObstacle("bin", center=(0.5, -0.2, 0.3), size=(0.2, 0.2, 0.4)),
+            PlannerWorldObstacle("goal-sphere", kind="sphere", center=(0.5, -0.2, 0.3), radius=0.12),
+            PlannerWorldObstacle(
+                "wrist-camera",
+                kind="mesh",
+                center=(0.0, 0.0, 0.08),
+                size=(1.0, 1.0, 1.0),
+                mesh_resource="package://robotflow/meshes/wrist_camera.usd",
+                attached_to="panda_hand",
+                touch_links=("panda_hand", "panda_leftfinger", "panda_rightfinger"),
+            ),
         )
     )
     backend.update_world_state(world_state)
@@ -67,10 +77,14 @@ def test_mac_planner_backend_tracks_world_state_and_batch_plans():
     batch = backend.plan_joint_motion_batch(requests)
 
     assert len(batch) == 2
-    assert batch[0].world_state["obstacle_count"] == 2
+    assert batch[0].world_state["obstacle_count"] == 3
+    assert batch[0].world_state["attached_obstacle_count"] == 1
+    assert batch[0].world_state["obstacle_type_counts"] == {"box": 1, "mesh": 1, "sphere": 1}
     assert batch[0].waypoints[-1] == pytest.approx((0.8, -0.4))
     assert batch[1].waypoints[-1] == pytest.approx((0.1, 0.2))
-    assert backend.state_dict()["world_state"]["obstacle_count"] == 2
+    assert batch[0].waypoint_times_s[-1] == pytest.approx(1.0)
+    assert backend.state_dict()["world_state"]["obstacle_count"] == 3
+    assert backend.state_dict()["world_state"]["attached_obstacle_count"] == 1
 
 
 def test_interpolate_joint_motion_batch_validates_request_shape():
@@ -93,3 +107,13 @@ def test_interpolate_joint_motion_batch_validates_request_shape():
     batch = interpolate_joint_motion_batch(requests, planner_backend="mac-planners")
 
     assert [plan.waypoints[-1][0] for plan in batch] == [1.0, 0.0]
+
+
+def test_planner_world_obstacle_validates_kind_specific_fields():
+    """World obstacles should reject incomplete kind-specific payloads."""
+
+    with pytest.raises(ValueError, match="positive radius"):
+        PlannerWorldObstacle("goal-sphere", kind="sphere", center=(0.0, 0.0, 0.0))
+
+    with pytest.raises(ValueError, match="mesh_resource"):
+        PlannerWorldObstacle("tool", kind="mesh", center=(0.0, 0.0, 0.0))

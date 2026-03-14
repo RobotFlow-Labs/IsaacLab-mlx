@@ -14,6 +14,8 @@ import shutil
 import subprocess
 from typing import Any
 
+from .planner_compat import JointMotionPlan, PlannerWorldState
+
 
 def _normalize_message_value(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
@@ -29,6 +31,15 @@ def _normalize_message_value(value: Any) -> Any:
     if hasattr(value, "item") and callable(value.item):
         return _normalize_message_value(value.item())
     return repr(value)
+
+
+def _seconds_to_ros_time(seconds: float) -> dict[str, int]:
+    sec = int(seconds)
+    nanosec = int(round((seconds - sec) * 1_000_000_000))
+    if nanosec >= 1_000_000_000:
+        sec += 1
+        nanosec -= 1_000_000_000
+    return {"sec": sec, "nanosec": nanosec}
 
 
 @dataclass(frozen=True)
@@ -52,6 +63,53 @@ class Ros2MessageEnvelope:
             "frame_id": self.frame_id,
             "stamp_ns": self.stamp_ns,
         }
+
+
+def planner_world_state_to_ros_envelope(
+    world_state: PlannerWorldState,
+    *,
+    topic: str = "/planner/world_state",
+    msg_type: str = "robotflow_msgs/msg/PlannerWorldState",
+) -> Ros2MessageEnvelope:
+    """Convert a planner world-state payload into a ROS-friendly envelope."""
+
+    return Ros2MessageEnvelope(
+        topic=topic,
+        msg_type=msg_type,
+        payload=world_state.state_dict(),
+        frame_id=world_state.frame_id,
+    )
+
+
+def joint_motion_plan_to_ros_envelope(
+    plan: JointMotionPlan,
+    *,
+    topic: str = "/planner/joint_trajectory",
+    msg_type: str = "trajectory_msgs/msg/JointTrajectory",
+    frame_id: str = "world",
+) -> Ros2MessageEnvelope:
+    """Convert a joint motion plan into a ROS-friendly joint trajectory envelope."""
+
+    points = []
+    for waypoint, time_s in zip(plan.waypoints, plan.waypoint_times_s, strict=True):
+        points.append(
+            {
+                "positions": list(waypoint),
+                "time_from_start": _seconds_to_ros_time(float(time_s)),
+            }
+        )
+
+    return Ros2MessageEnvelope(
+        topic=topic,
+        msg_type=msg_type,
+        payload={
+            "header": {"frame_id": frame_id},
+            "joint_names": list(plan.joint_names),
+            "points": points,
+            "planner_backend": plan.planner_backend,
+        },
+        frame_id=frame_id,
+    )
 
 
 def ros2_cli_available(executable: str = "ros2") -> bool:

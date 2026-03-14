@@ -16,6 +16,8 @@ from isaaclab.backends import (
     PlannerWorldObstacle,
     PlannerWorldState,
     create_planner_backend,
+    joint_motion_plan_to_ros_envelope,
+    planner_world_state_to_ros_envelope,
     resolve_runtime_selection,
 )
 
@@ -29,9 +31,21 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     planner = create_planner_backend(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
-    planner.update_world_state(
+    world_state = planner.update_world_state(
         PlannerWorldState(
-            obstacles=(PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),),
+            obstacles=(
+                PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),
+                PlannerWorldObstacle("target_sphere", kind="sphere", center=(0.45, -0.12, 0.26), radius=0.08),
+                PlannerWorldObstacle(
+                    "wrist_camera",
+                    kind="mesh",
+                    center=(0.0, 0.0, 0.06),
+                    size=(1.0, 1.0, 1.0),
+                    mesh_resource="package://robotflow/meshes/wrist_camera.usd",
+                    attached_to="panda_hand",
+                    touch_links=("panda_hand", "panda_leftfinger", "panda_rightfinger"),
+                ),
+            ),
         )
     )
     plan = planner.plan_joint_motion(
@@ -47,6 +61,8 @@ def main() -> int:
     payload = {
         "planner": planner.state_dict(),
         "plan": plan.state_dict(),
+        "planner_ros_envelope": planner_world_state_to_ros_envelope(world_state).state_dict(),
+        "trajectory_ros_envelope": joint_motion_plan_to_ros_envelope(plan).state_dict(),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -76,5 +76,7 @@ from .ros2_compat import (
     Ros2JsonlBridge,
     Ros2MessageEnvelope,
     Ros2ProcessBridge,
+    joint_motion_plan_to_ros_envelope,
+    planner_world_state_to_ros_envelope,
     ros2_cli_available,
 )

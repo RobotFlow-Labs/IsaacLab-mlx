@@ -11,7 +11,17 @@ import argparse
 import json
 from pathlib import Path
 
-from isaaclab.backends import Ros2JsonlBridge, Ros2MessageEnvelope, Ros2ProcessBridge
+from isaaclab.backends import (
+    JointMotionPlanRequest,
+    PlannerWorldObstacle,
+    PlannerWorldState,
+    Ros2JsonlBridge,
+    Ros2MessageEnvelope,
+    Ros2ProcessBridge,
+    interpolate_joint_motion,
+    joint_motion_plan_to_ros_envelope,
+    planner_world_state_to_ros_envelope,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +49,29 @@ def main() -> int:
             },
         ),
     ]
+    planner_world = PlannerWorldState(
+        obstacles=(
+            PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),
+            PlannerWorldObstacle("goal", kind="sphere", center=(0.4, -0.1, 0.2), radius=0.08),
+        )
+    )
+    planner_plan = interpolate_joint_motion(
+        JointMotionPlanRequest(
+            joint_names=("joint_1", "joint_2"),
+            start_positions=(0.0, -0.2),
+            goal_positions=(0.4, 0.3),
+            num_waypoints=4,
+            duration_s=1.0,
+        ),
+        planner_backend="mac-planners",
+        world_state=planner_world,
+    )
+    messages.extend(
+        (
+            planner_world_state_to_ros_envelope(planner_world),
+            joint_motion_plan_to_ros_envelope(planner_plan),
+        )
+    )
     output_path = Ros2JsonlBridge.write_messages(args.output, messages)
     restored = Ros2JsonlBridge.read_messages(output_path)
     bridge = Ros2ProcessBridge()
@@ -47,6 +80,8 @@ def main() -> int:
         "cli_available": bridge.cli_available(),
         "message_count": len(restored),
         "first_topic": restored[0].topic,
+        "planner_topic": restored[2].topic,
+        "trajectory_topic": restored[3].topic,
         "pub_command": bridge.build_topic_pub_command(restored[1]),
         "echo_command": bridge.build_topic_echo_command(restored[1].topic),
     }

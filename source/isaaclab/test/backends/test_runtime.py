@@ -237,6 +237,7 @@ def test_create_planner_backend_follows_runtime():
     assert world_state.state_dict()["obstacle_count"] == 1
     assert plan.waypoints[0] == (0.0, -1.0)
     assert plan.waypoints[-1] == (1.0, 1.0)
+    assert plan.waypoint_times_s[-1] == pytest.approx(1.0)
     assert mac.state_dict()["implementation"] == "joint-space-linear-interpolation"
 
 

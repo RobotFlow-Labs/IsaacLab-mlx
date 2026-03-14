@@ -49,8 +49,8 @@ What works today:
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
 - a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, and explicit env-vs-policy action-space fields
-- a planner compatibility seam for `mac-planners` with deterministic joint-space interpolation and world-state updates
-- a plain ROS 2 compatibility bridge for JSONL message transport and optional `ros2 topic pub/echo` command construction without CUDA assumptions
+- a planner compatibility seam for `mac-planners` with deterministic joint-space interpolation, timed waypoint payloads, richer obstacle metadata, and world-state updates
+- a plain ROS 2 compatibility bridge for JSONL message transport, planner-world envelopes, joint-trajectory envelopes, and optional `ros2 topic pub/echo` command construction without CUDA assumptions
 - portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
 - a maintained kernel inventory for the next Warp/CUDA families still blocking broader parity
@@ -148,8 +148,8 @@ This is the current public support contract for runtime combinations, not just w
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
 | Apple Silicon + backend-local external stereo capture | Supported prototype | AVFoundation discovery plus raw stereo dump and MLX depth smoke; live ZED/ZED 2i capture is supported through a camera-authorized Terminal host with `zed-sdk-mlx`, not as Isaac Sim camera parity |
-| Apple Silicon + `mac-planners` planner seam | Supported prototype | Deterministic joint-space interpolation compatibility layer; not cuRobo parity |
-| Apple Silicon + plain ROS 2 message/process bridge | Supported prototype | JSONL bridge and optional `ros2` CLI command builder without CUDA/NITROS |
+| Apple Silicon + `mac-planners` planner seam | Supported prototype | Deterministic joint-space interpolation with timed waypoints plus richer box/sphere/capsule/mesh obstacle metadata; not cuRobo parity |
+| Apple Silicon + plain ROS 2 message/process bridge | Supported prototype | JSONL bridge, planner-world / joint-trajectory envelope builders, and optional `ros2` CLI command builder without CUDA/NITROS |
 | macOS RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
 | macOS planners / cuRobo / Isaac ROS CUDA transport | Reference-only / deferred | Not part of the current public MLX support surface |
 
@@ -537,7 +537,7 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
 
 ## Planner And ROS Compatibility
 
-The current mac-native planner bridge is deliberately modest. `mac-planners` now exposes a deterministic joint-space interpolation seam that can accept world-state obstacles and produce serializable waypoint plans without relying on cuRobo or Isaac Sim:
+The current mac-native planner bridge is deliberately modest. `mac-planners` now exposes a deterministic joint-space interpolation seam that can accept richer world-state obstacles and produce timed serializable waypoint plans without relying on cuRobo or Isaac Sim:
 
 - [`source/isaaclab/isaaclab/backends/planner_compat.py`](source/isaaclab/isaaclab/backends/planner_compat.py)
 - [`scripts/tools/mac_planner_smoke.py`](scripts/tools/mac_planner_smoke.py)
@@ -566,8 +566,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 This is the current compatibility contract:
 
-- planner compatibility on macOS means serializable world updates plus deterministic joint-space plans
-- ROS compatibility on macOS means plain message/process interoperability first
+- planner compatibility on macOS means serializable box/sphere/capsule/mesh world updates, attachment metadata, and deterministic timed joint-space plans
+- ROS compatibility on macOS means plain message/process interoperability first, including ROS-friendly world-state and joint-trajectory envelopes without importing ROS Python bindings
 - CUDA stream transport, NITROS, and GXF remain future follow-on work
 
 ## Kernel Inventory

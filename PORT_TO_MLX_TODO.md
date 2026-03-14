@@ -81,6 +81,7 @@ without pausing for replanning after every small success.
 - `DONE` Shared MLX task CLIs now cover train and replay/eval flows across the current mac-native slices
 - `DONE` CI now has a dedicated import-safety lane plus benchmark artifact validation for the MLX/mac path
 - `DONE` Planner and ROS compatibility prototypes now exist as explicit backend seams with software smokes, backend tests, and capability-gated docs
+- `DONE` Planner and ROS compatibility now carry richer planner world-state obstacles plus ROS-friendly world-state / timed joint-trajectory envelopes without requiring ROS Python bindings
 
 ## Phase A: Import And Packaging Safety
 
@@ -728,7 +729,7 @@ This queue exists so work can continue without waiting for a new plan. The docum
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
 - Port the next manipulation milestone beyond the first four Franka slices, likely a richer cabinet/drawer variant or the first multi-object manipulation workflow.
 - Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
-- Grow the planner/ROS prototypes carefully: world-state richer obstacles first, then optional process/message interoperability layers that still avoid CUDA/NITROS assumptions.
+- Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 
 ## Validation Commands
 
