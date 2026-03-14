@@ -37,6 +37,8 @@ _EXPORTS = {
     "track_yaw_rate_z_exp": (".locomotion", "track_yaw_rate_z_exp"),
     "undesired_contacts": (".locomotion", "undesired_contacts"),
     "DeterministicResetSampler": (".reset_primitives", "DeterministicResetSampler"),
+    "DEFAULT_HEIGHT_SCAN_OFFSETS": (".sensors", "DEFAULT_HEIGHT_SCAN_OFFSETS"),
+    "MacPlaneRaycastSensor": (".sensors", "MacPlaneRaycastSensor"),
     "RolloutTrace": (".rollout", "RolloutTrace"),
     "replay_actions": (".rollout", "replay_actions"),
     "rollout_env": (".rollout", "rollout_env"),

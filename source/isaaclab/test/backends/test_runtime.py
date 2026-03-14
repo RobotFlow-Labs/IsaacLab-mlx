@@ -201,6 +201,8 @@ def test_create_sensor_backend_follows_runtime():
 
     assert isinstance(upstream, IsaacSimSensorBackend)
     assert isinstance(mac, MacSensorBackend)
+    assert mac.capabilities.raycast is True
+    assert mac.state_dict()["implementation"] == "analytic-plane-raycast"
 
 
 def test_create_planner_backend_follows_runtime():

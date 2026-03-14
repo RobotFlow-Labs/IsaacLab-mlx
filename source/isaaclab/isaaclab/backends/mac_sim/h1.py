@@ -54,6 +54,7 @@ from .ppo_training import (
     save_policy_checkpoint,
 )
 from .reset_primitives import DeterministicResetSampler
+from .sensors import MacPlaneRaycastSensor
 from .state_primitives import BatchedArticulationState, BatchedRootState
 from .terrain import MacPlaneTerrain
 
@@ -411,8 +412,19 @@ class MacH1FlatEnv:
         self.num_envs = self.cfg.num_envs
         self.step_dt = self.cfg.sim_dt * self.cfg.decimation
         self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
-
         self.sim_backend = MacH1FlatSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self.height_scan_sensor = (
+            MacPlaneRaycastSensor(
+                self.sim_backend.terrain,
+                offsets_xy=self.cfg.height_scan_offsets,
+                max_distance=self.cfg.height_scan_max_distance,
+            )
+            if self.cfg.height_scan_enabled and self.cfg.height_scan_offsets
+            else None
+        )
+        self.height_scan_dim = 0 if self.height_scan_sensor is None else self.height_scan_sensor.scan_dim
+        self.observation_space = self.cfg.observation_space + self.height_scan_dim
+
         self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
         self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
         self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
@@ -437,7 +449,7 @@ class MacH1FlatEnv:
                 "dof_acc_l2",
             )
         }
-        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.observation_space), dtype=mx.float32)}
         self.reset()
 
     def reset(self) -> tuple[dict[str, mx.array], dict[str, Any]]:
@@ -488,18 +500,18 @@ class MacH1FlatEnv:
     def _build_policy_observations(self) -> mx.array:
         joint_pos, joint_vel = self.sim_backend.get_joint_state(None)
         rel_joint_pos = joint_pos - mx.broadcast_to(self.sim_backend.default_joint_pos, joint_pos.shape)
-        return mx.concatenate(
-            [
-                self.sim_backend.root_lin_vel_b,
-                self.sim_backend.root_ang_vel_b,
-                self.sim_backend.projected_gravity_b,
-                self.sim_backend.commands,
-                rel_joint_pos,
-                joint_vel,
-                self._actions,
-            ],
-            axis=-1,
-        )
+        components = [
+            self.sim_backend.root_lin_vel_b,
+            self.sim_backend.root_ang_vel_b,
+            self.sim_backend.projected_gravity_b,
+            self.sim_backend.commands,
+            rel_joint_pos,
+            joint_vel,
+            self._actions,
+        ]
+        if self.height_scan_sensor is not None:
+            components.append(self.height_scan_sensor.height_scan(self.sim_backend.root_pos_w)["distances"])
+        return mx.concatenate(components, axis=-1)
 
     def _get_observations(self) -> dict[str, mx.array]:
         obs = self._build_policy_observations()

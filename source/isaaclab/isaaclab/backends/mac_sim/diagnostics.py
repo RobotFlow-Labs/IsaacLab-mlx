@@ -26,6 +26,10 @@ def mac_env_diagnostics(env: Any, *, rollout_summary: dict[str, Any] | None = No
     if contact_model is not None and hasattr(contact_model, "state_dict"):
         payload["contacts"] = contact_model.state_dict()
 
+    height_scan_sensor = getattr(env, "height_scan_sensor", None)
+    if height_scan_sensor is not None and hasattr(height_scan_sensor, "state_dict"):
+        payload["sensor"] = height_scan_sensor.state_dict()
+
     reset_streams: dict[str, Any] = {}
     reset_sampler = getattr(env, "reset_sampler", None)
     if reset_sampler is not None and hasattr(reset_sampler, "state_dict"):

@@ -542,7 +542,7 @@ class MacSensorBackend(SensorBackend):
     name: SensorBackendName = "mac-sensors"
     capabilities = SensorCapabilities(
         proprioception=True,
-        raycast=False,
+        raycast=True,
         cameras=False,
         depth=False,
         segmentation=False,
@@ -550,7 +550,11 @@ class MacSensorBackend(SensorBackend):
     )
 
     def state_dict(self) -> dict[str, Any]:
-        return {"backend": self.name, "capabilities": self.capabilities.__dict__}
+        return {
+            "backend": self.name,
+            "capabilities": self.capabilities.__dict__,
+            "implementation": "analytic-plane-raycast",
+        }
 
 
 class CpuSensorBackend(SensorBackend):

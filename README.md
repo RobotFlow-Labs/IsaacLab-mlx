@@ -38,7 +38,9 @@ What works today:
 - a runnable `MLX + mac-sim` quadcopter slice with root-state dynamics
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
+- a first mac-native analytic raycast / height-scan sensor substrate for flat-terrain locomotion tasks
 - MLX training, checkpoint save/load, and replay scripts
+- a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
 - a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, and explicit env-vs-policy action-space fields
 - portability guards for optional `torch`/`warp` utility imports on macOS
@@ -89,7 +91,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, and a first ANYmal-C flat locomotion slice needed to prove the MLX training/inference path can run without CUDA.
+The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat, with the task capability matrix below serving as the authoritative public support surface.
 
 ### Kernel backend
 
@@ -127,6 +129,19 @@ Use the smallest extra set that matches the workflow you actually need.
 | Optional IsaacLab task extras for CUDA AutoMate | `uv pip install --python .venv/bin/python -e source/isaaclab_tasks[cuda-automate]` |
 | Optional RL logging/video extras | `uv pip install --python .venv/bin/python -e source/isaaclab_rl[rl-logging,video]` |
 
+### Public Support Matrix
+
+This is the current public support contract for runtime combinations, not just what can be installed.
+
+| Platform / Runtime | Status | Notes |
+| --- | --- | --- |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, H1 flat |
+| Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
+| Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
+| Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
+| macOS cameras / RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
+| macOS planners / cuRobo / Isaac ROS CUDA transport | Reference-only / deferred | Not part of the current public MLX support surface |
+
 ### Import-Safe Surface On macOS
 
 These imports are now part of the tested MLX/mac bootstrap surface and are expected to work without Isaac Sim,
@@ -137,11 +152,14 @@ Warp, or torch installed:
 - `isaaclab.markers`, `isaaclab.markers.config`
 - `isaaclab.devices.openxr`
 - `isaaclab.sensors.camera`, `isaaclab.sensors.ray_caster`, `isaaclab.sensors.ray_caster.patterns`
-- `isaaclab_tasks`, `isaaclab_rl.sb3`, `isaaclab_rl.skrl`
+- `isaaclab_tasks`, `isaaclab_rl.mlx`, `isaaclab_rl.sb3`, `isaaclab_rl.skrl`
 
 On the mac path, configuration helpers such as `ViewerCfg`, `VisualizationMarkersCfg`, `XrCfg`,
 `remove_camera_configs`, `CameraCfg`, `RayCasterCfg`, and the lazy task registry stay available. Runtime-only
 Isaac Sim objects continue to fail through explicit backend checks when they are actually requested.
+For sensors specifically, the import-safe `isaaclab.sensors.camera` and `isaaclab.sensors.ray_caster` surfaces are
+currently config-oriented on macOS; the supported runtime sensor path today is the backend-local analytic height scan in
+[`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py).
 
 ### 1. Create the environment with `uv`
 
@@ -266,6 +284,15 @@ The fork now exposes one shared train entrypoint and one shared evaluation/repla
 
 The task-specific scripts remain as thin wrappers so existing commands still work, but the shared CLIs are the stable surface going forward.
 
+The same task family is also available as a public Python API through [`source/isaaclab_rl/isaaclab_rl/mlx.py`](source/isaaclab_rl/isaaclab_rl/mlx.py):
+
+```python
+from isaaclab_rl.mlx import evaluate_mlx_task, train_mlx_task
+
+train_payload = train_mlx_task("anymal-c-flat", num_envs=128, updates=10)
+eval_payload = evaluate_mlx_task("h1-flat", num_envs=32, episodes=3)
+```
+
 ### 9. Run the focused backend test suite
 
 ```bash
@@ -276,8 +303,10 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_kernel_inventory.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
   source/isaaclab/test/backends/test_mac_hotpath.py \
+  source/isaaclab/test/backends/test_mac_sensor_raycast.py \
   source/isaaclab/test/backends/test_mlx_task_cli.py \
   source/isaaclab_rl/test/test_import_safety.py \
+  source/isaaclab_rl/test/test_mlx_wrapper.py \
   source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_benchmark_suite.py \
   source/isaaclab/test/backends/test_mac_state_primitives.py \
@@ -341,6 +370,14 @@ The benchmark emits:
 
 CI now preserves both benchmark JSON artifacts and a dedicated import-safety artifact proving the MLX/mac path can run without `isaacsim`, `omni`, `carb`, or `pxr` installed.
 
+### Benchmark Expectations
+
+- `current-mac-native` is the stable public regression suite for the current MLX/mac task set.
+- `sensor-mac-native` is the stable regression suite for the first analytic height-scan/raycast slices: `anymal-c-flat-height-scan` and `h1-flat-height-scan`.
+- CI benchmark smokes are regression signals, not public performance claims.
+- A benchmark run is only considered healthy when `cpu_fallback.detected == false`.
+- Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons. Do not compare against CI smoke numbers.
+
 ## Kernel Inventory
 
 The next Warp/CUDA kernel families blocking broader parity are tracked in:
@@ -356,7 +393,17 @@ That inventory is test-backed and currently covers:
 
 ## Implemented MLX Vertical Slice
 
-Current implemented slices:
+Current task capability matrix:
+
+| Task | Train | Replay / Eval | Benchmarked | Checkpoint / Resume | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `Isaac-Cartpole-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Discrete cartpole PPO slice |
+| `Isaac-Cart-Double-Pendulum-Direct-v0` | No | Yes | `current-mac-native` | No | MARL dict observations/actions |
+| `Isaac-Quadcopter-Direct-v0` | No | Yes | `current-mac-native` | No | Root-state thrust/moment control |
+| `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+
+Implementation entrypoints:
 
 - cartpole environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
 - cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
@@ -364,16 +411,10 @@ Current implemented slices:
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
 - ANYmal-C flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
-- cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
-- cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- analytic plane raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
+- public MLX wrapper surface in [`source/isaaclab_rl/isaaclab_rl/mlx.py`](source/isaaclab_rl/isaaclab_rl/mlx.py)
 - shared trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_task.py`](scripts/reinforcement_learning/mlx/train_task.py)
 - shared replay/eval entrypoint in [`scripts/reinforcement_learning/mlx/evaluate_task.py`](scripts/reinforcement_learning/mlx/evaluate_task.py)
-- cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
-- quadcopter replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_quadcopter.py`](scripts/reinforcement_learning/mlx/play_quadcopter.py)
-- ANYmal-C replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_anymal_c.py`](scripts/reinforcement_learning/mlx/play_anymal_c.py)
-- ANYmal-C trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_anymal_c.py`](scripts/reinforcement_learning/mlx/train_anymal_c.py)
-- H1 replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_h1.py`](scripts/reinforcement_learning/mlx/play_h1.py)
-- H1 trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_h1.py`](scripts/reinforcement_learning/mlx/train_h1.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -386,6 +427,8 @@ The cartpole path preserves the important upstream task semantics:
 - quadcopter preserves a root-state-centric policy observation layout with vectorized thrust/moment control
 - ANYmal-C preserves a command-tracking locomotion observation layout with flat-terrain contacts, base-contact termination, and MLX PPO smoke coverage
 - H1 flat preserves a 19-DOF command-driven locomotion observation layout with contact-aware reward terms, base-contact termination, and MLX PPO smoke coverage
+- the first mac-native sensor slice is an analytic plane raycast / height-scan path for flat-terrain locomotion benchmarks
+- the `sensor-mac-native` benchmark rows correspond to `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
 
 ## Bootstrapping Upstream Sources
 
@@ -430,7 +473,7 @@ Near-term priorities:
 2. Add additional locomotion/manipulation tasks with compatible observation/action structure.
 3. Push more task code through backend capability checks instead of import-time backend assumptions.
 4. Define a stable checkpoint/config story across multiple MLX tasks.
-5. Add Apple Silicon CI for the MLX backend slice.
+5. Expand the public support matrix and benchmark expectations as the mac-native slice grows.
 
 Deferred work:
 

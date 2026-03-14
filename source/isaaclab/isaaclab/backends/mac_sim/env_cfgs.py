@@ -135,6 +135,9 @@ class MacAnymalCFlatEnvCfg:
     terrain_tile_size: tuple[float, float] = (4.0, 4.0)
     default_root_height: float = 0.55
     min_root_height: float = 0.18
+    height_scan_enabled: bool = False
+    height_scan_offsets: tuple[tuple[float, float], ...] = ()
+    height_scan_max_distance: float = 2.0
     nominal_leg_extension: float = 0.52
     foot_clearance: float = 0.08
     gait_frequency: float = 1.6
@@ -205,6 +208,9 @@ class MacH1FlatEnvCfg:
     terrain_tile_size: tuple[float, float] = (4.0, 4.0)
     default_root_height: float = 1.05
     min_root_height: float = 0.55
+    height_scan_enabled: bool = False
+    height_scan_offsets: tuple[tuple[float, float], ...] = ()
+    height_scan_max_distance: float = 2.0
     nominal_leg_extension: float = 0.86
     foot_clearance: float = 0.12
     gait_frequency: float = 1.35

@@ -74,6 +74,7 @@ jobs:
       run: |
         PYTHONPATH=.:source/isaaclab:source/isaaclab_rl:source/isaaclab_tasks .venv-import/bin/pytest \
           source/isaaclab_rl/test/test_import_safety.py \
+          source/isaaclab_rl/test/test_mlx_wrapper.py \
           source/isaaclab/test/backends/test_runtime.py -q
 
     - name: Upload import-safety artifacts
@@ -230,8 +231,10 @@ jobs:
           source/isaaclab/test/backends/test_kernel_inventory.py \
           source/isaaclab/test/backends/test_kernel_compat.py \
           source/isaaclab/test/backends/test_mac_hotpath.py \
+          source/isaaclab/test/backends/test_mac_sensor_raycast.py \
           source/isaaclab/test/backends/test_mlx_task_cli.py \
           source/isaaclab_rl/test/test_import_safety.py \
+          source/isaaclab_rl/test/test_mlx_wrapper.py \
           source/isaaclab/test/backends/test_portability_utils.py \
           source/isaaclab/test/backends/test_mac_benchmark_suite.py \
           source/isaaclab/test/backends/test_mac_state_primitives.py \
@@ -287,6 +290,25 @@ jobs:
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/h1_flat_policy.npz --eval-interval 1
 
+    - name: Run public MLX wrapper smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/python - <<'PY'
+        from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks
+
+        assert "h1-flat" in list_mlx_tasks()
+        payload = evaluate_mlx_task(
+            "h1-flat",
+            num_envs=8,
+            episodes=1,
+            episode_length_s=0.5,
+            max_steps=256,
+            random_actions=False,
+            seed=31,
+        )
+        assert payload["episodes_completed"] == 1
+        print(payload["task"], payload["episodes_completed"])
+        PY
+
     - name: Run MLX benchmark smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -296,9 +318,19 @@ jobs:
           --steps 128 \
           --json-out logs/benchmarks/mlx/smoke.json
 
+    - name: Run MLX sensor benchmark smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+          --task-group sensor-mac-native \
+          --num-envs 32 \
+          --steps 64 \
+          --json-out logs/benchmarks/mlx/sensor-smoke.json
+
     - name: Verify benchmark artifact payload
       run: |
         test -f logs/benchmarks/mlx/smoke.json
+        test -f logs/benchmarks/mlx/sensor-smoke.json
         PYTHONPATH=.:source/isaaclab .venv/bin/python - <<'PY'
         import json
         from pathlib import Path
@@ -308,6 +340,18 @@ jobs:
         assert payload["cpu_fallback_detected"] is False
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
+        sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
+        assert sensor_payload["task_group"] == "sensor-mac-native"
+        assert sensor_payload["cpu_fallback_detected"] is False
+        assert len(sensor_payload["benchmarks"]) == 2
+        benchmark_by_task = {benchmark["task"]: benchmark for benchmark in sensor_payload["benchmarks"]}
+        for task in ("anymal-c-flat-height-scan", "h1-flat-height-scan"):
+            benchmark = benchmark_by_task[task]
+            assert benchmark["sensor_scan_dim"] == 9
+            assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
+            assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-plane-raycast"
+            assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
+        print(sensor_payload["tasks"])
         PY
 
     - name: Upload MLX smoke artifacts

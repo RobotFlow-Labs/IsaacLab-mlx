@@ -39,6 +39,10 @@ def test_current_mac_native_benchmark_group_is_stable():
         "h1-flat",
     )
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
+    assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
+        "anymal-c-flat-height-scan",
+        "h1-flat-height-scan",
+    )
 
 
 def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
@@ -86,6 +90,34 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_contact_count",
             }
             assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
+
+
+def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
+    """The sensor benchmark group should exercise the height-scan locomotion variants."""
+    benchmark_module = _load_benchmark_module()
+
+    results = benchmark_module.run_benchmarks(
+        benchmark_module.resolve_requested_tasks(None, "sensor-mac-native"),
+        num_envs=8,
+        steps=8,
+        train_updates=1,
+        rollout_steps=4,
+        epochs_per_update=1,
+        seed=11,
+        quadcopter_thrust_action=0.2,
+        artifact_dir=tmp_path,
+    )
+
+    assert results["task_group"] == "sensor-mac-native"
+    assert results["cpu_fallback_detected"] is False
+    assert [benchmark["task"] for benchmark in results["benchmarks"]] == ["anymal-c-flat-height-scan", "h1-flat-height-scan"]
+
+    for benchmark in results["benchmarks"]:
+        assert benchmark["sensor_scan_dim"] == 9
+        assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-plane-raycast"
+        assert benchmark["runtime"]["capabilities"]["sensor"]["raycast"] is True
+        assert benchmark["output_signature"]["height_scan_hit_ratio"] == 1.0
+        assert benchmark["output_signature"]["height_scan_mean"] > 0.0
 
 
 def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):

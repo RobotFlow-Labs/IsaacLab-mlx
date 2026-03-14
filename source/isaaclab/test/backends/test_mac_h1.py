@@ -48,6 +48,24 @@ def test_mac_h1_reset_and_step_shapes():
     assert isinstance(step_extras, dict)
 
 
+def test_mac_h1_height_scan_expands_observation_space():
+    """Enabling the height scan should append deterministic sensor channels to the policy observation."""
+    cfg = MacH1FlatEnvCfg(
+        num_envs=4,
+        seed=21,
+        episode_length_s=0.5,
+        height_scan_enabled=True,
+        height_scan_offsets=((-0.25, 0.0), (0.0, 0.0), (0.25, 0.0)),
+    )
+    env = MacH1FlatEnv(cfg)
+
+    obs, _ = env.reset()
+
+    assert env.height_scan_sensor is not None
+    assert env.height_scan_dim == 3
+    assert obs["policy"].shape == (4, 72)
+
+
 def test_mac_h1_base_contact_termination():
     """Dropping the torso onto the terrain should terminate all environments."""
     cfg = MacH1FlatEnvCfg(num_envs=4, seed=5, episode_length_s=0.5, min_root_height=0.0)

@@ -20,6 +20,7 @@ import mlx.core as mx
 from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
 from isaaclab.backends import detect_cpu_fallback, get_runtime_state
 from isaaclab.backends.mac_sim import (
+    DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
     MacCartDoublePendulumEnv,
@@ -37,9 +38,11 @@ from isaaclab.backends.mac_sim import (
 )
 
 TRAINING_BENCHMARK_TASKS = ("train-cartpole",)
-TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + TRAINING_BENCHMARK_TASKS
+SENSOR_BENCHMARK_TASKS = ("anymal-c-flat-height-scan", "h1-flat-height-scan")
+TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + SENSOR_BENCHMARK_TASKS + TRAINING_BENCHMARK_TASKS
 TASK_GROUPS = {
     "current-mac-native": CURRENT_MAC_NATIVE_TASKS,
+    "sensor-mac-native": SENSOR_BENCHMARK_TASKS,
     "full": TASK_CHOICES,
 }
 
@@ -122,6 +125,18 @@ def _locomotion_output_signature(env: Any, trace: Any) -> dict[str, float]:
         "final_joint_acc_abs_mean": float(mx.mean(mx.abs(env.sim_backend.joint_acc)).item()),
         "final_applied_torque_abs_mean": float(mx.mean(mx.abs(env.sim_backend.applied_torque)).item()),
         "final_contact_count": float(mx.sum(env.sim_backend.contact_model.contact_mask.astype(mx.float32)).item()),
+    }
+
+
+def _sensor_output_signature(env: Any) -> dict[str, float]:
+    """Capture stable numeric signatures for height-scan sensor slices."""
+    if getattr(env, "height_scan_sensor", None) is None:
+        return {}
+    scan = env.height_scan_sensor.height_scan(env.sim_backend.root_pos_w)
+    return {
+        "height_scan_mean": float(mx.mean(scan["distances"]).item()),
+        "height_scan_std": float(mx.std(scan["distances"]).item()),
+        "height_scan_hit_ratio": float(mx.mean(scan["hit_mask"].astype(mx.float32)).item()),
     }
 
 
@@ -236,6 +251,40 @@ def benchmark_anymal_c_flat(num_envs: int, steps: int, seed: int) -> dict[str, A
     )
 
 
+def benchmark_anymal_c_flat_height_scan(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the ANYmal-C flat locomotion slice with the mac-native height scan enabled."""
+    env = MacAnymalCFlatEnv(
+        MacAnymalCFlatEnvCfg(
+            num_envs=num_envs,
+            seed=seed,
+            height_scan_enabled=True,
+            height_scan_offsets=DEFAULT_HEIGHT_SCAN_OFFSETS,
+        )
+    )
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "anymal-c-flat-height-scan",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.observation_space,
+            "action_dim": env.cfg.action_space,
+            "sensor_scan_dim": env.height_scan_dim,
+            "output_signature": _locomotion_output_signature(env, trace) | _sensor_output_signature(env),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_h1_flat(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the H1 flat locomotion MLX env step loop."""
     env = MacH1FlatEnv(MacH1FlatEnvCfg(num_envs=num_envs, seed=seed))
@@ -257,6 +306,40 @@ def benchmark_h1_flat(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _locomotion_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_h1_flat_height_scan(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the H1 flat locomotion slice with the mac-native height scan enabled."""
+    env = MacH1FlatEnv(
+        MacH1FlatEnvCfg(
+            num_envs=num_envs,
+            seed=seed,
+            height_scan_enabled=True,
+            height_scan_offsets=DEFAULT_HEIGHT_SCAN_OFFSETS,
+        )
+    )
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "h1-flat-height-scan",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.observation_space,
+            "action_dim": env.cfg.action_space,
+            "sensor_scan_dim": env.height_scan_dim,
+            "output_signature": _locomotion_output_signature(env, trace) | _sensor_output_signature(env),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -341,6 +424,10 @@ def run_benchmarks(
             benchmark = benchmark_anymal_c_flat(num_envs, steps, seed)
         elif task == "h1-flat":
             benchmark = benchmark_h1_flat(num_envs, steps, seed)
+        elif task == "anymal-c-flat-height-scan":
+            benchmark = benchmark_anymal_c_flat_height_scan(num_envs, steps, seed)
+        elif task == "h1-flat-height-scan":
+            benchmark = benchmark_h1_flat_height_scan(num_envs, steps, seed)
         else:
             benchmark = benchmark_train_cartpole(
                 num_envs,

@@ -7,14 +7,16 @@
 
 from __future__ import annotations
 
-import argparse
 import importlib.util
+import json
 from pathlib import Path
 
 from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
+
+from isaaclab_rl.mlx import evaluate_mlx_task, list_trainable_mlx_tasks, train_mlx_task  # noqa: E402
 
 
 def _load_task_support_module():
@@ -30,31 +32,25 @@ def _load_task_support_module():
 def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
     module = _load_task_support_module()
 
-    assert module.EVAL_TASKS == CURRENT_MAC_NATIVE_TASKS
-    assert module.TRAIN_TASKS == ("cartpole", "anymal-c-flat", "h1-flat")
+    assert tuple(module.TASK_PREFIXES) == CURRENT_MAC_NATIVE_TASKS
+    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat")
 
 
 def test_shared_task_cli_trains_first_locomotion_task(tmp_path: Path):
-    module = _load_task_support_module()
     checkpoint_path = tmp_path / "anymal_c_flat_policy.npz"
 
-    payload = module._train_task(
+    payload = train_mlx_task(
         "anymal-c-flat",
-        argparse.Namespace(
-            num_envs=8,
-            updates=1,
-            rollout_steps=8,
-            epochs_per_update=1,
-            learning_rate=3e-4,
-            hidden_dim=32,
-            action_std=None,
-            checkpoint=str(checkpoint_path),
-            resume_from=None,
-            eval_interval=1,
-            episode_length_s=0.5,
-            seed=13,
-            json_out=None,
-        ),
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        learning_rate=3e-4,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=13,
     )
 
     assert payload["task"] == "anymal-c-flat"
@@ -64,27 +60,14 @@ def test_shared_task_cli_trains_first_locomotion_task(tmp_path: Path):
 
 
 def test_shared_task_cli_evaluates_h1_manual_slice():
-    module = _load_task_support_module()
-
-    payload = module._evaluate_task(
+    payload = evaluate_mlx_task(
         "h1-flat",
-        argparse.Namespace(
-            num_envs=8,
-            episodes=1,
-            seed=17,
-            episode_length_s=0.5,
-            max_steps=256,
-            checkpoint=None,
-            hidden_dim=None,
-            random_actions=False,
-            cart_action=0.0,
-            pendulum_action=0.0,
-            thrust_action=0.2,
-            roll_action=0.0,
-            pitch_action=0.0,
-            yaw_action=0.0,
-            json_out=None,
-        ),
+        num_envs=8,
+        episodes=1,
+        seed=17,
+        episode_length_s=0.5,
+        max_steps=256,
+        random_actions=False,
     )
 
     assert payload["task"] == "h1-flat"
@@ -92,3 +75,31 @@ def test_shared_task_cli_evaluates_h1_manual_slice():
     assert payload["episodes_requested"] == 1
     assert payload["episodes_completed"] == 1
     assert payload["completed"][0]["length"] > 0
+
+
+def test_shared_task_cli_writes_json_safe_train_payload(tmp_path: Path):
+    module = _load_task_support_module()
+    checkpoint_path = tmp_path / "cartpole_wrapper_policy.npz"
+    output_path = tmp_path / "train_payload.json"
+
+    payload = train_mlx_task(
+        "cartpole",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=21,
+    )
+
+    module._write_json(output_path, payload)
+    stored = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert stored["task"] == "cartpole"
+    assert stored["task_spec"]["task"] == "cartpole"
+    assert stored["task_spec"]["trainable"] is True
+    assert stored["train_cfg"]["env"]["episode_length_s"] == 0.5
+    assert stored["checkpoint_path"].endswith("cartpole_wrapper_policy.npz")

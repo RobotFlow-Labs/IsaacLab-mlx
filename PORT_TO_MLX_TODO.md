@@ -491,14 +491,22 @@ without pausing for replanning after every small success.
 
 ### MLX-SENSOR-001
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Implement `mac-sensors` raycast substrate
+- Validation:
+  - `source/isaaclab/isaaclab/backends/mac_sim/sensors.py`
+  - `source/isaaclab/test/backends/test_mac_sensor_raycast.py`
+  - focused backend suite
 
 ### MLX-SENSOR-002
 
-- Status: `LATER`
+- Status: `DONE`
 - Depends on: `MLX-SENSOR-001`
 - Title: Add raycast parity tests and benchmark
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_sensor_raycast.py`
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
+  - `logs/benchmarks/mlx/sensor-smoke.json`
 
 ### MLX-SENSOR-003
 
@@ -518,8 +526,12 @@ without pausing for replanning after every small success.
 
 ### MLX-SENSOR-006
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Add benchmark coverage for sensor-heavy mac-native tasks
+- Validation:
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
+  - `.github/workflows/mlx-macos.yml`
+  - `logs/benchmarks/mlx/sensor-smoke.json`
 
 ## Phase F: RL And Training
 
@@ -555,8 +567,13 @@ without pausing for replanning after every small success.
 
 ### MLX-RL-005
 
-- Status: `LATER`
+- Status: `DONE`
 - Title: Define MLX-native wrapper surface instead of relying on torch-centric RL wrappers
+- Validation:
+  - `source/isaaclab_rl/isaaclab_rl/mlx.py`
+  - `source/isaaclab/test/backends/test_mlx_task_cli.py`
+  - `source/isaaclab_rl/test/test_mlx_wrapper.py`
+  - focused backend suite
 
 ### MLX-RL-006
 
@@ -596,8 +613,12 @@ without pausing for replanning after every small success.
 
 ### MLX-CI-005
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Publish support matrix and benchmark expectations in README
+- Validation:
+  - `README.md`
+  - `.github/workflows/mlx-macos.yml`
+  - focused backend suite
 
 ### MLX-CI-006
 

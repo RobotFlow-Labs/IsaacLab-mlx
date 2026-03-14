@@ -17,5 +17,6 @@ def test_isaaclab_rl_modules_import_on_mlx_mac_path():
     set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
 
     importlib.import_module("isaaclab_rl")
+    importlib.import_module("isaaclab_rl.mlx")
     importlib.import_module("isaaclab_rl.skrl")
     importlib.import_module("isaaclab_rl.sb3")
