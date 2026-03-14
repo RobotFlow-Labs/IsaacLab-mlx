@@ -207,6 +207,24 @@ def test_shared_task_cli_trains_franka_stack_slice(tmp_path: Path):
     assert payload["completed_episodes"] >= 0
 
 
+def test_shared_task_cli_evaluates_franka_stack_manual_slice():
+    payload = evaluate_mlx_task(
+        "franka-stack",
+        num_envs=8,
+        episodes=1,
+        seed=41,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+    )
+
+    assert payload["task"] == "franka-stack"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_requested"] == 1
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
 def test_shared_task_cli_writes_json_safe_train_payload(tmp_path: Path):
     module = _load_task_support_module()
     checkpoint_path = tmp_path / "cartpole_wrapper_policy.npz"
