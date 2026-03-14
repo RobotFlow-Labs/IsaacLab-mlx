@@ -19,6 +19,7 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
+from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend  # noqa: E402
 from isaaclab.backends.mac_sim import (  # noqa: E402
     MacFrankaCabinetEnv,
     MacFrankaCabinetEnvCfg,
@@ -69,6 +70,7 @@ def test_current_mac_native_benchmark_group_is_stable():
 def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
     """The benchmark harness should emit diagnostics for every current mac-native task slice."""
     benchmark_module = _load_benchmark_module()
+    expected_franka_hotpath = get_franka_hotpath_backend()
 
     results = benchmark_module.run_benchmarks(
         benchmark_module.CURRENT_MAC_NATIVE_TASKS,
@@ -139,7 +141,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 expected |= {"height_scan_hit_ratio", "height_scan_mean", "height_scan_std"}
             assert benchmark["output_signature"].keys() == expected
         elif benchmark["task"] == "franka-reach":
-            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -150,7 +152,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_target_distance_mean",
             }
         elif benchmark["task"] == "franka-lift":
-            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -163,7 +165,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_grasp_ratio",
             }
         elif benchmark["task"] == "franka-stack":
-            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -179,7 +181,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_stacked_ratio",
             }
         elif benchmark["task"] == "franka-stack-rgb":
-            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",
@@ -195,7 +197,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_active_is_top_ratio",
             }
         elif benchmark["task"] == "franka-cabinet":
-            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
                 "final_policy_std",

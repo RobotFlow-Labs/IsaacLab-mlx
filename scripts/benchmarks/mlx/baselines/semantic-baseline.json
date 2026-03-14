@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T23:11:49Z",
+  "generated_at": "2026-03-14T23:25:23Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -204,7 +204,7 @@
     "franka-cabinet": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-compiled",
+        "hotpath": "mlx-metal-ee",
         "observation_dim": 28,
         "output_signature": {
           "final_drawer_open_mean": 0.0,
@@ -216,7 +216,7 @@
           "final_joint_vel_abs_mean": 0.03102630004286766,
           "final_policy_mean": 0.04606763273477554,
           "final_policy_std": 0.5669611692428589,
-          "final_reward_mean": 0.001901170122437179
+          "final_reward_mean": 0.0019011700060218573
         }
       },
       "cpu_fallback": false,
@@ -229,7 +229,7 @@
     "franka-lift": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-compiled",
+        "hotpath": "mlx-metal-ee",
         "observation_dim": 27,
         "output_signature": {
           "final_cube_distance_mean": 0.48122885823249817,
@@ -240,7 +240,7 @@
           "final_joint_vel_abs_mean": 0.03345862030982971,
           "final_policy_mean": 0.04495088383555412,
           "final_policy_std": 0.5831705331802368,
-          "final_reward_mean": 0.0005667085642926395
+          "final_reward_mean": 0.0005667085060849786
         }
       },
       "cpu_fallback": false,
@@ -253,7 +253,7 @@
     "franka-reach": {
       "contract": {
         "action_dim": 7,
-        "hotpath": "mlx-compiled",
+        "hotpath": "mlx-metal-ee",
         "observation_dim": 23,
         "output_signature": {
           "final_ee_height_mean": 0.5111044049263,
@@ -261,8 +261,8 @@
           "final_joint_vel_abs_mean": 0.03297046944499016,
           "final_policy_mean": 0.06484701484441757,
           "final_policy_std": 0.6263383626937866,
-          "final_reward_mean": 0.0032317712903022766,
-          "final_target_distance_mean": 0.2649034261703491
+          "final_reward_mean": 0.003231771755963564,
+          "final_target_distance_mean": 0.26490339636802673
         }
       },
       "cpu_fallback": false,
@@ -275,10 +275,10 @@
     "franka-stack": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-compiled",
+        "hotpath": "mlx-metal-ee",
         "observation_dim": 33,
         "output_signature": {
-          "final_cube_distance_mean": 0.4998616874217987,
+          "final_cube_distance_mean": 0.4998617172241211,
           "final_cube_height_mean": 0.03999999910593033,
           "final_ee_height_mean": 0.5148086547851562,
           "final_grasp_ratio": 0.0,
@@ -302,7 +302,7 @@
     "franka-stack-rgb": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-compiled",
+        "hotpath": "mlx-metal-ee",
         "observation_dim": 42,
         "output_signature": {
           "final_active_is_top_ratio": 0.0,

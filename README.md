@@ -40,7 +40,7 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
-- trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, and cabinet-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that report `hotpath: "mlx-compiled"`
+- trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, and cabinet-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i, including a live Terminal-hosted `zed-sdk-mlx` validation path for macOS TCC-safe raw capture
@@ -109,9 +109,9 @@ The kernel backend isolates Warp and future Metal custom-kernel paths:
 - `metal`: Apple Silicon path for MLX + Metal-backed kernel replacements
 - `cpu`: correctness fallback for bring-up and unsupported kernels
 
-Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selection seam exists now so future Metal kernels can land without rewriting task-facing APIs again.
+Today the public MLX tasks mostly use pure MLX ops plus compiled MLX helpers. The explicit kernel selection seam has now landed its first true Metal-backed helper on the public path, so future narrow kernels can keep landing without rewriting task-facing APIs again.
 
-For the current locomotion and Franka manipulation slices, the hottest shared batched paths now run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`.
+For the current locomotion slices, the hottest shared batched paths still run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`. For the Franka manipulation slices, the shared analytic end-effector kinematics helper now runs through a Metal-backed MLX kernel and benchmark diagnostics surface that as `hotpath: "mlx-metal-ee"` when that narrow helper is active, otherwise the path falls back to the compiled MLX helper.
 
 ## MLX Quick Start
 
@@ -646,7 +646,7 @@ The cartpole path preserves the important upstream task semantics:
 - Franka cabinet preserves a reduced drawer-handle workflow with deterministic open-distance semantics, lightweight handle-grasp logic, and train/replay parity with the other manipulation slices
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
-- benchmark and semantic drift reports now surface `hotpath: "mlx-compiled"` for the Franka reach/lift/stack/cabinet slices alongside the locomotion tasks
+- benchmark and semantic drift reports now surface `hotpath: "mlx-metal-ee"` for the Franka reach/lift/stack/stack-RGB/cabinet slices when the Metal end-effector helper is active, while the locomotion tasks still report `hotpath: "mlx-compiled"`
 - the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 
 ## Bootstrapping Upstream Sources

@@ -531,7 +531,81 @@ def _franka_stack_rgb_step_impl(
     )
 
 
-franka_end_effector_position_hotpath = mx.compile(_franka_end_effector_position_impl)
+_franka_end_effector_position_compiled = mx.compile(_franka_end_effector_position_impl)
+_franka_end_effector_position_metal = None
+_franka_end_effector_hotpath_initialized = False
+FRANKA_HOTPATH_BACKEND = HOTPATH_BACKEND
+
+
+def _build_franka_end_effector_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float q0 = inp[env_id * 7 + 0];
+        float q1 = inp[env_id * 7 + 1];
+        float q2 = inp[env_id * 7 + 2];
+        float q3 = inp[env_id * 7 + 3];
+        float q4 = inp[env_id * 7 + 4];
+        float q5 = inp[env_id * 7 + 5];
+        float q6 = inp[env_id * 7 + 6];
+        out[env_id * 3 + 0] = 0.28f
+            + 0.18f * metal::cos(q0) * metal::cos(q1)
+            + 0.14f * metal::cos(q0) * metal::cos(q1 + q2)
+            + 0.08f * metal::cos(q0) * metal::cos(q1 + q2 + 0.5f * q3)
+            - 0.02f * metal::sin(q4);
+        out[env_id * 3 + 1] = 0.20f * metal::sin(q0)
+            + 0.07f * metal::sin(q0 + 0.5f * q3)
+            + 0.03f * metal::tanh(q5)
+            + 0.015f * metal::sin(q6);
+        out[env_id * 3 + 2] = 0.28f
+            + 0.18f * metal::sin(-q1)
+            + 0.13f * metal::sin(-(q1 + q2))
+            + 0.07f * metal::sin(-(q1 + q2 + 0.5f * q3));
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="franka_end_effector_position",
+            input_names=["inp"],
+            output_names=["out"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+def _ensure_franka_end_effector_hotpath() -> None:
+    global _franka_end_effector_position_metal
+    global _franka_end_effector_hotpath_initialized
+    global FRANKA_HOTPATH_BACKEND
+    if _franka_end_effector_hotpath_initialized:
+        return
+    _franka_end_effector_hotpath_initialized = True
+    _franka_end_effector_position_metal = _build_franka_end_effector_metal_kernel()
+    if _franka_end_effector_position_metal is not None:
+        FRANKA_HOTPATH_BACKEND = "mlx-metal-ee"
+
+
+def get_franka_hotpath_backend() -> str:
+    _ensure_franka_end_effector_hotpath()
+    return FRANKA_HOTPATH_BACKEND
+
+
+def franka_end_effector_position_hotpath(joint_pos: mx.array) -> mx.array:
+    _ensure_franka_end_effector_hotpath()
+    joint_pos = mx.array(joint_pos, dtype=mx.float32)
+    if _franka_end_effector_position_metal is None:
+        return _franka_end_effector_position_compiled(joint_pos)
+    if int(joint_pos.shape[0]) == 0:
+        return mx.zeros((0, 3), dtype=mx.float32)
+    return _franka_end_effector_position_metal(
+        inputs=[joint_pos],
+        grid=(int(joint_pos.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(joint_pos.shape[0]), 3)],
+        output_dtypes=[mx.float32],
+    )[0]
+
+
 franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
 franka_stack_object_step_hotpath = mx.compile(_franka_stack_object_step_impl)
 franka_cabinet_step_hotpath = mx.compile(_franka_cabinet_step_impl)

@@ -16,6 +16,7 @@ from isaaclab.backends import build_semantic_drift_snapshot, compare_semantic_dr
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
+from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend  # noqa: E402
 
 
 def _load_module(module_name: str, relative_path: str):
@@ -31,6 +32,7 @@ def _load_module(module_name: str, relative_path: str):
 def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     """Semantic snapshots should exclude training tasks and retain rollout/sensor contracts."""
     benchmark_module = _load_module("benchmark_mac_tasks", "scripts/benchmarks/mlx/benchmark_mac_tasks.py")
+    expected_franka_hotpath = get_franka_hotpath_backend()
 
     results = benchmark_module.run_benchmarks(
         benchmark_module.resolve_requested_tasks(None, "full"),
@@ -54,22 +56,22 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["anymal-c-flat"]["contract"]["hotpath"] == "mlx-compiled"
     assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["sensor_implementation"] == "analytic-terrain-raycast"
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
-    assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-stack"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stack_distance_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stacked_ratio"] <= 1.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_middle_stack_distance_mean"] >= 0.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_top_stack_distance_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_middle_stacked_ratio"] <= 1.0
     assert 0.0 <= snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_top_stacked_ratio"] <= 1.0
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-cabinet"]["contract"]["hotpath"] == "mlx-compiled"
+    assert snapshot["tasks"]["franka-cabinet"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9

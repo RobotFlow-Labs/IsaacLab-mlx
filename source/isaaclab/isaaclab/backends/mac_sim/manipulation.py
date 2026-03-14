@@ -39,6 +39,7 @@ from .hotpath import (
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
     franka_stack_rgb_step_hotpath,
+    get_franka_hotpath_backend,
 )
 from .ppo_training import (
     build_checkpoint_metadata,
@@ -298,7 +299,7 @@ class MacFrankaReachSimBackend(MacSimBackend):
                 "analytic_kinematics": True,
                 "object_tracking": False,
                 "grasp_logic": False,
-                "hotpath": "mlx-compiled",
+                "hotpath": get_franka_hotpath_backend(),
             },
             "joint_state_shape": list(self.state.joint_pos.shape),
         }
@@ -362,7 +363,7 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
             "analytic_kinematics": True,
             "object_tracking": True,
             "grasp_logic": True,
-            "hotpath": "mlx-compiled",
+            "hotpath": get_franka_hotpath_backend(),
         }
         return payload
 
@@ -469,7 +470,7 @@ class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
             "object_tracking": True,
             "grasp_logic": True,
             "stack_logic": True,
-            "hotpath": "mlx-compiled",
+            "hotpath": get_franka_hotpath_backend(),
         }
         return payload
 
@@ -557,7 +558,7 @@ class MacFrankaCabinetSimBackend(MacFrankaReachSimBackend):
             "object_tracking": True,
             "grasp_logic": True,
             "drawer_logic": True,
-            "hotpath": "mlx-compiled",
+            "hotpath": get_franka_hotpath_backend(),
         }
         return payload
 
@@ -715,7 +716,7 @@ class MacFrankaStackRgbSimBackend(MacFrankaReachSimBackend):
             "grasp_logic": True,
             "multi_object_logic": True,
             "stack_logic": True,
-            "hotpath": "mlx-compiled",
+            "hotpath": get_franka_hotpath_backend(),
         }
         return payload
 

@@ -75,7 +75,7 @@ without pausing for replanning after every small success.
 - `DONE` Fourth trainable manipulation slice landed for `Isaac-Franka-Cabinet-Direct-v0` with a reduced drawer workflow, compiled cabinet hotpath helper, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
 - `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
-- `DONE` Franka manipulation hotpaths now use compiled MLX helpers for analytic end-effector kinematics and lift object/grasp updates, and benchmark/semantic reports surface `hotpath: "mlx-compiled"` on the mac-native path
+- `DONE` Franka manipulation hotpaths now combine a true Metal-backed analytic end-effector kernel with compiled MLX step helpers, and benchmark/semantic reports surface `hotpath: "mlx-metal-ee"` for the Franka slices while locomotion stays `mlx-compiled`
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
@@ -728,8 +728,8 @@ without pausing for replanning after every small success.
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
-- Port the next manipulation milestone beyond the first four Franka slices, likely a richer cabinet/drawer variant or the first multi-object manipulation workflow.
-- Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
+- Port the next manipulation milestone beyond the current five trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
+- Replace the next remaining hot `mx.compile` helper with a true custom Metal kernel now that the first Metal-backed Franka end-effector helper is landed and benchmarked.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 
 ## Validation Commands
