@@ -20,6 +20,7 @@ CURRENT_MAC_NATIVE_TASKS = (
     "franka-reach",
     "franka-lift",
     "franka-stack",
+    "franka-cabinet",
 )
 """Current benchmarked mac-native task slices that must stay in the MLX smoke suite."""
 
@@ -69,7 +70,13 @@ KERNEL_PORT_INVENTORY = (
         key="wrench-composer",
         family="Warp wrench composition kernels",
         status="mlx-helper-ready",
-        target_tasks=("manipulation-reach", "manipulation-lift", "manipulation-stack", "external-wrench-controls"),
+        target_tasks=(
+            "manipulation-reach",
+            "manipulation-lift",
+            "manipulation-stack",
+            "manipulation-cabinet",
+            "external-wrench-controls",
+        ),
         upstream_modules=(
             "source/isaaclab/isaaclab/utils/warp/kernels.py",
             "source/isaaclab/isaaclab/utils/wrench_composer.py",

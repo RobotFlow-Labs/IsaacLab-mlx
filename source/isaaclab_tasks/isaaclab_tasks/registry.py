@@ -59,6 +59,20 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Franka-Cabinet-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaCabinetEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaCabinetEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Franka-Cabinet-Direct-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaCabinetEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaCabinetEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Velocity-Flat-H1-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacH1FlatEnv",
         "kwargs": {

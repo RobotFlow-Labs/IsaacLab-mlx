@@ -40,7 +40,7 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
-- trainable `MLX + mac-sim` Franka reach, cube-lift, and cube-stack slices with deterministic analytic kinematics, lightweight grasp/stack logic, and benchmark diagnostics that report `hotpath: "mlx-compiled"`
+- trainable `MLX + mac-sim` Franka reach, cube-lift, cube-stack, and cabinet-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that report `hotpath: "mlx-compiled"`
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i, including a live Terminal-hosted `zed-sdk-mlx` validation path for macOS TCC-safe raw capture
@@ -99,7 +99,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, and synthetic cartpole RGB/depth camera variants, with the task capability matrix below serving as the authoritative public support surface.
+The current `mac-sim` implementation is intentionally narrow. It currently covers 11 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka cabinet, plus synthetic cartpole RGB/depth camera variants. The task capability matrix below is the authoritative public support surface.
 
 ### Kernel backend
 
@@ -143,7 +143,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, and synthetic cartpole RGB/depth camera tasks |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka cabinet, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -317,9 +317,11 @@ lift_train_payload = train_mlx_task("franka-lift", num_envs=64, updates=5)
 lift_payload = evaluate_mlx_task("franka-lift", checkpoint=lift_train_payload["checkpoint_path"], episodes=2)
 stack_train_payload = train_mlx_task("franka-stack", num_envs=64, updates=5)
 stack_payload = evaluate_mlx_task("franka-stack", checkpoint=stack_train_payload["checkpoint_path"], episodes=2)
+cabinet_train_payload = train_mlx_task("franka-cabinet", num_envs=64, updates=5)
+cabinet_payload = evaluate_mlx_task("franka-cabinet", checkpoint=cabinet_train_payload["checkpoint_path"], episodes=2)
 ```
 
-### 9. Train and replay the Franka reach, lift, and stack slices
+### 9. Train and replay the Franka reach, lift, stack, and cabinet slices
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -369,6 +371,23 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/reinforcement_learning/mlx/play_franka_stack.py \
   --checkpoint logs/mlx/franka_stack_policy.npz \
+  --episodes 3
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_franka_cabinet.py \
+  --num-envs 128 \
+  --updates 10 \
+  --rollout-steps 24 \
+  --epochs-per-update 2 \
+  --checkpoint logs/mlx/franka_cabinet_policy.npz
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_franka_cabinet.py \
+  --checkpoint logs/mlx/franka_cabinet_policy.npz \
   --episodes 3
 ```
 
@@ -494,7 +513,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
-- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, and Franka stack
+- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, and Franka cabinet
 - a stable `sensor-mac-native` task group for `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`
 - a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
 - runtime metadata including compute, kernel, sensor, and planner backend selection
@@ -592,7 +611,7 @@ Implementation entrypoints:
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
 - ANYmal-C flat and rough locomotion environments in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
-- Franka reach/lift/stack manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
+- Franka reach/lift/stack/cabinet manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
 - analytic terrain raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
 - backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
 - backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
@@ -619,9 +638,10 @@ The cartpole path preserves the important upstream task semantics:
 - Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics and now exposes checkpointed MLX PPO training/replay
 - Franka lift preserves deterministic cube placement, lightweight grasp state, explicit lift-success semantics, and multi-step replay coverage
 - Franka stack preserves deterministic support-cube placement, lightweight release-driven stack success semantics, and train/replay parity with the other manipulation slices
+- Franka cabinet preserves a reduced drawer-handle workflow with deterministic open-distance semantics, lightweight handle-grasp logic, and train/replay parity with the other manipulation slices
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
-- benchmark and semantic drift reports now surface `hotpath: "mlx-compiled"` for the Franka reach/lift/stack slices alongside the locomotion tasks
+- benchmark and semantic drift reports now surface `hotpath: "mlx-compiled"` for the Franka reach/lift/stack/cabinet slices alongside the locomotion tasks
 - the first backend-local mac camera slice is a UVC/AVFoundation discovery path plus raw stereo YUYV depth smoke, with live hardware validation kept host-specific
 
 ## Bootstrapping Upstream Sources

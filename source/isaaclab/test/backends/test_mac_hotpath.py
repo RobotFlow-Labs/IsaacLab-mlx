@@ -20,6 +20,7 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     anymal_body_positions_hotpath,
     biped_support_metrics_hotpath,
     contact_update_hotpath,
+    franka_cabinet_step_hotpath,
     franka_end_effector_position_hotpath,
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
@@ -346,6 +347,64 @@ def test_franka_stack_release_miss_keeps_current_release_pose():
     assert np.array_equal(np.array(next_stacked), np.array([False]))
     assert np.allclose(np.array(next_cube_pos), expected_resting_pose)
     assert np.allclose(np.array(next_cube_pos)[:, :2], expected_release_pose[:, :2])
+
+
+def test_franka_cabinet_step_hotpath_matches_reference_math():
+    handle_anchor_pos_w = mx.array([[0.48, 0.01, 0.20], [0.52, -0.02, 0.18]], dtype=mx.float32)
+    ee_pos_w = mx.array([[0.68, 0.01, 0.20], [0.55, -0.02, 0.18]], dtype=mx.float32)
+    gripper_joint_pos = mx.array([0.04, 0.02], dtype=mx.float32)
+    gripper_action = mx.array([-1.0, 1.0], dtype=mx.float32)
+    grasped = mx.array([True, False], dtype=mx.bool_)
+    opened = mx.array([False, False], dtype=mx.bool_)
+    drawer_open_amount = mx.array([0.0, 0.03], dtype=mx.float32)
+
+    gripper_target, gripper_velocity, next_grasped, next_opened, next_drawer_open_amount, next_handle_pos = (
+        franka_cabinet_step_hotpath(
+            handle_anchor_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped,
+            opened,
+            drawer_open_amount,
+            0.02,
+            0.0,
+            0.08,
+            0.03,
+            0.065,
+            0.24,
+            0.18,
+        )
+    )
+    mx.eval(gripper_target, gripper_velocity, next_grasped, next_opened, next_drawer_open_amount, next_handle_pos)
+
+    anchor_np = np.array(handle_anchor_pos_w)
+    ee_np = np.array(ee_pos_w)
+    target_np = np.where(np.array(gripper_action) < 0.0, 0.0, 0.08).astype(np.float32)
+    velocity_np = (target_np - np.array(gripper_joint_pos)) / 0.02
+    current_handle_np = anchor_np + np.stack(
+        [np.array(drawer_open_amount), np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.float32)],
+        axis=-1,
+    )
+    handle_dist_np = np.linalg.norm(current_handle_np - ee_np, axis=1)
+    gripper_closed_np = target_np <= 0.03
+    can_grasp_np = handle_dist_np <= 0.065
+    next_grasped_np = (np.array(grasped) | (can_grasp_np & gripper_closed_np)) & gripper_closed_np & ~np.array(opened)
+    pulled_open_np = np.clip(ee_np[:, 0] - anchor_np[:, 0], 0.0, 0.24).astype(np.float32)
+    next_drawer_np = np.where(next_grasped_np, pulled_open_np, np.array(drawer_open_amount)).astype(np.float32)
+    next_opened_np = np.array(opened) | (next_drawer_np >= 0.18)
+    next_handle_np = anchor_np + np.stack(
+        [next_drawer_np, np.zeros(2, dtype=np.float32), np.zeros(2, dtype=np.float32)],
+        axis=-1,
+    )
+    next_grasped_np = next_grasped_np & ~next_opened_np
+
+    assert np.allclose(np.array(gripper_target), target_np)
+    assert np.allclose(np.array(gripper_velocity), velocity_np)
+    assert np.array_equal(np.array(next_grasped), next_grasped_np)
+    assert np.array_equal(np.array(next_opened), next_opened_np)
+    assert np.allclose(np.array(next_drawer_open_amount), next_drawer_np)
+    assert np.allclose(np.array(next_handle_pos), next_handle_np)
 
 
 def test_locomotion_root_step_hotpath_matches_reference_math():

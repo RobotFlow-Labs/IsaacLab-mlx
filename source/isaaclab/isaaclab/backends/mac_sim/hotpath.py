@@ -394,9 +394,66 @@ def _franka_stack_object_step_impl(
     )
 
 
+def _franka_cabinet_step_impl(
+    handle_anchor_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    grasped: mx.array,
+    opened: mx.array,
+    drawer_open_amount: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    handle_grasp_threshold: float,
+    drawer_open_distance_max: float,
+    drawer_success_distance: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array, mx.array]:
+    gripper_target = mx.where(gripper_action < 0.0, gripper_lower_limit, gripper_upper_limit).astype(mx.float32)
+    gripper_velocity = (gripper_target - gripper_joint_pos) / physics_dt
+    current_handle_pos = handle_anchor_pos_w + mx.stack(
+        (
+            drawer_open_amount,
+            mx.zeros_like(drawer_open_amount),
+            mx.zeros_like(drawer_open_amount),
+        ),
+        axis=-1,
+    )
+    dist_to_handle = mx.linalg.norm(current_handle_pos - ee_pos_w, axis=1)
+    gripper_closed = gripper_target <= gripper_closed_threshold
+    can_grasp = dist_to_handle <= handle_grasp_threshold
+    next_grasped = (grasped | (can_grasp & gripper_closed)) & gripper_closed & ~opened
+    pulled_drawer_open_amount = mx.clip(
+        ee_pos_w[:, 0] - handle_anchor_pos_w[:, 0],
+        0.0,
+        drawer_open_distance_max,
+    )
+    next_drawer_open_amount = mx.where(next_grasped, pulled_drawer_open_amount, drawer_open_amount).astype(mx.float32)
+    next_opened = opened | (next_drawer_open_amount >= drawer_success_distance)
+    next_handle_pos = handle_anchor_pos_w + mx.stack(
+        (
+            next_drawer_open_amount,
+            mx.zeros_like(next_drawer_open_amount),
+            mx.zeros_like(next_drawer_open_amount),
+        ),
+        axis=-1,
+    )
+    next_grasped = next_grasped & ~next_opened
+    return (
+        gripper_target,
+        gripper_velocity.astype(mx.float32),
+        next_grasped.astype(mx.bool_),
+        next_opened.astype(mx.bool_),
+        next_drawer_open_amount,
+        next_handle_pos.astype(mx.float32),
+    )
+
+
 franka_end_effector_position_hotpath = mx.compile(_franka_end_effector_position_impl)
 franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
 franka_stack_object_step_hotpath = mx.compile(_franka_stack_object_step_impl)
+franka_cabinet_step_hotpath = mx.compile(_franka_cabinet_step_impl)
 
 
 def _locomotion_root_step_impl(

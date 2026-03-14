@@ -39,6 +39,8 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleEnvCfg,
     MacCartpoleRGBCameraEnvCfg,
     MacCartpoleTrainCfg,
+    MacFrankaCabinetEnv,
+    MacFrankaCabinetEnvCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
     MacFrankaReachEnv,
@@ -256,7 +258,21 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
         "final_ee_height_mean": float(mx.mean(env.sim_backend.ee_pos_w[:, 2]).item()),
     }
-    if hasattr(env.sim_backend, "cube_pos_w"):
+    if hasattr(env.sim_backend, "drawer_open_amount"):
+        if terminal_policy_observations:
+            terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
+            payload["final_handle_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 22:25], axis=1)).item())
+            payload["final_drawer_open_mean"] = float(mx.mean(terminal_policy[:, 25]).item())
+            payload["final_drawer_open_ratio"] = float(
+                mx.mean(terminal_policy[:, 25] / env.cfg.drawer_open_distance_max).item()
+            )
+            payload["final_drawer_opened_ratio"] = float(mx.mean(terminal_policy[:, 27]).item())
+        else:
+            payload["final_handle_distance_mean"] = float(mx.mean(env.sim_backend.handle_distance()).item())
+            payload["final_drawer_open_mean"] = float(mx.mean(env.sim_backend.drawer_open_amount).item())
+            payload["final_drawer_open_ratio"] = float(mx.mean(env.sim_backend.drawer_open_ratio()).item())
+            payload["final_drawer_opened_ratio"] = float(mx.mean(env.sim_backend.drawer_opened.astype(mx.float32)).item())
+    elif hasattr(env.sim_backend, "cube_pos_w"):
         payload["final_cube_distance_mean"] = float(
             mx.mean(mx.linalg.norm(env.sim_backend.cube_pos_w - env.sim_backend.ee_pos_w, axis=1)).item()
         )
@@ -579,6 +595,33 @@ def benchmark_franka_stack(num_envs: int, steps: int, seed: int) -> dict[str, An
     )
 
 
+def benchmark_franka_cabinet(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka cabinet MLX env step loop."""
+
+    env = MacFrankaCabinetEnv(MacFrankaCabinetEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-cabinet",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_anymal_c_flat_height_scan(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the ANYmal-C flat locomotion slice with the mac-native height scan enabled."""
     env = MacAnymalCFlatEnv(
@@ -805,6 +848,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
         elif task == "franka-stack":
             benchmark = benchmark_franka_stack(num_envs, steps, seed)
+        elif task == "franka-cabinet":
+            benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
         elif task == "anymal-c-flat-height-scan":
             benchmark = benchmark_anymal_c_flat_height_scan(num_envs, steps, seed)
         elif task == "h1-flat-height-scan":

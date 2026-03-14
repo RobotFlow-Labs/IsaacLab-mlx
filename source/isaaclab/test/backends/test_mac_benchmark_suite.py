@@ -19,7 +19,7 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
-from isaaclab.backends.mac_sim import MacFrankaStackEnv, MacFrankaStackEnvCfg  # noqa: E402
+from isaaclab.backends.mac_sim import MacFrankaCabinetEnv, MacFrankaCabinetEnvCfg, MacFrankaStackEnv, MacFrankaStackEnvCfg  # noqa: E402
 
 
 def _load_benchmark_module():
@@ -47,6 +47,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "franka-reach",
         "franka-lift",
         "franka-stack",
+        "franka-cabinet",
     )
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
     assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
@@ -169,6 +170,20 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_stack_distance_mean",
                 "final_stacked_ratio",
             }
+        elif benchmark["task"] == "franka-cabinet":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_handle_distance_mean",
+                "final_drawer_open_mean",
+                "final_drawer_open_ratio",
+                "final_drawer_opened_ratio",
+            }
         assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
 
 
@@ -204,6 +219,40 @@ def test_franka_stack_benchmark_signature_uses_terminal_stack_snapshots():
     assert float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item()) == 0.0
     assert math.isclose(signature["final_stacked_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
     assert math.isclose(signature["final_stack_distance_mean"], 0.0, rel_tol=0.0, abs_tol=1e-6)
+
+
+def test_franka_cabinet_benchmark_signature_uses_terminal_drawer_snapshots():
+    """Cabinet benchmark metrics should use terminal pre-reset observations when successes auto-reset in-step."""
+
+    benchmark_module = _load_benchmark_module()
+    cfg = MacFrankaCabinetEnvCfg(num_envs=2, seed=63, episode_length_s=0.5)
+    env = MacFrankaCabinetEnv(cfg)
+    env.sim_backend.grasped_handle[:] = True
+    env.sim_backend.drawer_opened[:] = False
+    env.sim_backend.drawer_open_amount[:] = 0.0
+    env.sim_backend.handle_anchor_pos_w[:, 0] = env.sim_backend.ee_pos_w[:, 0] - (cfg.drawer_success_distance + 0.03)
+    env.sim_backend.handle_anchor_pos_w[:, 1] = env.sim_backend.ee_pos_w[:, 1]
+    env.sim_backend.handle_anchor_pos_w[:, 2] = env.sim_backend.ee_pos_w[:, 2]
+    env.sim_backend.handle_pos_w[:] = env.sim_backend.handle_anchor_pos_w
+    env.sim_backend.state.joint_pos[:, 7] = 0.04
+
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+    actions[:, -1] = -1.0
+    next_obs, reward, terminated, truncated, extras = env.step(actions)
+    trace = SimpleNamespace(
+        initial_observations={"policy": mx.zeros((cfg.num_envs, cfg.observation_space), dtype=mx.float32)},
+        observations=[next_obs],
+        rewards=[reward],
+        terminated=[terminated],
+        truncated=[truncated],
+        extras=[extras],
+    )
+
+    signature = benchmark_module._franka_output_signature(env, trace)
+
+    assert float(mx.mean(env.sim_backend.drawer_open_amount).item()) == 0.0
+    assert signature["final_drawer_open_mean"] >= cfg.drawer_success_distance
+    assert math.isclose(signature["final_drawer_opened_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
 
 
 def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
@@ -278,9 +327,9 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     assert '"task_group": "current-mac-native"' in payload
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
     trend = json.loads(trend_path.read_text(encoding="utf-8"))
-    assert dashboard["summary"]["rollout_task_count"] == 10
+    assert dashboard["summary"]["rollout_task_count"] == 11
     assert dashboard["summary"]["training_task_count"] == 0
-    assert trend["summary"]["task_count"] == 10
+    assert trend["summary"]["task_count"] == 11
 
 
 def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
@@ -302,7 +351,7 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     trend = build_benchmark_trend(results, hardware_label="m5-max")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 14
+    assert dashboard["summary"]["rollout_task_count"] == 15
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None

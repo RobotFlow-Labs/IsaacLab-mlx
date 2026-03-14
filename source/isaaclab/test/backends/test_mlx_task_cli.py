@@ -33,7 +33,15 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
     module = _load_task_support_module()
 
     assert tuple(module.TASK_PREFIXES) == list_mlx_tasks()
-    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach", "franka-lift", "franka-stack")
+    assert list_trainable_mlx_tasks() == (
+        "cartpole",
+        "anymal-c-flat",
+        "h1-flat",
+        "franka-reach",
+        "franka-lift",
+        "franka-stack",
+        "franka-cabinet",
+    )
 
 
 def test_shared_task_cli_trains_first_locomotion_task(tmp_path: Path):
@@ -219,6 +227,46 @@ def test_shared_task_cli_evaluates_franka_stack_manual_slice():
     )
 
     assert payload["task"] == "franka-stack"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_requested"] == 1
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
+def test_shared_task_cli_trains_franka_cabinet_slice(tmp_path: Path):
+    checkpoint_path = tmp_path / "franka_cabinet_policy.npz"
+
+    payload = train_mlx_task(
+        "franka-cabinet",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=33,
+    )
+
+    assert payload["task"] == "franka-cabinet"
+    assert Path(payload["checkpoint_path"]).exists()
+    assert Path(payload["metadata_path"]).exists()
+    assert payload["completed_episodes"] >= 0
+
+
+def test_shared_task_cli_evaluates_franka_cabinet_manual_slice():
+    payload = evaluate_mlx_task(
+        "franka-cabinet",
+        num_envs=8,
+        episodes=1,
+        seed=45,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+    )
+
+    assert payload["task"] == "franka-cabinet"
     assert payload["mode"] == "manual"
     assert payload["episodes_requested"] == 1
     assert payload["episodes_completed"] == 1

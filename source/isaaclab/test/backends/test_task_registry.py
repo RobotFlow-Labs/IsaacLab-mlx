@@ -22,6 +22,7 @@ SAFE_TASK_IDS = (
     "Isaac-Cartpole-Depth-Camera-Direct-v0",
     "Isaac-Reach-Franka-v0",
     "Isaac-Lift-Cube-Franka-v0",
+    "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Rough-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
@@ -31,7 +32,6 @@ SAFE_TASK_IDS = (
     "Isaac-Quadcopter-Direct-v0",
 )
 UNSUPPORTED_MAC_TASK_IDS = (
-    "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Factory-PegInsert-Direct-v0",
     "Isaac-PickPlace-GR1T2-Abs-v0",
     "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
@@ -169,7 +169,7 @@ def test_parse_env_cfg_supports_h1_rough_task_cfg(monkeypatch):
     assert parsed_cfg.terrain_type == "wave"
 
 
-def test_parse_env_cfg_supports_franka_reach_lift_and_stack_task_cfgs(monkeypatch):
+def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     """parse_env_cfg should resolve mac-native Franka manipulation configs without Isaac Sim imports."""
     task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
     monkeypatch.syspath_prepend(str(task_source))
@@ -183,6 +183,7 @@ def test_parse_env_cfg_supports_franka_reach_lift_and_stack_task_cfgs(monkeypatc
     reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-v0", device="cpu", num_envs=6)
     lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-v0", device="cpu", num_envs=5)
     stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-v0", device="cpu", num_envs=4)
+    cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
 
     assert type(reach_cfg).__name__ == "MacFrankaReachEnvCfg"
     assert reach_cfg.num_envs == 6
@@ -193,6 +194,9 @@ def test_parse_env_cfg_supports_franka_reach_lift_and_stack_task_cfgs(monkeypatc
     assert type(stack_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_cfg.num_envs == 4
     assert stack_cfg.action_space == 8
+    assert type(cabinet_cfg).__name__ == "MacFrankaCabinetEnvCfg"
+    assert cabinet_cfg.num_envs == 3
+    assert cabinet_cfg.action_space == 8
 
 
 def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):
@@ -274,7 +278,7 @@ def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
     parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
-        parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu")
+        parse_cfg.parse_env_cfg("Isaac-Factory-PegInsert-Direct-v0", device="cpu")
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         parse_cfg.parse_env_cfg("Isaac-Repose-Cube-Shadow-Vision-Direct-v0", device="cpu")

@@ -452,3 +452,22 @@ class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
     stack_align_reward_scale: float = 2.5
     stack_distance_reward_gain: float = 9.0
     stack_success_bonus: float = 6.0
+
+
+@configclass
+class MacFrankaCabinetEnvCfg(MacFrankaLiftEnvCfg):
+    """Configuration for a reduced mac-native Franka cabinet-drawer slice."""
+
+    observation_space: int = 28
+    episode_length_s: float = 10.0
+
+    handle_anchor_x_range: tuple[float, float] = (0.48, 0.58)
+    handle_anchor_y_range: tuple[float, float] = (-0.05, 0.05)
+    handle_anchor_z_range: tuple[float, float] = (0.16, 0.22)
+    handle_grasp_threshold: float = 0.065
+    drawer_open_distance_max: float = 0.24
+    drawer_success_distance: float = 0.18
+
+    grasp_reward_scale: float = 0.45
+    open_reward_scale: float = 5.0
+    drawer_success_bonus: float = 6.0

@@ -1,0 +1,26 @@
+{
+    "permissions": {
+        "allow": [
+            "Bash(*)",
+            "Read(*)",
+            "Write(*)",
+            "Edit(*)",
+            "Glob(*)",
+            "Grep(*)",
+            "Agent(*)",
+            "WebFetch(*)",
+            "WebSearch(*)",
+            "NotebookEdit(*)",
+            "Skill(*)",
+            "ToolSearch(*)"
+        ],
+        "deny": [
+            "Bash(rm -rf /)",
+            "Bash(sudo rm -rf /)",
+            "Write(/etc/*)",
+            "Write(/usr/*)",
+            "Write(/System/*)",
+            "Write(/Library/*)"
+        ]
+    }
+}

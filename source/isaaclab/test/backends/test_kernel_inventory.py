@@ -25,6 +25,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "franka-reach",
         "franka-lift",
         "franka-stack",
+        "franka-cabinet",
     )
 
 
@@ -49,3 +50,4 @@ def test_kernel_inventory_items_reference_real_upstream_modules():
             assert (repo_root / module_path).exists(), f"Missing inventory path: {module_path}"
 
     assert any("manipulation-stack" in item.target_tasks for item in KERNEL_PORT_INVENTORY)
+    assert any("manipulation-cabinet" in item.target_tasks for item in KERNEL_PORT_INVENTORY)
