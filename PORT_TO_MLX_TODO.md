@@ -54,6 +54,9 @@ without pausing for replanning after every small success.
 - `DONE` `isaaclab_rl.sb3` and `isaaclab_rl.skrl` import-safe on MLX/mac path
 - `DONE` `RmpFlowControllerCfg` split from the heavy controller implementation
 - `DONE` Lightweight Nucleus constant module split from the heavy assets helper
+- `DONE` `isaaclab.sim` config surfaces for schemas, converters, and file spawners import on `mlx + mac-sim`
+- `DONE` `isaaclab.envs.mdp.actions` config surfaces import on `mlx + mac-sim` without runtime action modules
+- `DONE` macOS install/import smoke now writes retained JSON artifacts and benchmark results in CI
 
 ## Phase A: Import And Packaging Safety
 
@@ -75,7 +78,7 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-003
 
-- Status: `ACTIVE`
+- Status: `DONE`
 - Title: Audit `isaaclab.sim` public config/helper imports and isolate config-safe surfaces
 - Scope:
   - `isaaclab.sim.__init__`
@@ -85,15 +88,22 @@ without pausing for replanning after every small success.
 - Acceptance:
   - config-only imports do not pull `carb`, `omni`, `isaacsim`, or `pxr` unless explicitly upstream-only
   - tests prove the new import-safe path
+- Validation:
+  - focused backend suite
+  - torch-free local install/import smoke
+  - local benchmark smoke JSON output
 
 ### MLX-IMPORT-004
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-003`
 - Title: Audit `isaaclab.envs.mdp.actions` config surfaces for config-only imports that still pull runtime-heavy modules
 - Acceptance:
   - action config modules import on `mlx + mac-sim`
   - unsupported runtime paths fail when instantiated, not when imported
+- Validation:
+  - focused backend suite
+  - torch-free local install/import smoke
 
 ### MLX-IMPORT-005
 
@@ -114,12 +124,16 @@ without pausing for replanning after every small success.
 
 ### MLX-IMPORT-007
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-IMPORT-003`
 - Title: Add explicit import-safety test matrix for public bootstrap modules
 - Acceptance:
   - test covers `isaaclab`, `isaaclab.sim`, `isaaclab.controllers`, `isaaclab_rl`
   - runs without Isaac Sim installed
+- Validation:
+  - `source/isaaclab/test/backends/test_runtime.py`
+  - `source/isaaclab_rl/test/test_import_safety.py`
+  - torch-free local install/import smoke
 
 ### MLX-IMPORT-008
 
@@ -129,6 +143,32 @@ without pausing for replanning after every small success.
 - Acceptance:
   - documented in README
   - kept in sync with tests
+
+### MLX-IMPORT-009
+
+- Status: `ACTIVE`
+- Depends on: `MLX-IMPORT-007`
+- Title: Replace `isaaclab_tasks` eager recursive package registration with a lazy task registry
+- Scope:
+  - `source/isaaclab_tasks/isaaclab_tasks/__init__.py`
+  - `source/isaaclab_tasks/isaaclab_tasks/utils/importer.py`
+- Acceptance:
+  - `import isaaclab_tasks` does not recursively import every task package on the MLX/mac path
+  - task/config entry points resolve lazily from strings or a registry manifest
+
+### MLX-IMPORT-010
+
+- Status: `READY`
+- Depends on: `MLX-IMPORT-009`
+- Title: Split direct-task CUDA/IsaacSim clusters from task package import surfaces
+- Scope:
+  - AutoMate
+  - Factory
+  - FORGE
+  - first manager-based manipulation config clusters that import `carb` or `isaacsim` at module load
+- Acceptance:
+  - task packages expose config/registration surfaces without importing `warp`, `carb`, `pxr`, or `isaacsim`
+  - runtime-only backends load on demand behind capability checks
 
 ### MLX-PKG-001
 

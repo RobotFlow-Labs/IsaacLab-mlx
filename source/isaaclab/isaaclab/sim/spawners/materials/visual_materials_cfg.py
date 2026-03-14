@@ -6,9 +6,19 @@
 from collections.abc import Callable
 from dataclasses import MISSING
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from . import visual_materials
+
+def _spawn_preview_surface(*args, **kwargs):
+    from .visual_materials import spawn_preview_surface
+
+    return spawn_preview_surface(*args, **kwargs)
+
+
+def _spawn_from_mdl_file(*args, **kwargs):
+    from .visual_materials import spawn_from_mdl_file
+
+    return spawn_from_mdl_file(*args, **kwargs)
 
 
 @configclass
@@ -26,7 +36,7 @@ class PreviewSurfaceCfg(VisualMaterialCfg):
     See :meth:`spawn_preview_surface` for more information.
     """
 
-    func: Callable = visual_materials.spawn_preview_surface
+    func: Callable = _spawn_preview_surface
 
     diffuse_color: tuple[float, float, float] = (0.18, 0.18, 0.18)
     """The RGB diffusion color. This is the base color of the surface. Defaults to a dark gray."""
@@ -51,7 +61,7 @@ class MdlFileCfg(VisualMaterialCfg):
     See :meth:`spawn_from_mdl_file` for more information.
     """
 
-    func: Callable = visual_materials.spawn_from_mdl_file
+    func: Callable = _spawn_from_mdl_file
 
     mdl_path: str = MISSING
     """The path to the MDL material.
@@ -93,7 +103,7 @@ class GlassMdlCfg(VisualMaterialCfg):
         The default values are taken from the glass material in the NVIDIA Nucleus.
     """
 
-    func: Callable = visual_materials.spawn_from_mdl_file
+    func: Callable = _spawn_from_mdl_file
 
     mdl_path: str = "OmniGlass.mdl"
     """The path to the MDL material. Defaults to the glass material in the NVIDIA Nucleus."""

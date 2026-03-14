@@ -3,19 +3,19 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 from dataclasses import MISSING
 
-from isaaclab.utils import configclass
-
-from .operational_space import OperationalSpaceController
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
 class OperationalSpaceControllerCfg:
     """Configuration for operational-space controller."""
 
-    class_type: type = OperationalSpaceController
+    class_type: type | str = "isaaclab.controllers.operational_space:OperationalSpaceController"
     """The associated controller class."""
 
     target_types: Sequence[str] = MISSING

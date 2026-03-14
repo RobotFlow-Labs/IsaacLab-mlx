@@ -241,9 +241,26 @@ def test_mac_runtime_entrypoints_import_without_isaacsim():
     importlib.import_module("isaaclab")
     importlib.import_module("isaaclab.backends.runtime")
     importlib.import_module("isaaclab.backends.mac_sim")
+    importlib.import_module("isaaclab.controllers")
+    importlib.import_module("isaaclab.controllers.differential_ik_cfg")
+    importlib.import_module("isaaclab.controllers.operational_space_cfg")
+    importlib.import_module("isaaclab.sim")
+    importlib.import_module("isaaclab.sim.schemas")
+    importlib.import_module("isaaclab.sim.converters")
+    importlib.import_module("isaaclab.sim.spawners.from_files")
     importlib.import_module("isaaclab.utils.nucleus")
+    importlib.import_module("isaaclab.envs.mdp")
+    importlib.import_module("isaaclab.envs.mdp.actions")
+    importlib.import_module("isaaclab.envs.mdp.actions.actions_cfg")
+    importlib.import_module("isaaclab.envs.mdp.actions.rmpflow_actions_cfg")
     importlib.import_module("isaaclab.controllers.rmp_flow_cfg")
     importlib.import_module("isaaclab.controllers.config.rmp_flow")
+
+    from isaaclab.sim.spawners.from_files import GroundPlaneCfg
+
+    cfg = GroundPlaneCfg()
+    assert isinstance(cfg, GroundPlaneCfg)
+    assert cfg.usd_path.endswith("default_environment.usd")
 
 
 def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):

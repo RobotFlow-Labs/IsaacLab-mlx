@@ -11,15 +11,15 @@ from collections.abc import Callable
 from dataclasses import MISSING
 from typing import TYPE_CHECKING, Any
 
-import torch
-
-from isaaclab.utils import configclass
-from isaaclab.utils.modifiers import ModifierCfg
-from isaaclab.utils.noise import NoiseCfg, NoiseModelCfg
+from isaaclab.utils.configclass import configclass
 
 from .scene_entity_cfg import SceneEntityCfg
 
 if TYPE_CHECKING:
+    import torch
+    from isaaclab.utils.modifiers import ModifierCfg
+    from isaaclab.utils.noise import NoiseCfg, NoiseModelCfg
+
     from .action_manager import ActionTerm
     from .command_manager import CommandTerm
     from .manager_base import ManagerTermBase

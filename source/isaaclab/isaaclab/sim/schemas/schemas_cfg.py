@@ -6,9 +6,14 @@
 from dataclasses import MISSING
 from typing import Literal
 
-from pxr import PhysxSchema, UsdPhysics
+from isaaclab.utils.configclass import configclass
 
-from isaaclab.utils import configclass
+_USD_MESH_COLLISION_API = "pxr.UsdPhysics:MeshCollisionAPI"
+_PHYSX_CONVEX_DECOMPOSITION_API = "pxr.PhysxSchema:PhysxConvexDecompositionCollisionAPI"
+_PHYSX_CONVEX_HULL_API = "pxr.PhysxSchema:PhysxConvexHullCollisionAPI"
+_PHYSX_TRIANGLE_MESH_API = "pxr.PhysxSchema:PhysxTriangleMeshCollisionAPI"
+_PHYSX_TRIANGLE_MESH_SIMPLIFICATION_API = "pxr.PhysxSchema:PhysxTriangleMeshSimplificationCollisionAPI"
+_PHYSX_SDF_MESH_API = "pxr.PhysxSchema:PhysxSDFMeshCollisionAPI"
 
 
 @configclass
@@ -441,14 +446,14 @@ class MeshCollisionPropertiesCfg:
         the properties and leave the rest as-is.
     """
 
-    usd_func: callable = MISSING
+    usd_func: callable | str = MISSING
     """USD API function for modifying mesh collision properties.
     Refer to
     `original USD Documentation <https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html>`_
     for more information.
     """
 
-    physx_func: callable = MISSING
+    physx_func: callable | str = MISSING
     """PhysX API function for modifying mesh collision properties.
     Refer to
     `original PhysX Documentation <https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/annotated.html>`_
@@ -463,7 +468,7 @@ class MeshCollisionPropertiesCfg:
 
 @configclass
 class BoundingCubePropertiesCfg(MeshCollisionPropertiesCfg):
-    usd_func: callable = UsdPhysics.MeshCollisionAPI
+    usd_func: callable | str = _USD_MESH_COLLISION_API
     """Original USD Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html
     """
@@ -476,7 +481,7 @@ class BoundingCubePropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class BoundingSpherePropertiesCfg(MeshCollisionPropertiesCfg):
-    usd_func: callable = UsdPhysics.MeshCollisionAPI
+    usd_func: callable | str = _USD_MESH_COLLISION_API
     """Original USD Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html
     """
@@ -489,12 +494,12 @@ class BoundingSpherePropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class ConvexDecompositionPropertiesCfg(MeshCollisionPropertiesCfg):
-    usd_func: callable = UsdPhysics.MeshCollisionAPI
+    usd_func: callable | str = _USD_MESH_COLLISION_API
     """Original USD Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html
     """
 
-    physx_func: callable = PhysxSchema.PhysxConvexDecompositionCollisionAPI
+    physx_func: callable | str = _PHYSX_CONVEX_DECOMPOSITION_API
     """Original PhysX Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_physx_schema_physx_convex_decomposition_collision_a_p_i.html
     """
@@ -538,12 +543,12 @@ class ConvexDecompositionPropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class ConvexHullPropertiesCfg(MeshCollisionPropertiesCfg):
-    usd_func: callable = UsdPhysics.MeshCollisionAPI
+    usd_func: callable | str = _USD_MESH_COLLISION_API
     """Original USD Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html
     """
 
-    physx_func: callable = PhysxSchema.PhysxConvexHullCollisionAPI
+    physx_func: callable | str = _PHYSX_CONVEX_HULL_API
     """Original PhysX Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_physx_schema_physx_convex_hull_collision_a_p_i.html
     """
@@ -567,7 +572,7 @@ class ConvexHullPropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class TriangleMeshPropertiesCfg(MeshCollisionPropertiesCfg):
-    physx_func: callable = PhysxSchema.PhysxTriangleMeshCollisionAPI
+    physx_func: callable | str = _PHYSX_TRIANGLE_MESH_API
     """Triangle mesh is only supported by PhysX API.
 
     Original PhysX Documentation:
@@ -589,12 +594,12 @@ class TriangleMeshPropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class TriangleMeshSimplificationPropertiesCfg(MeshCollisionPropertiesCfg):
-    usd_func: callable = UsdPhysics.MeshCollisionAPI
+    usd_func: callable | str = _USD_MESH_COLLISION_API
     """Original USD Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_usd_physics_mesh_collision_a_p_i.html
     """
 
-    physx_func: callable = PhysxSchema.PhysxTriangleMeshSimplificationCollisionAPI
+    physx_func: callable | str = _PHYSX_TRIANGLE_MESH_SIMPLIFICATION_API
     """Original PhysX Documentation:
     https://docs.omniverse.nvidia.com/kit/docs/omni_usd_schema_physics/latest/class_physx_schema_physx_triangle_mesh_simplification_collision_a_p_i.html
     """
@@ -619,7 +624,7 @@ class TriangleMeshSimplificationPropertiesCfg(MeshCollisionPropertiesCfg):
 
 @configclass
 class SDFMeshPropertiesCfg(MeshCollisionPropertiesCfg):
-    physx_func: callable = PhysxSchema.PhysxSDFMeshCollisionAPI
+    physx_func: callable | str = _PHYSX_SDF_MESH_API
     """SDF mesh is only supported by PhysX API.
 
     Original PhysX documentation:

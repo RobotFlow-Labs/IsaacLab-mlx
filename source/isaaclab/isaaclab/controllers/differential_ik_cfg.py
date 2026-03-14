@@ -3,19 +3,19 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from dataclasses import MISSING
 from typing import Literal
 
-from isaaclab.utils import configclass
-
-from .differential_ik import DifferentialIKController
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
 class DifferentialIKControllerCfg:
     """Configuration for differential inverse kinematics controller."""
 
-    class_type: type = DifferentialIKController
+    class_type: type | str = "isaaclab.controllers.differential_ik:DifferentialIKController"
     """The associated controller class."""
 
     command_type: Literal["position", "pose"] = MISSING

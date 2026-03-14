@@ -16,6 +16,7 @@ from omni.physx.scripts import deformableUtils as deformable_utils
 from pxr import PhysxSchema, Usd, UsdPhysics
 
 from isaaclab.sim.utils.stage import get_current_stage
+from isaaclab.utils.string import string_to_callable
 
 from ..utils import (
     apply_nested,
@@ -27,6 +28,13 @@ from . import schemas_cfg
 
 # import logger
 logger = logging.getLogger(__name__)
+
+
+def _resolve_schema_api(api_func: Callable | str) -> Callable:
+    """Resolve deferred schema callables stored in config objects."""
+    if callable(api_func):
+        return api_func
+    return string_to_callable(api_func)
 
 
 """
@@ -1027,9 +1035,9 @@ def extract_mesh_collision_api_and_attrs(
     if use_usd_api:
         # Use USD API for corresponding attributes
         # For mesh collision approximation attribute, we set it explicitly in `modify_mesh_collision_properties``
-        api_func = cfg.usd_func
+        api_func = _resolve_schema_api(cfg.usd_func)
     elif use_phsyx_api:
-        api_func = cfg.physx_func
+        api_func = _resolve_schema_api(cfg.physx_func)
     else:
         raise ValueError("Either USD or PhysX API should be used for modifying mesh collision attributes!")
 

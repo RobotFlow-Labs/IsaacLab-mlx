@@ -16,6 +16,11 @@ _SAFE_EXPORTS = {
     "RenderCfg": (".simulation_cfg", "RenderCfg"),
     "SimulationCfg": (".simulation_cfg", "SimulationCfg"),
 }
+_SAFE_MODULES = {
+    "converters": ".converters",
+    "schemas": ".schemas",
+    "spawners": ".spawners",
+}
 _ISAACSIM_EXPORTS = {
     "SimulationContext": (".simulation_context", "SimulationContext"),
     "build_simulation_context": (".simulation_context", "build_simulation_context"),
@@ -28,7 +33,7 @@ _SEARCH_MODULES = (
     ".views",
 )
 
-__all__ = [*_SAFE_EXPORTS.keys(), *_ISAACSIM_EXPORTS.keys()]
+__all__ = [*_SAFE_EXPORTS.keys(), *_SAFE_MODULES.keys(), *_ISAACSIM_EXPORTS.keys()]
 
 
 def __getattr__(name: str):
@@ -38,6 +43,12 @@ def __getattr__(name: str):
         value = getattr(module, target[1])
         globals()[name] = value
         return value
+
+    safe_module = _SAFE_MODULES.get(name)
+    if safe_module is not None:
+        module = importlib.import_module(safe_module, __name__)
+        globals()[name] = module
+        return module
 
     if current_runtime().sim_backend != "isaacsim":
         raise UnsupportedBackendError(

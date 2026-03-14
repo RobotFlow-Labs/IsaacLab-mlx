@@ -32,96 +32,75 @@ Locally, the schemas are defined in the following files:
 
 """
 
-from .schemas import (
-    MESH_APPROXIMATION_TOKENS,
-    PHYSX_MESH_COLLISION_CFGS,
-    USD_MESH_COLLISION_CFGS,
-    activate_contact_sensors,
-    define_articulation_root_properties,
-    define_collision_properties,
-    define_deformable_body_properties,
-    define_mass_properties,
-    define_mesh_collision_properties,
-    define_rigid_body_properties,
-    modify_articulation_root_properties,
-    modify_collision_properties,
-    modify_deformable_body_properties,
-    modify_fixed_tendon_properties,
-    modify_joint_drive_properties,
-    modify_mass_properties,
-    modify_mesh_collision_properties,
-    modify_rigid_body_properties,
-    modify_spatial_tendon_properties,
-)
-from .schemas_cfg import (
-    ArticulationRootPropertiesCfg,
-    BoundingCubePropertiesCfg,
-    BoundingSpherePropertiesCfg,
-    CollisionPropertiesCfg,
-    ConvexDecompositionPropertiesCfg,
-    ConvexHullPropertiesCfg,
-    DeformableBodyPropertiesCfg,
-    FixedTendonPropertiesCfg,
-    JointDrivePropertiesCfg,
-    MassPropertiesCfg,
-    MeshCollisionPropertiesCfg,
-    RigidBodyPropertiesCfg,
-    SDFMeshPropertiesCfg,
-    SpatialTendonPropertiesCfg,
-    TriangleMeshPropertiesCfg,
-    TriangleMeshSimplificationPropertiesCfg,
-)
+from __future__ import annotations
 
-__all__ = [
-    # articulation root
-    "ArticulationRootPropertiesCfg",
-    "define_articulation_root_properties",
-    "modify_articulation_root_properties",
-    # rigid bodies
-    "RigidBodyPropertiesCfg",
-    "define_rigid_body_properties",
-    "modify_rigid_body_properties",
-    "activate_contact_sensors",
-    # colliders
-    "CollisionPropertiesCfg",
-    "define_collision_properties",
-    "modify_collision_properties",
-    # deformables
-    "DeformableBodyPropertiesCfg",
-    "define_deformable_body_properties",
-    "modify_deformable_body_properties",
-    # joints
-    "JointDrivePropertiesCfg",
-    "modify_joint_drive_properties",
-    # mass
-    "MassPropertiesCfg",
-    "define_mass_properties",
-    "modify_mass_properties",
-    # mesh colliders
-    "MeshCollisionPropertiesCfg",
-    "define_mesh_collision_properties",
-    "modify_mesh_collision_properties",
-    # bounding cube
-    "BoundingCubePropertiesCfg",
-    # bounding sphere
-    "BoundingSpherePropertiesCfg",
-    # convex decomposition
-    "ConvexDecompositionPropertiesCfg",
-    # convex hull
-    "ConvexHullPropertiesCfg",
-    # sdf mesh
-    "SDFMeshPropertiesCfg",
-    # triangle mesh
-    "TriangleMeshPropertiesCfg",
-    # triangle mesh simplification
-    "TriangleMeshSimplificationPropertiesCfg",
-    # tendons
-    "FixedTendonPropertiesCfg",
-    "SpatialTendonPropertiesCfg",
-    "modify_fixed_tendon_properties",
-    "modify_spatial_tendon_properties",
-    # Constants for configs that use PhysX vs USD API
-    "PHYSX_MESH_COLLISION_CFGS",
-    "USD_MESH_COLLISION_CFGS",
-    "MESH_APPROXIMATION_TOKENS",
-]
+import importlib
+
+from isaaclab.backends import UnsupportedBackendError, current_runtime
+
+_SAFE_EXPORTS = {
+    "ArticulationRootPropertiesCfg": (".schemas_cfg", "ArticulationRootPropertiesCfg"),
+    "BoundingCubePropertiesCfg": (".schemas_cfg", "BoundingCubePropertiesCfg"),
+    "BoundingSpherePropertiesCfg": (".schemas_cfg", "BoundingSpherePropertiesCfg"),
+    "CollisionPropertiesCfg": (".schemas_cfg", "CollisionPropertiesCfg"),
+    "ConvexDecompositionPropertiesCfg": (".schemas_cfg", "ConvexDecompositionPropertiesCfg"),
+    "ConvexHullPropertiesCfg": (".schemas_cfg", "ConvexHullPropertiesCfg"),
+    "DeformableBodyPropertiesCfg": (".schemas_cfg", "DeformableBodyPropertiesCfg"),
+    "FixedTendonPropertiesCfg": (".schemas_cfg", "FixedTendonPropertiesCfg"),
+    "JointDrivePropertiesCfg": (".schemas_cfg", "JointDrivePropertiesCfg"),
+    "MassPropertiesCfg": (".schemas_cfg", "MassPropertiesCfg"),
+    "MeshCollisionPropertiesCfg": (".schemas_cfg", "MeshCollisionPropertiesCfg"),
+    "RigidBodyPropertiesCfg": (".schemas_cfg", "RigidBodyPropertiesCfg"),
+    "SDFMeshPropertiesCfg": (".schemas_cfg", "SDFMeshPropertiesCfg"),
+    "SpatialTendonPropertiesCfg": (".schemas_cfg", "SpatialTendonPropertiesCfg"),
+    "TriangleMeshPropertiesCfg": (".schemas_cfg", "TriangleMeshPropertiesCfg"),
+    "TriangleMeshSimplificationPropertiesCfg": (".schemas_cfg", "TriangleMeshSimplificationPropertiesCfg"),
+}
+_ISAACSIM_EXPORTS = {
+    "MESH_APPROXIMATION_TOKENS": (".schemas", "MESH_APPROXIMATION_TOKENS"),
+    "PHYSX_MESH_COLLISION_CFGS": (".schemas", "PHYSX_MESH_COLLISION_CFGS"),
+    "USD_MESH_COLLISION_CFGS": (".schemas", "USD_MESH_COLLISION_CFGS"),
+    "activate_contact_sensors": (".schemas", "activate_contact_sensors"),
+    "define_articulation_root_properties": (".schemas", "define_articulation_root_properties"),
+    "define_collision_properties": (".schemas", "define_collision_properties"),
+    "define_deformable_body_properties": (".schemas", "define_deformable_body_properties"),
+    "define_mass_properties": (".schemas", "define_mass_properties"),
+    "define_mesh_collision_properties": (".schemas", "define_mesh_collision_properties"),
+    "define_rigid_body_properties": (".schemas", "define_rigid_body_properties"),
+    "modify_articulation_root_properties": (".schemas", "modify_articulation_root_properties"),
+    "modify_collision_properties": (".schemas", "modify_collision_properties"),
+    "modify_deformable_body_properties": (".schemas", "modify_deformable_body_properties"),
+    "modify_fixed_tendon_properties": (".schemas", "modify_fixed_tendon_properties"),
+    "modify_joint_drive_properties": (".schemas", "modify_joint_drive_properties"),
+    "modify_mass_properties": (".schemas", "modify_mass_properties"),
+    "modify_mesh_collision_properties": (".schemas", "modify_mesh_collision_properties"),
+    "modify_rigid_body_properties": (".schemas", "modify_rigid_body_properties"),
+    "modify_spatial_tendon_properties": (".schemas", "modify_spatial_tendon_properties"),
+}
+
+__all__ = [*_SAFE_EXPORTS.keys(), *_ISAACSIM_EXPORTS.keys()]
+
+
+def __getattr__(name: str):
+    target = _SAFE_EXPORTS.get(name)
+    if target is not None:
+        module = importlib.import_module(target[0], __name__)
+        value = getattr(module, target[1])
+        globals()[name] = value
+        return value
+
+    if current_runtime().sim_backend != "isaacsim":
+        raise UnsupportedBackendError(
+            f"`isaaclab.sim.schemas.{name}` currently requires `sim-backend=isaacsim`."
+            " Schema configuration objects are available in the `mac-sim` bootstrap path, but USD/PhysX schema"
+            " mutation utilities remain Isaac Sim only."
+        )
+
+    target = _ISAACSIM_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module = importlib.import_module(target[0], __name__)
+    value = getattr(module, target[1])
+    globals()[name] = value
+    return value

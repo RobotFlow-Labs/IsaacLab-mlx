@@ -20,6 +20,7 @@ from prettytable import PrettyTable
 import omni.kit.app
 
 from isaaclab.envs.utils.io_descriptors import GenericActionIODescriptor
+from isaaclab.utils.string import string_to_callable
 
 from .manager_base import ManagerBase, ManagerTermBase
 from .manager_term_cfg import ActionTermCfg
@@ -445,6 +446,8 @@ class ActionManager(ManagerBase):
                     f"Configuration for the term '{term_name}' is not of type ActionTermCfg."
                     f" Received: '{type(term_cfg)}'."
                 )
+            if isinstance(term_cfg.class_type, str):
+                term_cfg.class_type = string_to_callable(term_cfg.class_type)
             # create the action term
             term = term_cfg.class_type(term_cfg, self._env)
             # sanity check if term is valid type

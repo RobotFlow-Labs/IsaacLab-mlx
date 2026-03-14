@@ -230,6 +230,9 @@ def benchmark_train_cartpole(
 def main() -> int:
     """Run the requested benchmarks and optionally write JSON output."""
     args = parse_args()
+    args.artifact_dir.mkdir(parents=True, exist_ok=True)
+    if args.json_out is None:
+        args.json_out = args.artifact_dir / "benchmark-results.json"
     results = {
         "platform": {
             "system": platform.system(),
@@ -260,9 +263,8 @@ def main() -> int:
 
     output = json.dumps(results, indent=2, sort_keys=True)
     print(output)
-    if args.json_out is not None:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(output + "\n", encoding="utf-8")
+    args.json_out.parent.mkdir(parents=True, exist_ok=True)
+    args.json_out.write_text(output + "\n", encoding="utf-8")
     return 0
 
 
