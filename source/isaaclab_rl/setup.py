@@ -9,7 +9,7 @@ import itertools
 import os
 
 import toml
-from setuptools import setup
+from setuptools import find_packages, setup
 
 # Obtain the extension data from the extension.toml file
 EXTENSION_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -71,7 +71,7 @@ setup(
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     extras_require=EXTRAS_REQUIRE,
-    packages=["isaaclab_rl"],
+    packages=find_packages(include=["isaaclab_rl", "isaaclab_rl.*"]),
     classifiers=[
         "Natural Language :: English",
         "Programming Language :: Python :: 3.10",

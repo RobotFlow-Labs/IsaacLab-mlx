@@ -117,7 +117,15 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --episodes 3
 ```
 
-### 4. Run the focused backend test suite
+### 4. Run cart-double-pendulum MARL smoke
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py \
+  --num-envs 64 --episodes 3 --max-steps 10000 --random-actions
+```
+
+### 5. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
@@ -153,11 +161,14 @@ Important constraint: `AppLauncher` itself still only launches the upstream Isaa
 
 ## Implemented MLX Vertical Slice
 
-The current vertical slice is cartpole:
+Current implemented slices:
 
-- environment config: [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
-- trainer entrypoint: [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
-- replay entrypoint: [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- cartpole environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/cartpole.py`](source/isaaclab/isaaclab/backends/mac_sim/cartpole.py)
+- cartpole showcase space variants in [`source/isaaclab/isaaclab/backends/mac_sim/showcase.py`](source/isaaclab/isaaclab/backends/mac_sim/showcase.py)
+- cart-double-pendulum MARL environment in [`source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py`](source/isaaclab/isaaclab/backends/mac_sim/cart_double_pendulum.py)
+- cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
+- cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
 
 The cartpole path preserves the important upstream task semantics:
 
@@ -166,6 +177,7 @@ The cartpole path preserves the important upstream task semantics:
 - termination conditions remain cart out-of-bounds or pole angle exceeding `pi/2`
 - reset sampling keeps the pole-angle randomization behavior
 - observations returned after done/reset are post-reset observations, matching the upstream direct RL flow
+- cart-double-pendulum preserves per-agent dict observations/rewards/dones for `cart` and `pendulum`
 
 ## Bootstrapping Upstream Sources
 
