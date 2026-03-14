@@ -5,10 +5,17 @@
 
 import os
 
-from isaacsim.core.utils.extensions import get_extension_path_from_name
+from isaaclab.controllers.rmp_flow_cfg import RmpFlowControllerCfg
 
-from isaaclab.controllers.rmp_flow import RmpFlowControllerCfg
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+try:
+    from isaacsim.core.utils.extensions import get_extension_path_from_name
+except Exception:
+    get_extension_path_from_name = None
+
+try:
+    from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+except Exception:
+    ISAACLAB_NUCLEUS_DIR = ""
 
 # Directory on Nucleus Server for RMP-Flow assets (URDFs, collision models, etc.)
 ISAACLAB_NUCLEUS_RMPFLOW_DIR = os.path.join(ISAACLAB_NUCLEUS_DIR, "Controllers", "RmpFlowAssets")
@@ -16,10 +23,9 @@ ISAACLAB_NUCLEUS_RMPFLOW_DIR = os.path.join(ISAACLAB_NUCLEUS_DIR, "Controllers",
 # Note: RMP-Flow config files for supported robots are stored in the motion_generation extension
 # We need to move it here for doc building purposes.
 try:
-    _RMP_CONFIG_DIR = os.path.join(
-        get_extension_path_from_name("isaacsim.robot_motion.motion_generation"),
-        "motion_policy_configs",
-    )
+    if get_extension_path_from_name is None:
+        raise ModuleNotFoundError("Isaac Sim extensions are unavailable.")
+    _RMP_CONFIG_DIR = os.path.join(get_extension_path_from_name("isaacsim.robot_motion.motion_generation"), "motion_policy_configs")
 except Exception:
     _RMP_CONFIG_DIR = ""
 

@@ -20,8 +20,6 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # generic
     "numpy<2",
-    "torch>=2.7",
-    "torchvision>=0.14.1",  # ensure compatibility with torch 1.13.1
     "protobuf>=4.25.8,!=5.26.0",
     # configuration management
     "hydra-core",
@@ -37,16 +35,27 @@ INSTALL_REQUIRES = [
 ]
 
 PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu128"]
+TORCH_DEPENDENCIES = [
+    "torch>=2.7",
+    "torchvision>=0.14.1",  # ensure compatibility with torch 1.13.1
+]
 
 # Extra dependencies for RL agents
 EXTRAS_REQUIRE = {
-    "sb3": ["stable-baselines3>=2.6", "tqdm", "rich"],  # tqdm/rich for progress bar
+    "torch": TORCH_DEPENDENCIES,
+    "sb3": [*TORCH_DEPENDENCIES, "stable-baselines3>=2.6", "tqdm", "rich"],  # tqdm/rich for progress bar
     "skrl": ["skrl>=1.4.3"],
     "rl-games": [
+        *TORCH_DEPENDENCIES,
         "rl-games @ git+https://github.com/isaac-sim/rl_games.git@python3.11",
         "gym",
     ],  # rl-games still needs gym :(
-    "rsl-rl": ["rsl-rl-lib==5.0.1", "onnxscript>=0.5"],  # linux aarch 64 requires manual onnxscript installation
+    "rsl-rl": [
+        *TORCH_DEPENDENCIES,
+        "rsl-rl-lib==5.0.1",
+        "onnxscript>=0.5",
+    ],  # linux aarch 64 requires manual onnxscript installation
+    "dev": ["pytest", "pytest-mock"],
 }
 # Add the names with hyphens as aliases for convenience
 EXTRAS_REQUIRE["rl_games"] = EXTRAS_REQUIRE["rl-games"]

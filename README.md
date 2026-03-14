@@ -145,6 +145,15 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --updates 50
 ```
 
+The torch-centric RL wrapper extension is now optional. If you need upstream SB3, rl-games, or RSL-RL wrappers, install them separately from the MLX path:
+
+```bash
+uv pip install --python .venv/bin/python -e source/isaaclab_rl[sb3]
+uv pip install --python .venv/bin/python -e source/isaaclab_rl[rsl-rl]
+```
+
+For the MLX/mac-sim task slices documented in this fork, `source/isaaclab_rl` is not required.
+
 ### 4. Run cart-double-pendulum MARL smoke
 
 ```bash
