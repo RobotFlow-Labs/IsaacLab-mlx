@@ -8,9 +8,13 @@
 from __future__ import annotations
 
 import math
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 import mlx.core as mx
+import mlx.nn as nn
+import mlx.optimizers as optim
 
 from isaaclab.backends.runtime import (
     ArticulationCapabilities,
@@ -20,10 +24,43 @@ from isaaclab.backends.runtime import (
     resolve_runtime_selection,
     set_runtime_selection,
 )
+from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import MacFrankaLiftEnvCfg, MacFrankaReachEnvCfg
+from .ppo_training import (
+    build_checkpoint_metadata,
+    compute_gae,
+    mean_recent_return,
+    normalize_advantages,
+    play_gaussian_policy_checkpoint,
+    resolve_resume_hidden_dim,
+    save_policy_checkpoint,
+)
 from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState
+
+LOG_2_PI = math.log(2.0 * math.pi)
+
+
+@configclass
+class MacFrankaReachTrainCfg:
+    """Training configuration for the MLX Franka reach slice."""
+
+    env: MacFrankaReachEnvCfg = MacFrankaReachEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.25
+    checkpoint_path: str = "logs/mlx/franka_reach_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
 
 
 def _franka_end_effector_position(joint_pos: mx.array) -> mx.array:
@@ -403,3 +440,205 @@ class MacFrankaLiftEnv(MacFrankaReachEnv):
         success = self.sim_backend.lift_success()
         time_out = self.episode_length_buf >= self.max_episode_length
         return success, time_out
+
+
+class MacFrankaReachPolicy(nn.Module):
+    """Small Gaussian PPO policy/value network for the Franka reach slice."""
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+        super().__init__()
+        self.backbone = [
+            nn.Linear(obs_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
+        ]
+        self.policy_head = nn.Linear(hidden_dim, action_dim)
+        self.value_head = nn.Linear(hidden_dim, 1)
+
+    def __call__(self, obs: mx.array) -> tuple[mx.array, mx.array]:
+        x = obs
+        for layer in self.backbone:
+            x = nn.elu(layer(x))
+        return self.policy_head(x), self.value_head(x).squeeze(-1)
+
+
+def _gaussian_log_probs(actions: mx.array, mean: mx.array, std: float) -> mx.array:
+    variance = std * std
+    return -0.5 * mx.sum(mx.square(actions - mean) / variance + math.log(variance) + LOG_2_PI, axis=-1)
+
+
+def _gaussian_entropy(action_dim: int, std: float) -> float:
+    return action_dim * (0.5 + 0.5 * LOG_2_PI + math.log(std))
+
+
+def _ppo_loss(
+    model: MacFrankaReachPolicy,
+    obs: mx.array,
+    actions: mx.array,
+    old_log_probs: mx.array,
+    advantages: mx.array,
+    returns: mx.array,
+    clip_epsilon: float,
+    value_loss_coef: float,
+    entropy_coef: float,
+    action_std: float,
+) -> mx.array:
+    mean, values = model(obs)
+    log_probs = _gaussian_log_probs(actions, mean, action_std)
+    ratio = mx.exp(log_probs - old_log_probs)
+    clipped_ratio = mx.clip(ratio, 1.0 - clip_epsilon, 1.0 + clip_epsilon)
+    policy_loss = -mx.mean(mx.minimum(ratio * advantages, clipped_ratio * advantages))
+    value_loss = 0.5 * mx.mean(mx.square(returns - values))
+    entropy_bonus = _gaussian_entropy(actions.shape[1], action_std)
+    return policy_loss + value_loss_coef * value_loss - entropy_coef * entropy_bonus
+
+
+def train_franka_reach_policy(cfg: MacFrankaReachTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka reach policy on the mac-native MLX slice."""
+
+    mx.random.seed(cfg.env.seed)
+    cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
+    env = MacFrankaReachEnv(cfg.env)
+    model = MacFrankaReachPolicy(
+        obs_dim=cfg.env.observation_space,
+        hidden_dim=cfg.hidden_dim,
+        action_dim=cfg.env.action_space,
+    )
+    optimizer = optim.Adam(learning_rate=cfg.learning_rate)
+    loss_and_grad = nn.value_and_grad(model, _ppo_loss)
+    resumed_from = None
+    if cfg.resume_from:
+        resume_path = Path(cfg.resume_from)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Checkpoint to resume from does not exist: {resume_path}")
+        model.load_weights(str(resume_path))
+        resumed_from = str(resume_path)
+    mx.eval(model.parameters())
+
+    obs = env.reset()[0]["policy"]
+    completed_returns: list[float] = []
+
+    for update in range(cfg.updates):
+        obs_rollout = []
+        actions_rollout = []
+        log_probs_rollout = []
+        rewards_rollout = []
+        terminated_rollout = []
+        values_rollout = []
+        bootstrap_obs_rollout = []
+
+        for _ in range(cfg.rollout_steps):
+            mean, values = model(obs)
+            noise = mx.random.normal(shape=mean.shape).astype(mx.float32)
+            actions = mx.clip(mean + cfg.action_std * noise, -1.0, 1.0)
+            next_obs, reward, terminated, _, extras = env.step(actions)
+            bootstrap_obs = next_obs["policy"]
+            if extras.get("reset_env_ids"):
+                ids = mx.array(extras["reset_env_ids"], dtype=mx.int32)
+                bootstrap_obs = bootstrap_obs + 0.0
+                bootstrap_obs[ids] = extras["final_policy_observations"]
+
+            obs_rollout.append(obs)
+            actions_rollout.append(actions)
+            log_probs_rollout.append(_gaussian_log_probs(actions, mean, cfg.action_std))
+            rewards_rollout.append(reward)
+            terminated_rollout.append(terminated.astype(mx.float32))
+            values_rollout.append(values)
+            bootstrap_obs_rollout.append(bootstrap_obs)
+            obs = next_obs["policy"]
+
+            if extras.get("completed_returns"):
+                completed_returns.extend(extras["completed_returns"])
+
+        rewards_t = mx.stack(rewards_rollout)
+        terminated_t = mx.stack(terminated_rollout)
+        values_t = mx.stack(values_rollout)
+        flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, cfg.env.observation_space))
+        _, flat_next_values = model(flat_bootstrap_obs)
+        next_values_t = mx.reshape(flat_next_values, (cfg.rollout_steps, cfg.env.num_envs))
+        advantages, returns = compute_gae(
+            rewards_t,
+            terminated_t,
+            values_t,
+            next_values_t,
+            gamma=cfg.gamma,
+            gae_lambda=cfg.gae_lambda,
+        )
+
+        flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
+        flat_actions = mx.reshape(mx.stack(actions_rollout), (-1, cfg.env.action_space))
+        flat_log_probs = mx.reshape(mx.stack(log_probs_rollout), (-1,))
+        flat_advantages = mx.reshape(advantages, (-1,))
+        flat_returns = mx.reshape(returns, (-1,))
+        flat_advantages = normalize_advantages(flat_advantages)
+
+        for _ in range(cfg.epochs_per_update):
+            loss, grads = loss_and_grad(
+                model,
+                flat_obs,
+                flat_actions,
+                flat_log_probs,
+                flat_advantages,
+                flat_returns,
+                cfg.clip_epsilon,
+                cfg.value_loss_coef,
+                cfg.entropy_coef,
+                cfg.action_std,
+            )
+            optimizer.update(model, grads)
+            mx.eval(loss, model.state, optimizer.state)
+
+        if (update + 1) % cfg.eval_interval == 0 or update == 0 or update == cfg.updates - 1:
+            mean_reward = float(mx.mean(rewards_t).item())
+            mean_return = mean_recent_return(completed_returns)
+            print(
+                f"[mlx-franka-reach] update={update + 1}/{cfg.updates} "
+                f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
+            )
+
+    checkpoint_path, metadata_path = save_policy_checkpoint(
+        model,
+        cfg.checkpoint_path,
+        build_checkpoint_metadata(
+            hidden_dim=cfg.hidden_dim,
+            observation_space=cfg.env.observation_space,
+            action_space=cfg.env.action_space,
+            task_id="Isaac-Reach-Franka-v0",
+            policy_distribution="gaussian",
+            action_std=cfg.action_std,
+            train_cfg=asdict(cfg),
+        ),
+    )
+    return {
+        "checkpoint_path": checkpoint_path,
+        "metadata_path": metadata_path,
+        "resumed_from": resumed_from,
+        "train_cfg": asdict(cfg),
+        "completed_episodes": len(completed_returns),
+        "mean_recent_return": mean_recent_return(completed_returns),
+    }
+
+
+def play_franka_reach_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaReachEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Franka reach policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaReachEnvCfg(num_envs=1)
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=MacFrankaReachEnv,
+        env_cfg=cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )

@@ -39,7 +39,7 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` ANYmal-C rough locomotion slice with procedural wave terrain, analytic terrain raycasts, and deterministic replay coverage
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
-- eval-ready `MLX + mac-sim` Franka reach and Franka cube-lift slices with deterministic analytic kinematics and lightweight grasp logic
+- a trainable `MLX + mac-sim` Franka reach slice plus an eval-ready Franka cube-lift slice with deterministic analytic kinematics and lightweight grasp logic
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i
 - a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
@@ -306,11 +306,31 @@ Additional eval/manual slices exposed through the same API:
 
 ```python
 rough_payload = evaluate_mlx_task("anymal-c-rough", num_envs=32, episodes=2)
+reach_train_payload = train_mlx_task("franka-reach", num_envs=64, updates=5)
 reach_payload = evaluate_mlx_task("franka-reach", num_envs=32, episodes=2)
 lift_payload = evaluate_mlx_task("franka-lift", num_envs=32, episodes=2)
 ```
 
-### 9. Probe the backend-local mac camera path
+### 9. Train and replay the Franka reach slice
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_franka_reach.py \
+  --num-envs 128 \
+  --updates 10 \
+  --rollout-steps 24 \
+  --epochs-per-update 2 \
+  --checkpoint logs/mlx/franka_reach_policy.npz
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_franka_reach.py \
+  --checkpoint logs/mlx/franka_reach_policy.npz \
+  --episodes 3
+```
+
+### 10. Probe the backend-local mac camera path
 
 The fork now also ships backend-local macOS camera tools for external stereo devices. These do not depend on Isaac Sim or the Omniverse camera stack.
 
@@ -337,7 +357,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 The current live-camera validation path is intentionally separated from the main CI ring because camera ownership and TCC permissions depend on the host app. The software path is still fully test-backed through synthetic stereo dumps.
 
-### 10. Run the focused backend test suite
+### 11. Run the focused backend test suite
 
 ```bash
 PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
@@ -496,7 +516,7 @@ Current task capability matrix:
 | `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
 | `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain plus analytic terrain raycasts |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
-| `Isaac-Reach-Franka-v0` | No | Yes | `current-mac-native` | No | Analytic joint-space reach slice, public eval/manual path |
+| `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
 | `Isaac-Lift-Cube-Franka-v0` | No | Yes | `current-mac-native` | No | Analytic lift slice with lightweight grasp logic, public eval/manual path |
 
 Implementation entrypoints:
@@ -529,7 +549,7 @@ The cartpole path preserves the important upstream task semantics:
 - ANYmal-C preserves a command-tracking locomotion observation layout with flat-terrain contacts, base-contact termination, and MLX PPO smoke coverage
 - ANYmal-C rough preserves the same command-tracking layout while swapping in procedural wave terrain and analytic terrain raycasts for deterministic rough-terrain evaluation
 - H1 flat preserves a 19-DOF command-driven locomotion observation layout with contact-aware reward terms, base-contact termination, and MLX PPO smoke coverage
-- Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics suitable for eval/manual bring-up
+- Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics and now exposes checkpointed MLX PPO training/replay
 - Franka lift preserves deterministic cube placement, lightweight grasp state, and explicit lift-success semantics suitable for eval/manual bring-up
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows correspond to `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks

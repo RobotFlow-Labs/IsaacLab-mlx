@@ -35,8 +35,9 @@ def test_public_mlx_task_lists_are_stable():
         "franka-reach",
         "franka-lift",
     )
-    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat")
+    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach")
     assert get_mlx_task_spec("h1-flat").default_hidden_dim == 192
+    assert get_mlx_task_spec("franka-reach").default_hidden_dim == 128
 
 
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
@@ -143,6 +144,39 @@ def test_evaluate_franka_reach_and_lift_manual_via_public_mlx_wrapper():
     assert lift_payload["episodes_completed"] == 1
 
 
+def test_train_and_evaluate_franka_reach_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for the first manipulation task."""
+
+    checkpoint_path = tmp_path / "franka-reach-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "franka-reach",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=41,
+    )
+    eval_payload = evaluate_mlx_task(
+        "franka-reach",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=41,
+    )
+
+    assert train_payload["task"] == "franka-reach"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "franka-reach"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
 def test_public_mlx_wrapper_rejects_non_trainable_tasks():
     """The wrapper should fail explicitly when training is requested for eval-only tasks."""
     with pytest.raises(ValueError, match="does not expose an MLX training surface"):
@@ -167,7 +201,7 @@ def test_public_mlx_wrapper_rejects_checkpoint_for_eval_only_tasks():
         evaluate_mlx_task("cart-double-pendulum", checkpoint="logs/mlx/cart_double_policy.npz")
 
     with pytest.raises(ValueError, match="does not expose checkpoint replay"):
-        evaluate_mlx_task("franka-reach", checkpoint="logs/mlx/franka_reach_policy.npz")
+        evaluate_mlx_task("franka-lift", checkpoint="logs/mlx/franka_lift_policy.npz")
 
 
 def test_public_mlx_wrapper_honors_short_episode_length_for_cart_double_pendulum():

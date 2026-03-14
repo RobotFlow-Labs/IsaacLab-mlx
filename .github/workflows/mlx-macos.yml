@@ -304,6 +304,14 @@ jobs:
           --task franka-reach \
           --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
 
+    - name: Run MLX Franka reach training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task franka-reach \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/franka_reach_policy.npz --eval-interval 1
+
     - name: Run MLX Franka lift smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -322,18 +330,28 @@ jobs:
     - name: Run public MLX wrapper smoke
       run: |
         PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/python - <<'PY'
-        from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks
+        from isaaclab_rl.mlx import evaluate_mlx_task, list_mlx_tasks, train_mlx_task
 
         assert "h1-flat" in list_mlx_tasks()
         assert "franka-reach" in list_mlx_tasks()
         assert "franka-lift" in list_mlx_tasks()
-        payload = evaluate_mlx_task(
+        train_payload = train_mlx_task(
             "franka-reach",
             num_envs=8,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            hidden_dim=32,
+            checkpoint="logs/mlx/franka_reach_wrapper_policy.npz",
+            eval_interval=1,
+            episode_length_s=0.5,
+            seed=31,
+        )
+        payload = evaluate_mlx_task(
+            "franka-reach",
+            checkpoint=train_payload["checkpoint_path"],
             episodes=1,
             episode_length_s=0.5,
-            max_steps=512,
-            random_actions=False,
             seed=31,
         )
         assert payload["episodes_completed"] == 1
