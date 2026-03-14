@@ -282,3 +282,39 @@ def test_mac_sim_sensor_exports_fail_with_clear_backend_error():
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         _ = sensors.Camera
+
+
+def test_mac_sim_manager_exports_fail_with_clear_backend_error():
+    """Import-time manager access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    managers = importlib.import_module("isaaclab.managers")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = managers.ActionManager
+
+
+def test_mac_sim_controller_exports_fail_with_clear_backend_error():
+    """Import-time controller access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    controllers = importlib.import_module("isaaclab.controllers")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = controllers.DifferentialIKController
+
+
+def test_mac_sim_device_exports_fail_with_clear_backend_error():
+    """Import-time device access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    devices = importlib.import_module("isaaclab.devices")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = devices.Se2Keyboard
+
+
+def test_mac_sim_scene_exports_fail_with_clear_backend_error():
+    """Import-time scene access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    scene = importlib.import_module("isaaclab.scene")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = scene.InteractiveScene
