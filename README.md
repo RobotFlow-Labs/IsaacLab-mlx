@@ -30,7 +30,7 @@ This fork exists to close that gap:
 What works today:
 
 - runtime/backend selection seam for `torch-cuda|mlx` and `isaacsim|mac-sim`
-- lazy import boundaries in `envs`, `sim`, `assets`, `sensors`, `managers`, `controllers`, `devices`, and `scene` so the macOS path fails explicitly instead of exploding on missing `omni.*`
+- lazy import boundaries in `envs`, `sim`, `assets`, `sensors`, `managers`, `controllers`, `devices`, `scene`, and `markers` so the macOS path fails explicitly instead of exploding on missing `omni.*`
 - reproducible source bootstrap script for upstream repositories
 - a runnable `MLX + mac-sim` cartpole vertical slice
 - cartpole showcase variants covering Box, Discrete, MultiDiscrete, Tuple, and Dict spaces

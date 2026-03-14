@@ -347,3 +347,12 @@ def test_mac_sim_scene_exports_fail_with_clear_backend_error():
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         _ = scene.InteractiveScene
+
+
+def test_mac_sim_marker_exports_fail_with_clear_backend_error():
+    """Import-time marker access on mac-sim should raise a backend error instead of importing Omniverse modules."""
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    markers = importlib.import_module("isaaclab.markers")
+
+    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
+        _ = markers.VisualizationMarkers
