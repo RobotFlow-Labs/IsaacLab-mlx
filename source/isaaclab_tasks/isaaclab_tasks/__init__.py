@@ -36,32 +36,7 @@ __version__ = ISAACLAB_TASKS_METADATA["package"]["version"]
 
 from .utils.importer import import_packages
 
-# The blacklist is used to prevent importing configs from sub-packages
-# TODO(@ashwinvk): Remove pick_place from the blacklist once pinocchio from Isaac Sim is compatibility
-_BLACKLIST_PKGS = ["utils", ".mdp", "pick_place", "direct.humanoid_amp.motions"]
-_MAC_SAFE_TASK_SPECS = (
-    {
-        "id": "Isaac-Cartpole-Direct-v0",
-        "entry_point": "isaaclab.backends.mac_sim:MacCartpoleEnv",
-        "kwargs": {
-            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacCartpoleEnvCfg",
-        },
-    },
-    {
-        "id": "Isaac-Cart-Double-Pendulum-Direct-v0",
-        "entry_point": "isaaclab.backends.mac_sim:MacCartDoublePendulumEnv",
-        "kwargs": {
-            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacCartDoublePendulumEnvCfg",
-        },
-    },
-    {
-        "id": "Isaac-Quadcopter-Direct-v0",
-        "entry_point": "isaaclab.backends.mac_sim:MacQuadcopterEnv",
-        "kwargs": {
-            "env_cfg_entry_point": "isaaclab.backends.mac_sim:MacQuadcopterEnvCfg",
-        },
-    },
-)
+from .registry import ISAACSIM_ONLY_TASK_SPECS, LAZY_IMPORT_BLACKLIST, MAC_SAFE_TASK_SPECS
 
 
 def _register_gym_specs(specs: tuple[dict[str, object], ...]) -> None:
@@ -79,11 +54,13 @@ def _register_gym_specs(specs: tuple[dict[str, object], ...]) -> None:
 
 def register_tasks() -> None:
     """Register task packages appropriate for the active runtime."""
+    _register_gym_specs(ISAACSIM_ONLY_TASK_SPECS)
+
     if current_runtime().sim_backend == "isaacsim":
-        import_packages(__name__, _BLACKLIST_PKGS)
+        import_packages(__name__, LAZY_IMPORT_BLACKLIST)
         return
 
-    _register_gym_specs(_MAC_SAFE_TASK_SPECS)
+    _register_gym_specs(MAC_SAFE_TASK_SPECS)
 
 
 register_tasks()

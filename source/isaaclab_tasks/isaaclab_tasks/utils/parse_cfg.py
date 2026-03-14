@@ -16,6 +16,10 @@ from typing import TYPE_CHECKING
 
 import gymnasium as gym
 
+from isaaclab.backends import UnsupportedBackendError, current_runtime
+
+from isaaclab_tasks.registry import RUNTIME_REQUIREMENTS_KEY
+
 try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover - optional dependency on the MLX/mac path
@@ -63,12 +67,14 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
         ValueError: If the entry point key is not available in the gym registry for the task.
     """
     # obtain the configuration entry point
-    cfg_entry_point = gym.spec(task_name.split(":")[-1]).kwargs.get(entry_point_key)
+    spec = gym.spec(task_name.split(":")[-1])
+    _require_runtime_support(spec)
+    cfg_entry_point = spec.kwargs.get(entry_point_key)
     # check if entry point exists
     if cfg_entry_point is None:
         # get existing agents and algorithms
         agents = collections.defaultdict(list)
-        for k in gym.spec(task_name.split(":")[-1]).kwargs:
+        for k in spec.kwargs:
             if k.endswith("_cfg_entry_point") and k != "env_cfg_entry_point":
                 spec = (
                     k.replace("_cfg_entry_point", "")
@@ -173,6 +179,22 @@ def parse_env_cfg(
             cfg.num_envs = num_envs
 
     return cfg
+
+
+def _require_runtime_support(spec: gym.envs.registration.EnvSpec) -> None:
+    """Raise a backend error before resolving config entry points for unsupported runtimes."""
+    requirements = spec.kwargs.get(RUNTIME_REQUIREMENTS_KEY)
+    if not requirements:
+        return
+
+    runtime = current_runtime()
+    allowed_sim_backends = requirements.get("sim_backends")
+    if allowed_sim_backends and runtime.sim_backend not in allowed_sim_backends:
+        allowed = "|".join(allowed_sim_backends)
+        raise UnsupportedBackendError(
+            f"Task '{spec.id}' currently requires sim-backend={allowed}. "
+            f"The active runtime is sim-backend={runtime.sim_backend}."
+        )
 
 
 def get_checkpoint_path(

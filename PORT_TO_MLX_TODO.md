@@ -60,6 +60,7 @@ without pausing for replanning after every small success.
 - `DONE` `isaaclab_tasks` lazy mac task registry for cartpole, cart-double-pendulum, and quadcopter
 - `DONE` clean MLX/mac base install no longer pulls `torch`, `onnx`, `hidapi`, `transformers`, `starlette`, `tensorboard`, `numba`, or `moviepy`
 - `DONE` shared config/helper imports for `envs.common`, `utils.noise`, `utils.io`, `utils.types`, and `envs.utils.spaces` are now torch-free on the mac bootstrap path
+- `DONE` a first static manifest now keeps AutoMate, Factory, FORGE, Franka Cabinet, and manager-based pick-place task IDs discoverable on mac while gating them behind explicit `sim-backend=isaacsim` errors
 
 ## Phase A: Import And Packaging Safety
 
@@ -172,6 +173,9 @@ without pausing for replanning after every small success.
 - Acceptance:
   - task packages expose config/registration surfaces without importing `warp`, `carb`, `pxr`, or `isaacsim`
   - runtime-only backends load on demand behind capability checks
+- Progress:
+  - static manifest/gating completed for AutoMate, Factory, FORGE, Franka Cabinet, and manager-based pick-place
+  - remaining high-value families include shadow-hand vision and additional manager-based manipulation/locomanipulation clusters
 
 ### MLX-PKG-001
 
