@@ -450,10 +450,92 @@ def _franka_cabinet_step_impl(
     )
 
 
+def _franka_stack_rgb_step_impl(
+    middle_cube_pos_w: mx.array,
+    top_cube_pos_w: mx.array,
+    support_cube_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    middle_grasped: mx.array,
+    top_grasped: mx.array,
+    middle_stacked: mx.array,
+    top_stacked: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    stack_release_open_threshold: float,
+    grasp_distance_threshold: float,
+    grasp_offset_z: float,
+    table_height: float,
+    stack_offset_z: float,
+    stack_xy_threshold: float,
+    stack_z_threshold: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array, mx.array, mx.array, mx.array]:
+    gripper_target = mx.where(gripper_action < 0.0, gripper_lower_limit, gripper_upper_limit).astype(mx.float32)
+    gripper_velocity = (gripper_target - gripper_joint_pos) / physics_dt
+    use_top_cube = middle_stacked
+
+    active_cube_pos = mx.where(use_top_cube[:, None], top_cube_pos_w, middle_cube_pos_w)
+    active_target = mx.where(
+        use_top_cube[:, None],
+        middle_cube_pos_w + mx.array([0.0, 0.0, stack_offset_z], dtype=mx.float32),
+        support_cube_pos_w + mx.array([0.0, 0.0, stack_offset_z], dtype=mx.float32),
+    )
+    active_grasped = mx.where(use_top_cube, top_grasped, middle_grasped)
+
+    dist_to_cube = mx.linalg.norm(active_cube_pos - ee_pos_w, axis=1)
+    gripper_closed = gripper_target <= gripper_closed_threshold
+    gripper_open = gripper_target >= stack_release_open_threshold
+    can_grasp = dist_to_cube <= grasp_distance_threshold
+    next_active_grasped = (active_grasped | (can_grasp & gripper_closed)) & gripper_closed & ~top_stacked
+
+    attached_cube = ee_pos_w + mx.array([0.0, 0.0, -grasp_offset_z], dtype=mx.float32)
+    release_cube = mx.where(active_grasped[:, None], attached_cube, active_cube_pos)
+    stack_xy_error = mx.linalg.norm(release_cube[:, :2] - active_target[:, :2], axis=1)
+    stack_z_error = mx.abs(release_cube[:, 2] - active_target[:, 2])
+    newly_stacked = active_grasped & gripper_open & (stack_xy_error <= stack_xy_threshold) & (stack_z_error <= stack_z_threshold)
+
+    next_middle_stacked = middle_stacked | (~use_top_cube & newly_stacked)
+    next_top_stacked = top_stacked | (use_top_cube & newly_stacked)
+
+    resting_cube = mx.stack(
+        (
+            release_cube[:, 0],
+            release_cube[:, 1],
+            mx.maximum(table_height, release_cube[:, 2] - physics_dt * 0.35),
+        ),
+        axis=-1,
+    )
+    next_active_cube_pos = mx.where(
+        newly_stacked[:, None],
+        active_target,
+        mx.where(next_active_grasped[:, None], attached_cube, resting_cube),
+    )
+
+    next_middle_cube_pos = mx.where(use_top_cube[:, None], middle_cube_pos_w, next_active_cube_pos).astype(mx.float32)
+    next_top_cube_pos = mx.where(use_top_cube[:, None], next_active_cube_pos, top_cube_pos_w).astype(mx.float32)
+
+    next_middle_grasped = mx.where(use_top_cube, middle_grasped, next_active_grasped & ~next_middle_stacked).astype(mx.bool_)
+    next_top_grasped = mx.where(use_top_cube, next_active_grasped & ~next_top_stacked, top_grasped).astype(mx.bool_)
+    return (
+        gripper_target,
+        gripper_velocity.astype(mx.float32),
+        next_middle_grasped,
+        next_top_grasped,
+        next_middle_stacked.astype(mx.bool_),
+        next_top_stacked.astype(mx.bool_),
+        next_middle_cube_pos,
+        next_top_cube_pos,
+    )
+
+
 franka_end_effector_position_hotpath = mx.compile(_franka_end_effector_position_impl)
 franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
 franka_stack_object_step_hotpath = mx.compile(_franka_stack_object_step_impl)
 franka_cabinet_step_hotpath = mx.compile(_franka_cabinet_step_impl)
+franka_stack_rgb_step_hotpath = mx.compile(_franka_stack_rgb_step_impl)
 
 
 def _locomotion_root_step_impl(

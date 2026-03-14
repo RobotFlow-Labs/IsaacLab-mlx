@@ -20,6 +20,7 @@ CURRENT_MAC_NATIVE_TASKS = (
     "franka-reach",
     "franka-lift",
     "franka-stack",
+    "franka-stack-rgb",
     "franka-cabinet",
 )
 """Current benchmarked mac-native task slices that must stay in the MLX smoke suite."""
@@ -74,6 +75,7 @@ KERNEL_PORT_INVENTORY = (
             "manipulation-reach",
             "manipulation-lift",
             "manipulation-stack",
+            "manipulation-stack-rgb",
             "manipulation-cabinet",
             "external-wrench-controls",
         ),

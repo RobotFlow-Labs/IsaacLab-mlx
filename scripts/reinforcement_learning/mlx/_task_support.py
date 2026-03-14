@@ -32,6 +32,7 @@ TASK_PREFIXES = {
     "franka-reach": "mlx-franka-reach",
     "franka-lift": "mlx-franka-lift",
     "franka-stack": "mlx-franka-stack",
+    "franka-stack-rgb": "mlx-franka-stack-rgb",
     "franka-cabinet": "mlx-franka-cabinet",
 }
 

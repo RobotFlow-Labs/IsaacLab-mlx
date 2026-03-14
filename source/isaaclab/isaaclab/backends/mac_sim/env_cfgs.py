@@ -471,3 +471,23 @@ class MacFrankaCabinetEnvCfg(MacFrankaLiftEnvCfg):
     grasp_reward_scale: float = 0.45
     open_reward_scale: float = 5.0
     drawer_success_bonus: float = 6.0
+
+
+@configclass
+class MacFrankaStackRgbEnvCfg(MacFrankaStackEnvCfg):
+    """Configuration for a reduced three-cube Franka stack slice."""
+
+    observation_space: int = 42
+    episode_length_s: float = 12.0
+
+    support_cube_x_range: tuple[float, float] = (0.44, 0.56)
+    support_cube_y_range: tuple[float, float] = (-0.05, 0.05)
+    middle_cube_offset_x_range: tuple[float, float] = (0.10, 0.16)
+    middle_cube_offset_y_range: tuple[float, float] = (0.08, 0.14)
+    top_cube_offset_x_range: tuple[float, float] = (-0.16, -0.10)
+    top_cube_offset_y_range: tuple[float, float] = (0.08, 0.14)
+
+    middle_stage_bonus: float = 2.5
+    top_stack_align_reward_scale: float = 3.0
+    top_stack_distance_reward_gain: float = 10.0
+    stack_success_bonus: float = 8.0

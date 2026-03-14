@@ -47,6 +47,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaReachEnvCfg,
     MacFrankaStackEnv,
     MacFrankaStackEnvCfg,
+    MacFrankaStackRgbEnv,
+    MacFrankaStackRgbEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
     MacH1RoughEnv,
@@ -290,6 +292,26 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
                     mx.mean(mx.linalg.norm(env.sim_backend.stack_error(), axis=1)).item()
                 )
                 payload["final_stacked_ratio"] = float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item())
+    elif hasattr(env.sim_backend, "middle_cube_pos_w"):
+        if terminal_policy_observations:
+            terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
+            payload["final_support_cube_height_mean"] = float(mx.mean(terminal_policy[:, 27]).item())
+            payload["final_middle_stack_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 31:34], axis=1)).item())
+            payload["final_top_stack_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 34:37], axis=1)).item())
+            payload["final_middle_stacked_ratio"] = float(mx.mean(terminal_policy[:, 39]).item())
+            payload["final_top_stacked_ratio"] = float(mx.mean(terminal_policy[:, 40]).item())
+            payload["final_active_is_top_ratio"] = float(mx.mean(terminal_policy[:, 41]).item())
+        else:
+            payload["final_support_cube_height_mean"] = float(mx.mean(env.sim_backend.support_cube_pos_w[:, 2]).item())
+            payload["final_middle_stack_distance_mean"] = float(
+                mx.mean(mx.linalg.norm(env.sim_backend.middle_stack_error(), axis=1)).item()
+            )
+            payload["final_top_stack_distance_mean"] = float(
+                mx.mean(mx.linalg.norm(env.sim_backend.top_stack_error(), axis=1)).item()
+            )
+            payload["final_middle_stacked_ratio"] = float(mx.mean(env.sim_backend.middle_stacked.astype(mx.float32)).item())
+            payload["final_top_stacked_ratio"] = float(mx.mean(env.sim_backend.top_stacked.astype(mx.float32)).item())
+            payload["final_active_is_top_ratio"] = float(mx.mean(env.sim_backend.active_is_top_cube().astype(mx.float32)).item())
     elif hasattr(env.sim_backend, "target_pos_w"):
         payload["final_target_distance_mean"] = float(mx.mean(env.sim_backend.goal_distance()).item())
     return payload
@@ -595,6 +617,33 @@ def benchmark_franka_stack(num_envs: int, steps: int, seed: int) -> dict[str, An
     )
 
 
+def benchmark_franka_stack_rgb(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the three-cube Franka stack MLX env step loop."""
+
+    env = MacFrankaStackRgbEnv(MacFrankaStackRgbEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-stack-rgb",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_franka_cabinet(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the Franka cabinet MLX env step loop."""
 
@@ -848,6 +897,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
         elif task == "franka-stack":
             benchmark = benchmark_franka_stack(num_envs, steps, seed)
+        elif task == "franka-stack-rgb":
+            benchmark = benchmark_franka_stack_rgb(num_envs, steps, seed)
         elif task == "franka-cabinet":
             benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
         elif task == "anymal-c-flat-height-scan":

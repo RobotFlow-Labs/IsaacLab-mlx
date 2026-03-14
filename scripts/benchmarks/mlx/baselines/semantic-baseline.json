@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T22:30:49Z",
+  "generated_at": "2026-03-14T23:11:49Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 15,
+  "task_count": 16,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -290,6 +290,33 @@
           "final_stack_distance_mean": 0.17270350456237793,
           "final_stacked_ratio": 0.0,
           "final_support_cube_height_mean": 0.03999999910593033
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-stack-rgb": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 42,
+        "output_signature": {
+          "final_active_is_top_ratio": 0.0,
+          "final_ee_height_mean": 0.5095078945159912,
+          "final_joint_pos_abs_mean": 0.6499584913253784,
+          "final_joint_vel_abs_mean": 0.025217102840542793,
+          "final_middle_stack_distance_mean": 0.15761804580688477,
+          "final_middle_stacked_ratio": 0.0,
+          "final_policy_mean": 0.05549232289195061,
+          "final_policy_std": 0.480934202671051,
+          "final_reward_mean": 0.0005440388340502977,
+          "final_support_cube_height_mean": 0.03999999910593033,
+          "final_top_stack_distance_mean": 0.24102027714252472,
+          "final_top_stacked_ratio": 0.0
         }
       },
       "cpu_fallback": false,

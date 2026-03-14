@@ -254,6 +254,8 @@ jobs:
           source/isaaclab/test/backends/test_mac_franka_reach.py \
           source/isaaclab/test/backends/test_mac_franka_lift.py \
           source/isaaclab/test/backends/test_mac_franka_stack.py \
+          source/isaaclab/test/backends/test_mac_franka_stack_rgb.py \
+          source/isaaclab/test/backends/test_mac_franka_cabinet.py \
           source/isaaclab/test/backends/test_mac_h1.py -q
 
     - name: Run MLX cart-double-pendulum smoke script
@@ -365,6 +367,21 @@ jobs:
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/franka_stack_policy.npz --eval-interval 1
 
+    - name: Run MLX Franka stack RGB smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task franka-stack-rgb \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
+
+    - name: Run MLX Franka stack RGB training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task franka-stack-rgb \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/franka_stack_rgb_policy.npz --eval-interval 1
+
     - name: Run MLX Franka cabinet smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -400,21 +417,22 @@ jobs:
         assert "franka-reach" in list_mlx_tasks()
         assert "franka-lift" in list_mlx_tasks()
         assert "franka-stack" in list_mlx_tasks()
+        assert "franka-stack-rgb" in list_mlx_tasks()
         assert "franka-cabinet" in list_mlx_tasks()
         train_payload = train_mlx_task(
-            "franka-cabinet",
+            "franka-stack-rgb",
             num_envs=8,
             updates=1,
             rollout_steps=8,
             epochs_per_update=1,
             hidden_dim=32,
-            checkpoint="logs/mlx/franka_cabinet_wrapper_policy.npz",
+            checkpoint="logs/mlx/franka_stack_rgb_wrapper_policy.npz",
             eval_interval=1,
             episode_length_s=0.5,
             seed=31,
         )
         payload = evaluate_mlx_task(
-            "franka-cabinet",
+            "franka-stack-rgb",
             checkpoint=train_payload["checkpoint_path"],
             episodes=1,
             episode_length_s=0.5,
@@ -542,10 +560,10 @@ jobs:
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
         dashboard = json.loads(Path("logs/benchmarks/mlx/smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert dashboard["summary"]["rollout_task_count"] == 10
+        assert dashboard["summary"]["rollout_task_count"] == 12
         assert dashboard["summary"]["training_task_count"] == 0
         trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
-        assert trend["summary"]["task_count"] == 10
+        assert trend["summary"]["task_count"] == 12
         planner_payload = json.loads(Path("logs/planner/mac-planner-smoke.json").read_text(encoding="utf-8"))
         assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
         assert planner_payload["plan"]["waypoint_count"] == 6
@@ -573,7 +591,7 @@ jobs:
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert full_dashboard["summary"]["rollout_task_count"] == 14
+        assert full_dashboard["summary"]["rollout_task_count"] == 16
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])
