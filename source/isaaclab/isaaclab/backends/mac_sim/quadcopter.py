@@ -20,51 +20,9 @@ from isaaclab.backends.runtime import (
     resolve_runtime_selection,
     set_runtime_selection,
 )
-from isaaclab.utils.configclass import configclass
 
-
-@configclass
-class MacQuadcopterEnvCfg:
-    """Configuration aligned with the upstream quadcopter task where practical."""
-
-    num_envs: int = 256
-    sim_dt: float = 1.0 / 100.0
-    decimation: int = 2
-    episode_length_s: float = 10.0
-    action_space: int = 4
-    observation_space: int = 12
-    state_space: int = 0
-
-    env_spacing: float = 2.5
-    mass: float = 0.032
-    gravity: float = 9.81
-    thrust_to_weight: float = 1.9
-    moment_scale: float = 0.01
-    angular_damping: float = 0.08
-    linear_damping_xy: float = 0.05
-    linear_damping_z: float = 0.03
-    lateral_accel_scale: float = 2.5
-
-    min_height: float = 0.1
-    max_height: float = 2.0
-
-    lin_vel_reward_scale: float = -0.05
-    ang_vel_reward_scale: float = -0.01
-    distance_to_goal_reward_scale: float = 15.0
-
-    seed: int = 42
-
-
-def _grid_origins(num_envs: int, spacing: float) -> mx.array:
-    side = int(math.ceil(math.sqrt(num_envs)))
-    grid_x = mx.arange(side, dtype=mx.float32)
-    grid_y = mx.arange(side, dtype=mx.float32)
-    mesh_x = mx.repeat(grid_x.reshape((1, -1)), side, axis=0).reshape((-1,))
-    mesh_y = mx.repeat(grid_y.reshape((-1, 1)), side, axis=1).reshape((-1,))
-    centered_x = (mesh_x[:num_envs] - (side - 1) / 2.0) * spacing
-    centered_y = (mesh_y[:num_envs] - (side - 1) / 2.0) * spacing
-    zeros = mx.zeros((num_envs,), dtype=mx.float32)
-    return mx.stack([centered_x, centered_y, zeros], axis=-1)
+from .env_cfgs import MacQuadcopterEnvCfg
+from .state_primitives import BatchedArticulationState, BatchedRootState, EnvironmentOriginGrid
 
 
 def _quat_conjugate(quat: mx.array) -> mx.array:
@@ -133,12 +91,9 @@ class MacQuadcopterSimBackend(MacSimBackend):
     def __init__(self, cfg: MacQuadcopterEnvCfg):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
-        self.env_origins = _grid_origins(cfg.num_envs, cfg.env_spacing)
-        self.root_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
-        self.root_lin_vel_b = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
-        self.root_ang_vel_b = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
-        self.root_quat_w = mx.tile(mx.array([[0.0, 0.0, 0.0, 1.0]], dtype=mx.float32), (cfg.num_envs, 1))
-        self.projected_gravity_b = mx.tile(mx.array([[0.0, 0.0, -1.0]], dtype=mx.float32), (cfg.num_envs, 1))
+        self.origin_grid = EnvironmentOriginGrid(cfg.num_envs, cfg.env_spacing)
+        self.root_state = BatchedRootState(cfg.num_envs, origin_grid=self.origin_grid)
+        self.joint_state = BatchedArticulationState(cfg.num_envs, num_joints=4)
         self._thrust = mx.zeros((cfg.num_envs,), dtype=mx.float32)
         self._moments = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
         self.reset()
@@ -153,12 +108,16 @@ class MacQuadcopterSimBackend(MacSimBackend):
     def reset_envs(self, env_ids: list[int]) -> None:
         if len(env_ids) == 0:
             return
+        self.root_state.reset_envs(
+            env_ids,
+            root_pos_w=self.origin_grid.positions_with_offset(env_ids, (0.0, 0.0, 1.0)),
+            root_quat_w=(0.0, 0.0, 0.0, 1.0),
+            root_lin_vel_b=0.0,
+            root_ang_vel_b=0.0,
+            projected_gravity_b=(0.0, 0.0, -1.0),
+        )
+        self.joint_state.reset_envs(env_ids)
         ids = mx.array(env_ids)
-        self.root_pos_w[ids] = self.env_origins[ids] + mx.array([0.0, 0.0, 1.0], dtype=mx.float32)
-        self.root_lin_vel_b[ids] = 0.0
-        self.root_ang_vel_b[ids] = 0.0
-        self.root_quat_w[ids] = mx.array([0.0, 0.0, 0.0, 1.0], dtype=mx.float32)
-        self.projected_gravity_b[ids] = mx.array([0.0, 0.0, -1.0], dtype=mx.float32)
         self._thrust[ids] = self.cfg.mass * self.cfg.gravity
         self._moments[ids] = 0.0
 
@@ -172,15 +131,15 @@ class MacQuadcopterSimBackend(MacSimBackend):
         damping = mx.array(
             [self.cfg.linear_damping_xy, self.cfg.linear_damping_xy, self.cfg.linear_damping_z], dtype=mx.float32
         )
-        self.root_lin_vel_b = self.root_lin_vel_b + dt * (accel - damping * self.root_lin_vel_b)
-        self.root_pos_w = self.root_pos_w + dt * self.root_lin_vel_b
+        self.root_state.root_lin_vel_b = self.root_state.root_lin_vel_b + dt * (accel - damping * self.root_state.root_lin_vel_b)
+        self.root_state.root_pos_w = self.root_state.root_pos_w + dt * self.root_state.root_lin_vel_b
 
-        ang_acc = self._moments - self.cfg.angular_damping * self.root_ang_vel_b
-        self.root_ang_vel_b = self.root_ang_vel_b + dt * ang_acc
-        delta_quat = _quat_from_angular_velocity(self.root_ang_vel_b, dt)
-        self.root_quat_w = _quat_normalize(_quat_multiply(self.root_quat_w, delta_quat))
+        ang_acc = self._moments - self.cfg.angular_damping * self.root_state.root_ang_vel_b
+        self.root_state.root_ang_vel_b = self.root_state.root_ang_vel_b + dt * ang_acc
+        delta_quat = _quat_from_angular_velocity(self.root_state.root_ang_vel_b, dt)
+        self.root_state.root_quat_w = _quat_normalize(_quat_multiply(self.root_state.root_quat_w, delta_quat))
         gravity_w = mx.tile(mx.array([[0.0, 0.0, -1.0]], dtype=mx.float32), (self.num_envs, 1))
-        self.projected_gravity_b = _quat_rotate(_quat_conjugate(self.root_quat_w), gravity_w)
+        self.root_state.projected_gravity_b = _quat_rotate(_quat_conjugate(self.root_state.root_quat_w), gravity_w)
 
     def set_thrust_and_moment(self, thrust: Any, moment: Any) -> None:
         self._thrust = mx.array(thrust, dtype=mx.float32).reshape((self.num_envs,))
@@ -188,9 +147,7 @@ class MacQuadcopterSimBackend(MacSimBackend):
 
     def get_joint_state(self, articulation: Any) -> tuple[mx.array, mx.array]:
         del articulation
-        joint_pos = mx.zeros((self.num_envs, 4), dtype=mx.float32)
-        joint_vel = mx.zeros((self.num_envs, 4), dtype=mx.float32)
-        return joint_pos, joint_vel
+        return self.joint_state.read()
 
     def set_joint_effort_target(
         self,
@@ -199,7 +156,8 @@ class MacQuadcopterSimBackend(MacSimBackend):
         *,
         joint_ids: Any | None = None,
     ) -> None:
-        del articulation, efforts, joint_ids
+        del articulation
+        self.joint_state.set_effort_target(efforts, joint_ids=joint_ids)
 
     def write_joint_state(
         self,
@@ -210,17 +168,12 @@ class MacQuadcopterSimBackend(MacSimBackend):
         joint_acc: Any | None = None,
         env_ids: Any | None = None,
     ) -> None:
-        del articulation, joint_pos, joint_vel, joint_acc, env_ids
+        del articulation, joint_acc
+        self.joint_state.write(joint_pos, joint_vel, env_ids=env_ids)
 
     def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Any | None = None) -> None:
         del articulation
-        pose = mx.array(root_pose, dtype=mx.float32)
-        if env_ids is None:
-            env_ids = list(range(self.num_envs))
-        ids = mx.array(env_ids)
-        self.root_pos_w[ids] = pose[:, :3]
-        if pose.shape[1] >= 7:
-            self.root_quat_w[ids] = pose[:, 3:7]
+        self.root_state.write_root_pose(root_pose, env_ids=env_ids)
 
     def write_root_velocity(
         self,
@@ -230,22 +183,40 @@ class MacQuadcopterSimBackend(MacSimBackend):
         env_ids: Any | None = None,
     ) -> None:
         del articulation
-        velocity = mx.array(root_velocity, dtype=mx.float32)
-        if env_ids is None:
-            env_ids = list(range(self.num_envs))
-        ids = mx.array(env_ids)
-        self.root_lin_vel_b[ids] = velocity[:, :3]
-        if velocity.shape[1] >= 6:
-            self.root_ang_vel_b[ids] = velocity[:, 3:6]
+        self.root_state.write_root_velocity(root_velocity, env_ids=env_ids)
 
     def state_dict(self) -> dict[str, Any]:
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "root_pos_w": self.root_pos_w.tolist(),
-            "root_lin_vel_b": self.root_lin_vel_b.tolist(),
-            "root_ang_vel_b": self.root_ang_vel_b.tolist(),
+            "root_pos_w": self.root_state.root_pos_w.tolist(),
+            "root_lin_vel_b": self.root_state.root_lin_vel_b.tolist(),
+            "root_ang_vel_b": self.root_state.root_ang_vel_b.tolist(),
         }
+
+    @property
+    def env_origins(self) -> mx.array:
+        return self.root_state.env_origins
+
+    @property
+    def root_pos_w(self) -> mx.array:
+        return self.root_state.root_pos_w
+
+    @property
+    def root_lin_vel_b(self) -> mx.array:
+        return self.root_state.root_lin_vel_b
+
+    @property
+    def root_ang_vel_b(self) -> mx.array:
+        return self.root_state.root_ang_vel_b
+
+    @property
+    def root_quat_w(self) -> mx.array:
+        return self.root_state.root_quat_w
+
+    @property
+    def projected_gravity_b(self) -> mx.array:
+        return self.root_state.projected_gravity_b
 
 
 class MacQuadcopterEnv:

@@ -61,6 +61,8 @@ without pausing for replanning after every small success.
 - `DONE` clean MLX/mac base install no longer pulls `torch`, `onnx`, `hidapi`, `transformers`, `starlette`, `tensorboard`, `numba`, or `moviepy`
 - `DONE` shared config/helper imports for `envs.common`, `utils.noise`, `utils.io`, `utils.types`, and `envs.utils.spaces` are now torch-free on the mac bootstrap path
 - `DONE` a first static manifest now keeps AutoMate, Factory, FORGE, Franka Cabinet, and manager-based pick-place task IDs discoverable on mac while gating them behind explicit `sim-backend=isaacsim` errors
+- `DONE` shared mac-sim batched state primitives now back cartpole, cart-double-pendulum, and quadcopter
+- `DONE` reusable environment origin/grid helper now backs quadcopter root-state resets and goal sampling
 
 ## Phase A: Import And Packaging Safety
 
@@ -220,36 +222,48 @@ without pausing for replanning after every small success.
 
 ### MLX-SIM-001
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Extract shared articulated joint-state container from cartpole/cart-double-pendulum
 - Acceptance:
   - no duplicated joint state reset/write logic across those envs
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_state_primitives.py`
+  - cartpole/cart-double-pendulum mac backend smoke tests
 
 ### MLX-SIM-002
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-001`
 - Title: Extract shared root-state container from quadcopter path
 - Acceptance:
   - root pose/velocity read/write helpers centralized
+- Validation:
+  - `source/isaaclab/test/backends/test_mac_state_primitives.py`
+  - quadcopter mac backend smoke tests
 
 ### MLX-SIM-003
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-001`, `MLX-SIM-002`
 - Title: Create reusable mac-sim batched state primitives module
 - Acceptance:
   - cartpole/cart-double-pendulum/quadcopter use the shared substrate
+- Validation:
+  - focused backend suite
+  - benchmark smoke `logs/benchmarks/mlx/sim-primitives-smoke.json`
 
 ### MLX-SIM-004
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-SIM-003`
 - Title: Add reusable environment origin/grid manager
+- Validation:
+  - quadcopter backend smoke tests
+  - benchmark smoke `logs/benchmarks/mlx/sim-primitives-smoke.json`
 
 ### MLX-SIM-005
 
-- Status: `READY`
+- Status: `ACTIVE`
 - Depends on: `MLX-SIM-003`
 - Title: Add terrain representation for the first locomotion task
 

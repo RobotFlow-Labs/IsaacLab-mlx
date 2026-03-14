@@ -163,6 +163,7 @@ jobs:
           source/isaaclab/test/backends/test_task_registry.py \
           source/isaaclab_rl/test/test_import_safety.py \
           source/isaaclab/test/backends/test_portability_utils.py \
+          source/isaaclab/test/backends/test_mac_state_primitives.py \
           source/isaaclab/test/backends/test_mac_cartpole.py \
           source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
           source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \

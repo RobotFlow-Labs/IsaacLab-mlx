@@ -27,37 +27,8 @@ from isaaclab.backends.runtime import (
 )
 from isaaclab.utils.configclass import configclass
 
-
-@configclass
-class MacCartpoleEnvCfg:
-    """Cartpole configuration aligned with the upstream IsaacLab direct task where practical."""
-
-    num_envs: int = 256
-    sim_dt: float = 1.0 / 120.0
-    decimation: int = 2
-    episode_length_s: float = 5.0
-
-    action_scale: float = 100.0
-    action_space: Any = 1
-    observation_space: Any = 4
-    state_space: Any = 0
-
-    max_cart_pos: float = 3.0
-    initial_pole_angle_range: tuple[float, float] = (-0.25 * math.pi, 0.25 * math.pi)
-
-    rew_scale_alive: float = 1.0
-    rew_scale_terminated: float = -2.0
-    rew_scale_pole_pos: float = -1.0
-    rew_scale_cart_vel: float = -0.01
-    rew_scale_pole_vel: float = -0.005
-
-    gravity: float = 9.81
-    mass_cart: float = 1.0
-    mass_pole: float = 0.1
-    pole_half_length: float = 0.5
-    force_mag: float = 1.0
-
-    seed: int = 42
+from .env_cfgs import MacCartpoleEnvCfg
+from .state_primitives import BatchedArticulationState
 
 
 @configclass
@@ -105,11 +76,7 @@ class MacCartpoleSimBackend(MacSimBackend):
     def __init__(self, cfg: MacCartpoleEnvCfg):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
-        self.cart_pos = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.cart_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pole_angle = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pole_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self._joint_effort_target = mx.zeros((cfg.num_envs,), dtype=mx.float32)
+        self.state = BatchedArticulationState(cfg.num_envs, num_joints=2)
         self.reset()
 
     @property
@@ -125,26 +92,28 @@ class MacCartpoleSimBackend(MacSimBackend):
     def reset_envs(self, env_ids: list[int]) -> None:
         if len(env_ids) == 0:
             return
-        ids = mx.array(env_ids)
-        self.cart_pos[ids] = 0.0
-        self.cart_vel[ids] = 0.0
-        self.pole_vel[ids] = 0.0
-        self.pole_angle[ids] = mx.random.uniform(
+        joint_pos = mx.zeros((len(env_ids), 2), dtype=mx.float32)
+        joint_vel = mx.zeros((len(env_ids), 2), dtype=mx.float32)
+        joint_pos[:, 1] = mx.random.uniform(
             low=self.cfg.initial_pole_angle_range[0],
             high=self.cfg.initial_pole_angle_range[1],
             shape=(len(env_ids),),
         )
-        self._joint_effort_target[ids] = 0.0
+        self.state.reset_envs(env_ids, joint_pos=joint_pos, joint_vel=joint_vel, joint_effort_target=0.0)
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         del render, update_fabric
-        force = self._joint_effort_target * self.cfg.force_mag
-        costheta = mx.cos(self.pole_angle)
-        sintheta = mx.sin(self.pole_angle)
+        cart_pos = self.state.joint_pos[:, 0]
+        pole_angle = self.state.joint_pos[:, 1]
+        cart_vel = self.state.joint_vel[:, 0]
+        pole_vel = self.state.joint_vel[:, 1]
+        force = self.state.joint_effort_target[:, 0] * self.cfg.force_mag
+        costheta = mx.cos(pole_angle)
+        sintheta = mx.sin(pole_angle)
         total_mass = self.cfg.mass_cart + self.cfg.mass_pole
         polemass_length = self.cfg.mass_pole * self.cfg.pole_half_length
 
-        temp = (force + polemass_length * mx.square(self.pole_vel) * sintheta) / total_mass
+        temp = (force + polemass_length * mx.square(pole_vel) * sintheta) / total_mass
         theta_acc = (
             self.cfg.gravity * sintheta - costheta * temp
         ) / (
@@ -154,16 +123,14 @@ class MacCartpoleSimBackend(MacSimBackend):
         x_acc = temp - polemass_length * theta_acc * costheta / total_mass
 
         dt = self.physics_dt
-        self.cart_pos = self.cart_pos + dt * self.cart_vel
-        self.cart_vel = self.cart_vel + dt * x_acc
-        self.pole_angle = self.pole_angle + dt * self.pole_vel
-        self.pole_vel = self.pole_vel + dt * theta_acc
+        self.state.joint_pos[:, 0] = cart_pos + dt * cart_vel
+        self.state.joint_vel[:, 0] = cart_vel + dt * x_acc
+        self.state.joint_pos[:, 1] = pole_angle + dt * pole_vel
+        self.state.joint_vel[:, 1] = pole_vel + dt * theta_acc
 
     def get_joint_state(self, articulation: Any) -> tuple[mx.array, mx.array]:
         del articulation
-        joint_pos = mx.stack([self.cart_pos, self.pole_angle], axis=-1)
-        joint_vel = mx.stack([self.cart_vel, self.pole_vel], axis=-1)
-        return joint_pos, joint_vel
+        return self.state.read()
 
     def set_joint_effort_target(
         self,
@@ -172,9 +139,8 @@ class MacCartpoleSimBackend(MacSimBackend):
         *,
         joint_ids: Any | None = None,
     ) -> None:
-        del articulation, joint_ids
-        efforts = mx.array(efforts, dtype=mx.float32).reshape((-1,))
-        self._joint_effort_target = efforts
+        del articulation
+        self.state.set_effort_target(efforts, joint_ids=joint_ids or [0])
 
     def write_joint_state(
         self,
@@ -186,15 +152,7 @@ class MacCartpoleSimBackend(MacSimBackend):
         env_ids: Any | None = None,
     ) -> None:
         del articulation, joint_acc
-        joint_pos = mx.array(joint_pos, dtype=mx.float32)
-        joint_vel = mx.array(joint_vel, dtype=mx.float32)
-        if env_ids is None:
-            env_ids = list(range(self.num_envs))
-        ids = mx.array(env_ids)
-        self.cart_pos[ids] = joint_pos[:, 0]
-        self.pole_angle[ids] = joint_pos[:, 1]
-        self.cart_vel[ids] = joint_vel[:, 0]
-        self.pole_vel[ids] = joint_vel[:, 1]
+        self.state.write(joint_pos, joint_vel, env_ids=env_ids)
 
     def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Any | None = None) -> None:
         del articulation, root_pose, env_ids
@@ -212,10 +170,10 @@ class MacCartpoleSimBackend(MacSimBackend):
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "cart_pos": self.cart_pos.tolist(),
-            "cart_vel": self.cart_vel.tolist(),
-            "pole_angle": self.pole_angle.tolist(),
-            "pole_vel": self.pole_vel.tolist(),
+            "cart_pos": self.state.joint_pos[:, 0].tolist(),
+            "cart_vel": self.state.joint_vel[:, 0].tolist(),
+            "pole_angle": self.state.joint_pos[:, 1].tolist(),
+            "pole_vel": self.state.joint_vel[:, 1].tolist(),
         }
 
 

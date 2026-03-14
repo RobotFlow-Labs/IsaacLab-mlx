@@ -20,49 +20,9 @@ from isaaclab.backends.runtime import (
     resolve_runtime_selection,
     set_runtime_selection,
 )
-from isaaclab.utils.configclass import configclass
 
-
-@configclass
-class MacCartDoublePendulumEnvCfg:
-    """Configuration aligned with upstream cart-double-pendulum semantics where practical."""
-
-    num_envs: int = 256
-    sim_dt: float = 1.0 / 120.0
-    decimation: int = 2
-    episode_length_s: float = 5.0
-    possible_agents: tuple[str, str] = ("cart", "pendulum")
-    action_spaces: dict[str, int] = {"cart": 1, "pendulum": 1}
-    observation_spaces: dict[str, int] = {"cart": 4, "pendulum": 3}
-    state_space: int = -1
-
-    max_cart_pos: float = 3.0
-    initial_pole_angle_range: tuple[float, float] = (-0.25, 0.25)
-    initial_pendulum_angle_range: tuple[float, float] = (-0.25, 0.25)
-
-    cart_action_scale: float = 100.0
-    pendulum_action_scale: float = 50.0
-
-    rew_scale_alive: float = 1.0
-    rew_scale_terminated: float = -2.0
-    rew_scale_cart_pos: float = 0.0
-    rew_scale_cart_vel: float = -0.01
-    rew_scale_pole_pos: float = -1.0
-    rew_scale_pole_vel: float = -0.01
-    rew_scale_pendulum_pos: float = -1.0
-    rew_scale_pendulum_vel: float = -0.01
-
-    gravity: float = 9.81
-    mass_cart: float = 1.0
-    mass_pole: float = 0.1
-    mass_pendulum: float = 0.08
-    pole_half_length: float = 0.5
-    pendulum_half_length: float = 0.45
-    cart_force_scale: float = 1.0
-    pendulum_torque_scale: float = 1.0
-    pendulum_damping: float = 0.05
-
-    seed: int = 42
+from .env_cfgs import MacCartDoublePendulumEnvCfg
+from .state_primitives import BatchedArticulationState
 
 
 def normalize_angle(angle: mx.array) -> mx.array:
@@ -119,14 +79,7 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
     def __init__(self, cfg: MacCartDoublePendulumEnvCfg):
         self.cfg = cfg
         self.num_envs = cfg.num_envs
-        self.cart_pos = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.cart_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pole_angle = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pole_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pendulum_angle = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self.pendulum_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self._cart_effort_target = mx.zeros((cfg.num_envs,), dtype=mx.float32)
-        self._pendulum_effort_target = mx.zeros((cfg.num_envs,), dtype=mx.float32)
+        self.state = BatchedArticulationState(cfg.num_envs, num_joints=3)
         self.reset()
 
     @property
@@ -142,34 +95,32 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
     def reset_envs(self, env_ids: list[int]) -> None:
         if len(env_ids) == 0:
             return
-        ids = mx.array(env_ids)
-        self.cart_pos[ids] = 0.0
-        self.cart_vel[ids] = 0.0
-        self.pole_vel[ids] = 0.0
-        self.pendulum_vel[ids] = 0.0
-        self.pole_angle[ids] = mx.random.uniform(
+        joint_pos = mx.zeros((len(env_ids), 3), dtype=mx.float32)
+        joint_vel = mx.zeros((len(env_ids), 3), dtype=mx.float32)
+        joint_pos[:, 1] = mx.random.uniform(
             low=self.cfg.initial_pole_angle_range[0] * math.pi,
             high=self.cfg.initial_pole_angle_range[1] * math.pi,
             shape=(len(env_ids),),
         )
-        self.pendulum_angle[ids] = mx.random.uniform(
+        joint_pos[:, 2] = mx.random.uniform(
             low=self.cfg.initial_pendulum_angle_range[0] * math.pi,
             high=self.cfg.initial_pendulum_angle_range[1] * math.pi,
             shape=(len(env_ids),),
         )
-        self._cart_effort_target[ids] = 0.0
-        self._pendulum_effort_target[ids] = 0.0
+        self.state.reset_envs(env_ids, joint_pos=joint_pos, joint_vel=joint_vel, joint_effort_target=0.0)
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         del render, update_fabric
-        cart_force = self._cart_effort_target * self.cfg.cart_force_scale
-        pendulum_torque = self._pendulum_effort_target * self.cfg.pendulum_torque_scale
+        joint_pos = self.state.joint_pos
+        joint_vel = self.state.joint_vel
+        cart_force = self.state.joint_effort_target[:, 0] * self.cfg.cart_force_scale
+        pendulum_torque = self.state.joint_effort_target[:, 2] * self.cfg.pendulum_torque_scale
 
         total_mass = self.cfg.mass_cart + self.cfg.mass_pole + self.cfg.mass_pendulum
-        costheta = mx.cos(self.pole_angle)
-        sintheta = mx.sin(self.pole_angle)
+        costheta = mx.cos(joint_pos[:, 1])
+        sintheta = mx.sin(joint_pos[:, 1])
         polemass_length = self.cfg.mass_pole * self.cfg.pole_half_length
-        temp = (cart_force + polemass_length * mx.square(self.pole_vel) * sintheta) / total_mass
+        temp = (cart_force + polemass_length * mx.square(joint_vel[:, 1]) * sintheta) / total_mass
         pole_acc = (
             self.cfg.gravity * sintheta - costheta * temp
         ) / (
@@ -178,28 +129,26 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         )
         cart_acc = temp - polemass_length * pole_acc * costheta / total_mass
 
-        pend_abs_angle = self.pole_angle + self.pendulum_angle
+        pend_abs_angle = joint_pos[:, 1] + joint_pos[:, 2]
         inertia = self.cfg.mass_pendulum * self.cfg.pendulum_half_length * self.cfg.pendulum_half_length + 1e-6
         pendulum_acc = (
             -self.cfg.gravity * mx.sin(pend_abs_angle) / self.cfg.pendulum_half_length
             + pendulum_torque / inertia
-            - self.cfg.pendulum_damping * self.pendulum_vel
+            - self.cfg.pendulum_damping * joint_vel[:, 2]
             + 0.2 * pole_acc
         )
 
         dt = self.physics_dt
-        self.cart_pos = self.cart_pos + dt * self.cart_vel
-        self.cart_vel = self.cart_vel + dt * cart_acc
-        self.pole_angle = self.pole_angle + dt * self.pole_vel
-        self.pole_vel = self.pole_vel + dt * pole_acc
-        self.pendulum_angle = self.pendulum_angle + dt * self.pendulum_vel
-        self.pendulum_vel = self.pendulum_vel + dt * pendulum_acc
+        self.state.joint_pos[:, 0] = joint_pos[:, 0] + dt * joint_vel[:, 0]
+        self.state.joint_vel[:, 0] = joint_vel[:, 0] + dt * cart_acc
+        self.state.joint_pos[:, 1] = joint_pos[:, 1] + dt * joint_vel[:, 1]
+        self.state.joint_vel[:, 1] = joint_vel[:, 1] + dt * pole_acc
+        self.state.joint_pos[:, 2] = joint_pos[:, 2] + dt * joint_vel[:, 2]
+        self.state.joint_vel[:, 2] = joint_vel[:, 2] + dt * pendulum_acc
 
     def get_joint_state(self, articulation: Any) -> tuple[mx.array, mx.array]:
         del articulation
-        joint_pos = mx.stack([self.cart_pos, self.pole_angle, self.pendulum_angle], axis=-1)
-        joint_vel = mx.stack([self.cart_vel, self.pole_vel, self.pendulum_vel], axis=-1)
-        return joint_pos, joint_vel
+        return self.state.read()
 
     def set_joint_effort_target(
         self,
@@ -209,18 +158,12 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         joint_ids: Any | None = None,
     ) -> None:
         del articulation
-        values = mx.array(efforts, dtype=mx.float32).reshape((-1,))
         if joint_ids is None:
-            self._cart_effort_target = values
-            return
+            joint_ids = [0]
         joint_ids = list(joint_ids)
-        if 0 in joint_ids:
-            self._cart_effort_target = values
-            return
-        if 2 in joint_ids:
-            self._pendulum_effort_target = values
-            return
-        raise ValueError(f"Unsupported joint_ids for cart-double-pendulum mac-sim: {joint_ids}")
+        if any(joint_id not in (0, 2) for joint_id in joint_ids):
+            raise ValueError(f"Unsupported joint_ids for cart-double-pendulum mac-sim: {joint_ids}")
+        self.state.set_effort_target(efforts, joint_ids=joint_ids)
 
     def write_joint_state(
         self,
@@ -232,17 +175,7 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         env_ids: Any | None = None,
     ) -> None:
         del articulation, joint_acc
-        joint_pos = mx.array(joint_pos, dtype=mx.float32)
-        joint_vel = mx.array(joint_vel, dtype=mx.float32)
-        if env_ids is None:
-            env_ids = list(range(self.num_envs))
-        ids = mx.array(env_ids)
-        self.cart_pos[ids] = joint_pos[:, 0]
-        self.pole_angle[ids] = joint_pos[:, 1]
-        self.pendulum_angle[ids] = joint_pos[:, 2]
-        self.cart_vel[ids] = joint_vel[:, 0]
-        self.pole_vel[ids] = joint_vel[:, 1]
-        self.pendulum_vel[ids] = joint_vel[:, 2]
+        self.state.write(joint_pos, joint_vel, env_ids=env_ids)
 
     def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Any | None = None) -> None:
         del articulation, root_pose, env_ids
@@ -260,12 +193,12 @@ class MacCartDoublePendulumSimBackend(MacSimBackend):
         return {
             "backend": self.name,
             "num_envs": self.num_envs,
-            "cart_pos": self.cart_pos.tolist(),
-            "cart_vel": self.cart_vel.tolist(),
-            "pole_angle": self.pole_angle.tolist(),
-            "pole_vel": self.pole_vel.tolist(),
-            "pendulum_angle": self.pendulum_angle.tolist(),
-            "pendulum_vel": self.pendulum_vel.tolist(),
+            "cart_pos": self.state.joint_pos[:, 0].tolist(),
+            "cart_vel": self.state.joint_vel[:, 0].tolist(),
+            "pole_angle": self.state.joint_pos[:, 1].tolist(),
+            "pole_vel": self.state.joint_vel[:, 1].tolist(),
+            "pendulum_angle": self.state.joint_pos[:, 2].tolist(),
+            "pendulum_vel": self.state.joint_vel[:, 2].tolist(),
         }
 
 
