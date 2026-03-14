@@ -11,7 +11,7 @@ import argparse
 import json
 from pathlib import Path
 
-from isaaclab.backends.mac_sim import capture_avfoundation_raw_frame, discover_external_cameras
+from isaaclab.backends.mac_sim import CAPTURE_BACKENDS, capture_mac_camera_raw_frame, discover_external_cameras
 
 
 def main() -> None:
@@ -24,6 +24,9 @@ def main() -> None:
     parser.add_argument("--capture-height", type=int, default=None)
     parser.add_argument("--capture-framerate", type=float, default=30.0)
     parser.add_argument("--capture-output", type=Path, default=None)
+    parser.add_argument("--capture-timeout-s", type=float, default=60.0)
+    parser.add_argument("--capture-backend", choices=CAPTURE_BACKENDS, default="auto")
+    parser.add_argument("--zed-sdk-mlx-repo", type=Path, default=None)
     args = parser.parse_args()
 
     devices = discover_external_cameras(
@@ -38,13 +41,18 @@ def main() -> None:
     if args.capture_device_index is not None:
         if args.capture_width is None or args.capture_height is None or args.capture_output is None:
             raise SystemExit("--capture-width, --capture-height, and --capture-output are required with --capture-device-index")
-        payload["capture"] = capture_avfoundation_raw_frame(
+        selected_device = next((device for device in devices if device.index == args.capture_device_index), None)
+        payload["capture"] = capture_mac_camera_raw_frame(
             device_index=args.capture_device_index,
             output_path=args.capture_output,
             width=args.capture_width,
             height=args.capture_height,
             framerate=args.capture_framerate,
             ffmpeg_bin=args.ffmpeg_bin,
+            timeout_s=args.capture_timeout_s,
+            capture_backend=args.capture_backend,
+            zed_sdk_mlx_repo=args.zed_sdk_mlx_repo,
+            device=selected_device,
         )
 
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"

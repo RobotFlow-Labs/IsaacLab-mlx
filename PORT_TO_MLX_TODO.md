@@ -723,7 +723,7 @@ without pausing for replanning after every small success.
 
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
-- Hardware-validate the backend-local stereo path against live ZED/ZED 2i capture once the camera is free, then retain a host-local probe artifact.
+- Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
 - Port the next manipulation milestone beyond the first two Franka slices, likely `franka-stack` or a richer arm/object interaction task.
 - Replace the next hot `mx.compile` helper with a true custom Metal kernel once benchmark evidence shows Python-free MLX is no longer enough.
 - Grow the planner/ROS prototypes carefully: world-state richer obstacles first, then optional process/message interoperability layers that still avoid CUDA/NITROS assumptions.

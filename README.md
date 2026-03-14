@@ -43,7 +43,7 @@ What works today:
 - trainable `MLX + mac-sim` Franka reach and cube-lift slices with deterministic analytic kinematics, lightweight grasp logic, and benchmark diagnostics that report `hotpath: "mlx-compiled"`
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
-- a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i
+- a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i, including a live Terminal-hosted `zed-sdk-mlx` validation path for macOS TCC-safe raw capture
 - a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
 - MLX training, checkpoint save/load, and replay scripts
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
@@ -147,7 +147,7 @@ This is the current public support contract for runtime combinations, not just w
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
-| Apple Silicon + backend-local external stereo capture | Supported prototype | AVFoundation/UVC discovery plus raw stereo dump and MLX depth smoke; not Isaac Sim camera parity |
+| Apple Silicon + backend-local external stereo capture | Supported prototype | AVFoundation discovery plus raw stereo dump and MLX depth smoke; live ZED/ZED 2i capture is supported through a camera-authorized Terminal host with `zed-sdk-mlx`, not as Isaac Sim camera parity |
 | Apple Silicon + `mac-planners` planner seam | Supported prototype | Deterministic joint-space interpolation compatibility layer; not cuRobo parity |
 | Apple Silicon + plain ROS 2 message/process bridge | Supported prototype | JSONL bridge and optional `ros2` CLI command builder without CUDA/NITROS |
 | macOS RTX / Omniverse UI / Kit extensions | Unsupported | Explicit capability-gated failures only |
@@ -360,12 +360,28 @@ The fork now also ships backend-local macOS camera tools for external stereo dev
 - [`scripts/tools/probe_mac_camera.py`](scripts/tools/probe_mac_camera.py)
 - [`scripts/tools/mac_stereo_depth_smoke.py`](scripts/tools/mac_stereo_depth_smoke.py)
 
+Live ZED/ZED 2i capture on macOS is host-app sensitive because Camera permission is attributed by TCC to the host app, not just the child Python process. The supported live path is a camera-authorized Terminal host plus [`zed-sdk-mlx`](https://github.com/RobotFlow-Labs/zed-sdk-mlx). The current `zed-sdk-mlx` capture helper is fixed to raw `2560x720 @ 30 FPS`.
+
 Device discovery:
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/tools/probe_mac_camera.py \
   --json-out logs/hardware/mac_camera_probe.json
+```
+
+Live ZED 2i capture through `zed-sdk-mlx`:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/tools/probe_mac_camera.py \
+  --capture-device-index 0 \
+  --capture-width 2560 \
+  --capture-height 720 \
+  --capture-backend zed-sdk-mlx-terminal \
+  --zed-sdk-mlx-repo /path/to/zed-sdk-mlx \
+  --capture-output logs/hardware/zed-live.yuv \
+  --json-out logs/hardware/zed-live.json
 ```
 
 Stereo/depth smoke on a raw side-by-side YUYV dump:
@@ -378,7 +394,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
   --max-disparity 64
 ```
 
-The current live-camera validation path is intentionally separated from the main CI ring because camera ownership and TCC permissions depend on the host app. The software path is still fully test-backed through synthetic stereo dumps.
+The current live-camera validation path is intentionally separated from the main CI ring because camera ownership, TCC attribution, and device ownership depend on the host app. The software path is still fully test-backed through synthetic stereo dumps, and the live ZED path now has a hardware-validated Terminal-hosted workflow.
 
 ### 11. Run the focused backend test suite
 
