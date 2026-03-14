@@ -534,7 +534,7 @@ without pausing for replanning after every small success.
 
 ### MLX-RL-003
 
-- Status: `BLOCKED`
+- Status: `READY`
 - Depends on: `MLX-TASK-004`, `MLX-RL-001`
 - Title: Train first locomotion task on MLX
 
