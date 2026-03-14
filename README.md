@@ -201,7 +201,8 @@ For the MLX/mac-sim task slices documented in this fork, `source/isaaclab_rl` is
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py \
+  scripts/reinforcement_learning/mlx/evaluate_task.py \
+  --task cart-double-pendulum \
   --num-envs 64 --episodes 3 --max-steps 10000 --random-actions
 ```
 
@@ -209,7 +210,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/play_quadcopter.py \
+  scripts/reinforcement_learning/mlx/evaluate_task.py \
+  --task quadcopter \
   --num-envs 64 --episodes 3 --episode-length-s 0.5 --max-steps 10000 --thrust-action 0.2 --no-random-actions
 ```
 
@@ -217,7 +219,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/train_anymal_c.py \
+  scripts/reinforcement_learning/mlx/train_task.py \
+  --task anymal-c-flat \
   --num-envs 256 \
   --updates 10 \
   --rollout-steps 24 \
@@ -227,7 +230,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/play_anymal_c.py \
+  scripts/reinforcement_learning/mlx/evaluate_task.py \
+  --task anymal-c-flat \
   --checkpoint logs/mlx/anymal_c_flat_policy.npz \
   --episodes 3
 ```
@@ -236,7 +240,8 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/train_h1.py \
+  scripts/reinforcement_learning/mlx/train_task.py \
+  --task h1-flat \
   --num-envs 256 \
   --updates 10 \
   --rollout-steps 24 \
@@ -246,20 +251,37 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/play_h1.py \
+  scripts/reinforcement_learning/mlx/evaluate_task.py \
+  --task h1-flat \
   --checkpoint logs/mlx/h1_flat_policy.npz \
   --episodes 3
 ```
 
-### 8. Run the focused backend test suite
+### 8. Use the shared MLX task CLIs
+
+The fork now exposes one shared train entrypoint and one shared evaluation/replay entrypoint for the current MLX/mac-sim slices:
+
+- [`scripts/reinforcement_learning/mlx/train_task.py`](scripts/reinforcement_learning/mlx/train_task.py)
+- [`scripts/reinforcement_learning/mlx/evaluate_task.py`](scripts/reinforcement_learning/mlx/evaluate_task.py)
+
+The task-specific scripts remain as thin wrappers so existing commands still work, but the shared CLIs are the stable surface going forward.
+
+### 9. Run the focused backend test suite
 
 ```bash
-PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
+PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   source/isaaclab/test/backends/test_runtime.py \
-  source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_task_registry.py \
+  source/isaaclab/test/backends/test_kernel_inventory.py \
+  source/isaaclab/test/backends/test_kernel_compat.py \
+  source/isaaclab/test/backends/test_mac_hotpath.py \
+  source/isaaclab/test/backends/test_mlx_task_cli.py \
+  source/isaaclab_rl/test/test_import_safety.py \
+  source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_benchmark_suite.py \
+  source/isaaclab/test/backends/test_mac_state_primitives.py \
+  source/isaaclab/test/backends/test_mac_phase_b_support.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
   source/isaaclab/test/backends/test_mac_cart_double_pendulum.py \
@@ -317,6 +339,8 @@ The benchmark emits:
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
 - locomotion-only `output_signature` fields so hot-loop refactors can be compared on M-series Macs without relying on throughput numbers alone
 
+CI now preserves both benchmark JSON artifacts and a dedicated import-safety artifact proving the MLX/mac path can run without `isaacsim`, `omni`, `carb`, or `pxr` installed.
+
 ## Kernel Inventory
 
 The next Warp/CUDA kernel families blocking broader parity are tracked in:
@@ -342,6 +366,8 @@ Current implemented slices:
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
 - cartpole trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_cartpole.py`](scripts/reinforcement_learning/mlx/train_cartpole.py)
 - cartpole replay entrypoint in [`scripts/reinforcement_learning/mlx/play_cartpole.py`](scripts/reinforcement_learning/mlx/play_cartpole.py)
+- shared trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_task.py`](scripts/reinforcement_learning/mlx/train_task.py)
+- shared replay/eval entrypoint in [`scripts/reinforcement_learning/mlx/evaluate_task.py`](scripts/reinforcement_learning/mlx/evaluate_task.py)
 - cart-double-pendulum replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py`](scripts/reinforcement_learning/mlx/play_cart_double_pendulum.py)
 - quadcopter replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_quadcopter.py`](scripts/reinforcement_learning/mlx/play_quadcopter.py)
 - ANYmal-C replay/smoke entrypoint in [`scripts/reinforcement_learning/mlx/play_anymal_c.py`](scripts/reinforcement_learning/mlx/play_anymal_c.py)

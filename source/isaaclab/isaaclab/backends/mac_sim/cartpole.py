@@ -32,6 +32,7 @@ from .ppo_training import (
     compute_gae,
     mean_recent_return,
     normalize_advantages,
+    play_categorical_policy_checkpoint,
     read_checkpoint_metadata,
     resolve_resume_hidden_dim,
     save_policy_checkpoint,
@@ -510,22 +511,17 @@ def play_cartpole_policy(
     hidden_dim: int | None = None,
 ) -> list[float]:
     """Run a trained cartpole policy greedily and return episode returns."""
-
-    env = MacCartpoleEnv(env_cfg or MacCartpoleEnvCfg(num_envs=1))
-    checkpoint = Path(checkpoint_path)
-    metadata = read_checkpoint_metadata(checkpoint)
-    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 128))
-    model = MacCartpolePolicy(obs_dim=env.cfg.observation_space, hidden_dim=policy_hidden_dim)
-    model.load_weights(str(checkpoint))
-    obs = env.reset()[0]["policy"]
-    episode_returns: list[float] = []
-
-    while len(episode_returns) < episodes:
-        logits, _ = model(obs)
-        action_ids = mx.argmax(logits, axis=-1).astype(mx.int32)
-        obs, _, _, _, extras = env.step(_action_index_to_force(action_ids))
-        obs = obs["policy"]
-        if extras.get("completed_returns"):
-            episode_returns.extend(extras["completed_returns"])
-
-    return episode_returns[:episodes]
+    cfg = env_cfg or MacCartpoleEnvCfg(num_envs=1)
+    return play_categorical_policy_checkpoint(
+        checkpoint_path,
+        env_factory=MacCartpoleEnv,
+        env_cfg=cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim: MacCartpolePolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+        ),
+        action_transform=_action_index_to_force,
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )

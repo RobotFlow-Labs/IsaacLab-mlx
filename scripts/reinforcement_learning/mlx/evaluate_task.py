@@ -3,15 +3,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Run the shared MLX/mac-sim trainer for the ANYmal-C flat slice."""
+"""Shared evaluation and replay entrypoint for the MLX/mac-sim task slices."""
 
 from __future__ import annotations
 
-from _task_support import run_train_cli
+from _task_support import run_eval_cli
 
 
 def main() -> int:
-    return run_train_cli(default_task="anymal-c-flat")
+    return run_eval_cli()
 
 
 if __name__ == "__main__":

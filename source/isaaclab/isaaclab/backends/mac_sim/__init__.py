@@ -22,6 +22,8 @@ _EXPORTS = {
     "compute_gae": (".ppo_training", "compute_gae"),
     "mean_recent_return": (".ppo_training", "mean_recent_return"),
     "normalize_advantages": (".ppo_training", "normalize_advantages"),
+    "play_categorical_policy_checkpoint": (".ppo_training", "play_categorical_policy_checkpoint"),
+    "play_gaussian_policy_checkpoint": (".ppo_training", "play_gaussian_policy_checkpoint"),
     "read_checkpoint_metadata": (".ppo_training", "read_checkpoint_metadata"),
     "resolve_resume_hidden_dim": (".ppo_training", "resolve_resume_hidden_dim"),
     "save_policy_checkpoint": (".ppo_training", "save_policy_checkpoint"),

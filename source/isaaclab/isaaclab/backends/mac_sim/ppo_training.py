@@ -3,13 +3,13 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Shared PPO helpers for the mac-native MLX training slices."""
+"""Shared PPO helpers for the mac-native MLX training and playback slices."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from collections.abc import Mapping, Sequence
 
 import mlx.core as mx
@@ -130,3 +130,69 @@ def save_policy_checkpoint(model: Any, checkpoint_path: str | Path, metadata: Ma
     model.save_weights(str(checkpoint_path))
     metadata_path = write_checkpoint_metadata(checkpoint_path, metadata)
     return str(checkpoint_path), str(metadata_path)
+
+
+def play_gaussian_policy_checkpoint(
+    checkpoint_path: str | Path,
+    *,
+    env_factory: Callable[[Any], Any],
+    env_cfg: Any,
+    model_factory: Callable[[int, int, int], Any],
+    default_hidden_dim: int,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Load a Gaussian MLX policy checkpoint and collect episode returns greedily."""
+
+    checkpoint = Path(checkpoint_path)
+    metadata = read_checkpoint_metadata(checkpoint)
+    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", default_hidden_dim))
+    env = env_factory(env_cfg)
+    model = model_factory(env_cfg.observation_space, policy_hidden_dim, env_cfg.action_space)
+    model.load_weights(str(checkpoint))
+    obs = env.reset()[0]["policy"]
+
+    episode_returns: list[float] = []
+    max_steps = max(1, env.max_episode_length * max(1, episodes) * 2)
+    for _ in range(max_steps):
+        mean, _ = model(obs)
+        obs_dict, _, _, _, extras = env.step(mx.clip(mean, -1.0, 1.0))
+        obs = obs_dict["policy"]
+        if extras.get("completed_returns"):
+            episode_returns.extend(float(value) for value in extras["completed_returns"])
+        if len(episode_returns) >= episodes:
+            break
+    return episode_returns[:episodes]
+
+
+def play_categorical_policy_checkpoint(
+    checkpoint_path: str | Path,
+    *,
+    env_factory: Callable[[Any], Any],
+    env_cfg: Any,
+    model_factory: Callable[[int, int], Any],
+    action_transform: Callable[[mx.array], mx.array],
+    default_hidden_dim: int,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Load a categorical MLX policy checkpoint and collect episode returns greedily."""
+
+    checkpoint = Path(checkpoint_path)
+    metadata = read_checkpoint_metadata(checkpoint)
+    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", default_hidden_dim))
+    model = model_factory(env_cfg.observation_space, policy_hidden_dim)
+    model.load_weights(str(checkpoint))
+    env = env_factory(env_cfg)
+    obs = env.reset()[0]["policy"]
+
+    episode_returns: list[float] = []
+    while len(episode_returns) < episodes:
+        logits, _ = model(obs)
+        action_ids = mx.argmax(logits, axis=-1).astype(mx.int32)
+        obs_dict, _, _, _, extras = env.step(action_transform(action_ids))
+        obs = obs_dict["policy"]
+        if extras.get("completed_returns"):
+            episode_returns.extend(float(value) for value in extras["completed_returns"])
+
+    return episode_returns[:episodes]

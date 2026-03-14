@@ -17,6 +17,8 @@ from isaaclab.backends.mac_sim.ppo_training import (
     compute_gae,
     mean_recent_return,
     normalize_advantages,
+    play_categorical_policy_checkpoint,
+    play_gaussian_policy_checkpoint,
     read_checkpoint_metadata,
     resolve_resume_hidden_dim,
     write_checkpoint_metadata,
@@ -70,3 +72,114 @@ def test_normalize_advantages_and_recent_return_helpers():
     assert abs(float(mx.mean(normalized))) < 1e-6
     assert abs(float(mx.mean(mx.square(normalized))) - 1.0) < 1e-5
     assert mean_recent_return([1.0, 2.0, 3.0, 4.0], window=2) == 3.5
+
+
+class _DummyPolicyCfg:
+    observation_space = 3
+    action_space = 2
+
+
+class _DummyPolicyEnv:
+    def __init__(self, cfg: _DummyPolicyCfg):
+        self.cfg = cfg
+        self.max_episode_length = 4
+        self._steps = 0
+
+    def reset(self):
+        self._steps = 0
+        return {"policy": mx.zeros((1, self.cfg.observation_space), dtype=mx.float32)}, {}
+
+    def step(self, actions):
+        del actions
+        self._steps += 1
+        return (
+            {"policy": mx.full((1, self.cfg.observation_space), float(self._steps), dtype=mx.float32)},
+            mx.zeros((1,), dtype=mx.float32),
+            mx.zeros((1,), dtype=mx.bool_),
+            mx.zeros((1,), dtype=mx.bool_),
+            {"completed_returns": [float(self._steps)]},
+        )
+
+
+class _DummyGaussianModel:
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+        self.obs_dim = obs_dim
+        self.hidden_dim = hidden_dim
+        self.action_dim = action_dim
+        self.loaded_path: str | None = None
+
+    def load_weights(self, path: str) -> None:
+        self.loaded_path = path
+
+    def __call__(self, obs):
+        batch = obs.shape[0]
+        return mx.ones((batch, self.action_dim), dtype=mx.float32), mx.zeros((batch,), dtype=mx.float32)
+
+
+class _DummyCategoricalModel:
+    def __init__(self, obs_dim: int, hidden_dim: int):
+        self.obs_dim = obs_dim
+        self.hidden_dim = hidden_dim
+        self.loaded_path: str | None = None
+
+    def load_weights(self, path: str) -> None:
+        self.loaded_path = path
+
+    def __call__(self, obs):
+        batch = obs.shape[0]
+        logits = mx.array([[0.0, 1.0]] * batch, dtype=mx.float32)
+        return logits, mx.zeros((batch,), dtype=mx.float32)
+
+
+def test_play_gaussian_policy_checkpoint_collects_episode_returns(tmp_path: Path):
+    checkpoint = tmp_path / "gaussian_policy.npz"
+    write_checkpoint_metadata(
+        checkpoint,
+        build_checkpoint_metadata(
+            hidden_dim=64,
+            observation_space=3,
+            action_space=2,
+            task_id="dummy-gaussian",
+            policy_distribution="gaussian",
+            train_cfg={"updates": 1},
+        ),
+    )
+
+    episode_returns = play_gaussian_policy_checkpoint(
+        checkpoint,
+        env_factory=_DummyPolicyEnv,
+        env_cfg=_DummyPolicyCfg(),
+        model_factory=_DummyGaussianModel,
+        default_hidden_dim=32,
+        episodes=2,
+    )
+
+    assert episode_returns == [1.0, 2.0]
+
+
+def test_play_categorical_policy_checkpoint_collects_episode_returns(tmp_path: Path):
+    checkpoint = tmp_path / "categorical_policy.npz"
+    write_checkpoint_metadata(
+        checkpoint,
+        build_checkpoint_metadata(
+            hidden_dim=48,
+            observation_space=3,
+            action_space=1,
+            task_id="dummy-categorical",
+            policy_distribution="categorical",
+            policy_action_space=2,
+            train_cfg={"updates": 1},
+        ),
+    )
+
+    episode_returns = play_categorical_policy_checkpoint(
+        checkpoint,
+        env_factory=_DummyPolicyEnv,
+        env_cfg=_DummyPolicyCfg(),
+        model_factory=_DummyCategoricalModel,
+        action_transform=lambda actions: actions.reshape((-1, 1)),
+        default_hidden_dim=16,
+        episodes=3,
+    )
+
+    assert episode_returns == [1.0, 2.0, 3.0]

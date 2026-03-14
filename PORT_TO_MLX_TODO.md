@@ -69,6 +69,8 @@ without pausing for replanning after every small success.
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
+- `DONE` Shared MLX task CLIs now cover train and replay/eval flows across the current mac-native slices
+- `DONE` CI now has a dedicated import-safety lane plus benchmark artifact validation for the MLX/mac path
 
 ## Phase A: Import And Packaging Safety
 
@@ -534,14 +536,22 @@ without pausing for replanning after every small success.
 
 ### MLX-RL-003
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-TASK-004`, `MLX-RL-001`
 - Title: Train first locomotion task on MLX
+- Validation:
+  - `source/isaaclab/test/backends/test_mlx_task_cli.py`
+  - shared ANYmal-C train smoke
+  - focused backend suite
 
 ### MLX-RL-004
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Add shared replay/eval scripts for all MLX task slices
+- Validation:
+  - `source/isaaclab/test/backends/test_mlx_task_cli.py`
+  - shared cartpole/cart-double-pendulum/quadcopter/H1 eval smokes
+  - focused backend suite
 
 ### MLX-RL-005
 
@@ -562,14 +572,22 @@ without pausing for replanning after every small success.
 
 ### MLX-CI-002
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Add benchmark smoke run and artifact upload to MLX macOS workflow
+- Validation:
+  - `.github/workflows/mlx-macos.yml`
+  - `source/isaaclab/test/backends/test_mac_benchmark_suite.py`
+  - local benchmark artifact `logs/benchmarks/mlx/shared-cli-smoke.json`
 
 ### MLX-CI-003
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-CI-002`
 - Title: Add import-safety lane that proves no Isaac Sim install is required
+- Validation:
+  - `.github/workflows/mlx-macos.yml`
+  - local import-safety artifact `logs/benchmarks/mlx/import-safety/local-specs.json`
+  - focused backend suite
 
 ### MLX-CI-004
 

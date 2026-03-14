@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import math
+import sys
 from pathlib import Path
 
 from isaaclab.backends.test_utils import require_mlx_runtime
@@ -85,3 +86,32 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_contact_count",
             }
             assert all(math.isfinite(value) for value in benchmark["output_signature"].values())
+
+
+def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
+    """The benchmark CLI should persist its JSON payload for CI artifact upload."""
+    benchmark_module = _load_benchmark_module()
+    output_path = tmp_path / "benchmark-results.json"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "benchmark_mac_tasks.py",
+            "--task-group",
+            "current-mac-native",
+            "--num-envs",
+            "8",
+            "--steps",
+            "8",
+            "--json-out",
+            str(output_path),
+            "--artifact-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert benchmark_module.main() == 0
+    assert output_path.exists()
+    payload = output_path.read_text(encoding="utf-8")
+    assert '"task_group": "current-mac-native"' in payload

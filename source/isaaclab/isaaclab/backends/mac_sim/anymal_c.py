@@ -50,7 +50,7 @@ from .ppo_training import (
     compute_gae,
     mean_recent_return,
     normalize_advantages,
-    read_checkpoint_metadata,
+    play_gaussian_policy_checkpoint,
     resolve_resume_hidden_dim,
     save_policy_checkpoint,
 )
@@ -747,24 +747,17 @@ def play_anymal_c_policy(
     hidden_dim: int | None = None,
 ) -> list[float]:
     """Run a trained ANYmal-C locomotion policy greedily and return episode returns."""
-
     cfg = env_cfg or MacAnymalCFlatEnvCfg(num_envs=1)
-    env = MacAnymalCFlatEnv(cfg)
-    checkpoint = Path(checkpoint_path)
-    metadata = read_checkpoint_metadata(checkpoint)
-    policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 128))
-    model = MacAnymalCPolicy(obs_dim=cfg.observation_space, hidden_dim=policy_hidden_dim, action_dim=cfg.action_space)
-    model.load_weights(str(checkpoint))
-    obs = env.reset()[0]["policy"]
-
-    episode_returns: list[float] = []
-    max_steps = max(1, env.max_episode_length * max(1, episodes) * 2)
-    for _ in range(max_steps):
-        mean, _ = model(obs)
-        obs_dict, _, _, _, extras = env.step(mx.clip(mean, -1.0, 1.0))
-        obs = obs_dict["policy"]
-        if extras.get("completed_returns"):
-            episode_returns.extend(float(value) for value in extras["completed_returns"])
-        if len(episode_returns) >= episodes:
-            break
-    return episode_returns[:episodes]
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=MacAnymalCFlatEnv,
+        env_cfg=cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacAnymalCPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
