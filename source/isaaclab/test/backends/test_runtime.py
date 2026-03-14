@@ -95,6 +95,35 @@ def test_app_launcher_arg_parser_exposes_backend_flags():
     assert "--sim-backend" in parser._option_string_actions
 
 
+def test_app_launcher_macsim_bootstrap_mode():
+    """AppLauncher should support a mac-sim bootstrap path without requiring Isaac Sim modules."""
+    launcher = AppLauncher(
+        {
+            "compute_backend": "mlx",
+            "sim_backend": "mac-sim",
+            "device": "cpu",
+            "headless": True,
+        }
+    )
+
+    assert launcher.sim_backend == "mac-sim"
+    assert launcher.compute_backend == "mlx"
+    assert launcher.app.is_running() is False
+
+
+def test_app_launcher_rejects_non_mlx_compute_for_macsim():
+    """AppLauncher should reject unsupported compute backends for mac-sim."""
+    with pytest.raises(UnsupportedBackendError, match="mac-sim"):
+        AppLauncher(
+            {
+                "compute_backend": "torch-cuda",
+                "sim_backend": "mac-sim",
+                "device": "cuda:0",
+                "headless": True,
+            }
+        )
+
+
 def test_create_sim_backend_returns_isaacsim_adapter():
     """Isaac Sim runtime should produce the Isaac Sim adapter."""
     backend = create_sim_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))

@@ -179,7 +179,7 @@ python some_script.py --compute-backend torch-cuda --sim-backend isaacsim
 python some_script.py --compute-backend mlx --sim-backend mac-sim
 ```
 
-Important constraint: `AppLauncher` itself still only launches the upstream Isaac Sim runtime path. The MLX cartpole scripts run directly on the `mac-sim` backend and do not launch Isaac Sim.
+Important constraint: `AppLauncher` now accepts `--compute-backend mlx --sim-backend mac-sim` in bootstrap mode, but it does not launch Isaac Sim/Omniverse there. Use the dedicated MLX scripts for task execution.
 
 ## Implemented MLX Vertical Slice
 
@@ -318,7 +318,7 @@ Common current pitfalls:
 
 - If `mlx` is missing, install it into the active `uv` environment.
 - If imports fail on `omni.*` or `isaacsim.*`, you are probably invoking an upstream Isaac Sim path rather than the `mac-sim` path.
-- If you expect `AppLauncher` to boot the MLX task slices, that is not wired yet. Use the dedicated MLX scripts instead.
+- If you use `AppLauncher` with `--sim-backend mac-sim`, it runs in bootstrap mode and returns a placeholder app object. Use the dedicated MLX scripts for environment stepping/training.
 - If a task depends on cameras, Warp, cuRobo, or Omniverse-only features, it should currently be treated as unsupported on the macOS path.
 
 ## Support

@@ -63,6 +63,16 @@ class ExplicitAction(argparse.Action):
         setattr(namespace, f"{self.dest}_explicit", True)
 
 
+class _MacSimPlaceholderApp:
+    """Minimal placeholder app for the mac-sim bootstrap path."""
+
+    def is_running(self) -> bool:
+        return False
+
+    def close(self) -> None:
+        return None
+
+
 class AppLauncher:
     """A utility class to launch Isaac Sim application based on command-line arguments and environment variables.
 
@@ -146,6 +156,14 @@ class AppLauncher:
 
         # Integrate env-vars and input keyword args into simulation app config
         self._config_resolution(launcher_args)
+
+        # The mac-sim path is intentionally bootstrap-only and does not launch Isaac Sim.
+        if self.sim_backend != "isaacsim":
+            self._app = _MacSimPlaceholderApp()
+            print(
+                "[INFO][AppLauncher]: Initialized mac-sim bootstrap mode without launching Isaac Sim."
+            )
+            return
 
         # Internal: Override SimulationApp._start_app method to apply patches after app has started.
         self.__patch_simulation_start_app(launcher_args)
@@ -535,6 +553,11 @@ class AppLauncher:
         # Resolve compute/sim backends before Isaac Sim-specific setup.
         self._resolve_backend_settings(launcher_args)
 
+        # The mac-sim path does not launch SimulationApp/Kit and therefore skips Isaac Sim setup.
+        if self.sim_backend != "isaacsim":
+            self._sim_app_config = {}
+            return
+
         # Handle experience file settings
         self._resolve_experience_file(launcher_args)
 
@@ -763,11 +786,15 @@ class AppLauncher:
             f" compute={self.compute_backend}, sim={self.sim_backend}"
         )
 
+        if self.sim_backend == "mac-sim":
+            if self.compute_backend != "mlx":
+                raise UnsupportedBackendError(
+                    "`AppLauncher` supports `--sim-backend mac-sim` only with `--compute-backend mlx`."
+                )
+            return
+
         if self.sim_backend != "isaacsim":
-            raise UnsupportedBackendError(
-                "`AppLauncher` only supports `--sim-backend isaacsim` today."
-                " The `mac-sim` path is being introduced behind separate entrypoints."
-            )
+            raise UnsupportedBackendError(f"Unsupported simulation backend for AppLauncher: {self.sim_backend}.")
 
         if self.compute_backend != "torch-cuda":
             raise UnsupportedBackendError(
