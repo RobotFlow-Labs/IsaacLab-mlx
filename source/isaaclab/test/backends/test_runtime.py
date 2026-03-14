@@ -16,20 +16,31 @@ import pytest
 
 from isaaclab.app import AppLauncher
 from isaaclab.backends import (
+    CpuKernelBackend,
     IsaacSimBackend,
+    IsaacSimPlannerBackend,
+    IsaacSimSensorBackend,
     MlxComputeBackend,
+    MacPlannerBackend,
+    MacSensorBackend,
     MacSimBackend,
+    MetalKernelBackend,
     TorchCudaComputeBackend,
     ENV_COMPUTE_BACKEND,
+    ENV_KERNEL_BACKEND,
     ENV_SIM_BACKEND,
     UnsupportedBackendError,
     UnsupportedRuntimeFeatureError,
     configure_torch_device,
     create_compute_backend,
+    create_kernel_backend,
+    create_planner_backend,
+    create_sensor_backend,
     create_sim_backend,
     get_runtime_state,
     resolve_runtime_selection,
     set_runtime_selection,
+    WarpKernelBackend,
 )
 
 
@@ -37,18 +48,21 @@ from isaaclab.backends import (
 def clear_runtime_env(monkeypatch: pytest.MonkeyPatch):
     """Keep runtime selection isolated per test."""
     monkeypatch.delenv(ENV_COMPUTE_BACKEND, raising=False)
+    monkeypatch.delenv(ENV_KERNEL_BACKEND, raising=False)
     monkeypatch.delenv(ENV_SIM_BACKEND, raising=False)
 
 
 def test_resolve_runtime_selection_from_environment(monkeypatch: pytest.MonkeyPatch):
     """Environment variables should seed the runtime selection."""
     monkeypatch.setenv(ENV_COMPUTE_BACKEND, "mlx")
+    monkeypatch.setenv(ENV_KERNEL_BACKEND, "metal")
     monkeypatch.setenv(ENV_SIM_BACKEND, "mac-sim")
 
     runtime = resolve_runtime_selection(device="cpu")
 
     assert runtime.compute_backend == "mlx"
     assert runtime.sim_backend == "mac-sim"
+    assert runtime.kernel_backend == "metal"
     assert runtime.device == "cpu"
 
 
@@ -59,6 +73,9 @@ def test_set_runtime_selection_persists_process_state():
 
     assert state["compute_backend"] == "mlx"
     assert state["sim_backend"] == "mac-sim"
+    assert state["kernel_backend"] == "metal"
+    assert state["sensor_backend"] == "mac-sensors"
+    assert state["planner_backend"] == "mac-planners"
     assert state["device"] == "cpu"
 
 
@@ -92,6 +109,7 @@ def test_app_launcher_arg_parser_exposes_backend_flags():
     AppLauncher.add_app_launcher_args(parser)
 
     assert "--compute-backend" in parser._option_string_actions
+    assert "--kernel-backend" in parser._option_string_actions
     assert "--sim-backend" in parser._option_string_actions
 
 
@@ -108,6 +126,9 @@ def test_app_launcher_macsim_bootstrap_mode():
 
     assert launcher.sim_backend == "mac-sim"
     assert launcher.compute_backend == "mlx"
+    assert launcher.kernel_backend == "metal"
+    assert launcher.sensor_backend == "mac-sensors"
+    assert launcher.planner_backend == "mac-planners"
     assert launcher.app.is_running() is False
 
 
@@ -119,6 +140,20 @@ def test_app_launcher_rejects_non_mlx_compute_for_macsim():
                 "compute_backend": "torch-cuda",
                 "sim_backend": "mac-sim",
                 "device": "cuda:0",
+                "headless": True,
+            }
+        )
+
+
+def test_app_launcher_rejects_warp_kernel_for_macsim():
+    """AppLauncher should reject Warp kernels on the mac-sim path."""
+    with pytest.raises(UnsupportedBackendError, match="kernel-backend warp"):
+        AppLauncher(
+            {
+                "compute_backend": "mlx",
+                "sim_backend": "mac-sim",
+                "kernel_backend": "warp",
+                "device": "cpu",
                 "headless": True,
             }
         )
@@ -140,6 +175,48 @@ def test_create_sim_backend_returns_macsim_adapter():
     assert backend.contract.articulations.effort_targets is False
 
 
+def test_create_kernel_backend_returns_warp_adapter():
+    """Isaac Sim runtime should default to the Warp kernel adapter."""
+    backend = create_kernel_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))
+
+    assert isinstance(backend, WarpKernelBackend)
+    assert backend.capabilities.custom_kernels is True
+
+
+def test_create_kernel_backend_returns_metal_adapter():
+    """mac-sim runtime should default to the Metal kernel adapter."""
+    backend = create_kernel_backend(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+
+    assert isinstance(backend, MetalKernelBackend)
+    assert backend.capabilities.raycast is True
+
+
+def test_create_sensor_backend_follows_runtime():
+    """Sensor backends should follow the selected simulation runtime."""
+    upstream = create_sensor_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))
+    mac = create_sensor_backend(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+
+    assert isinstance(upstream, IsaacSimSensorBackend)
+    assert isinstance(mac, MacSensorBackend)
+
+
+def test_create_planner_backend_follows_runtime():
+    """Planner backends should follow the selected simulation runtime."""
+    upstream = create_planner_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))
+    mac = create_planner_backend(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+
+    assert isinstance(upstream, IsaacSimPlannerBackend)
+    assert isinstance(mac, MacPlannerBackend)
+
+
+def test_create_cpu_kernel_backend():
+    """Explicit CPU kernel selection should return the CPU backend."""
+    backend = create_kernel_backend(resolve_runtime_selection("mlx", "mac-sim", "cpu", kernel_backend="cpu"))
+
+    assert isinstance(backend, CpuKernelBackend)
+    assert backend.capabilities.cpu_fallback is True
+
+
 def test_create_compute_backend_returns_torch_adapter():
     """Torch runtime should produce the torch compute adapter."""
     backend = create_compute_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))
@@ -154,6 +231,16 @@ def test_create_compute_backend_returns_mlx_adapter():
 
     assert isinstance(backend, MlxComputeBackend)
     assert backend.capabilities.torch_interop is False
+
+
+def test_mac_runtime_entrypoints_import_without_isaacsim():
+    """The public mac entrypoints should import without requiring Isaac Sim modules."""
+    pytest.importorskip("mlx.core")
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab")
+    importlib.import_module("isaaclab.backends.runtime")
+    importlib.import_module("isaaclab.backends.mac_sim")
 
 
 def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):

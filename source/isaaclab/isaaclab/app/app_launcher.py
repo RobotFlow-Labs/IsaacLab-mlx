@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from isaaclab.backends import (
     UnsupportedBackendError,
+    create_planner_backend,
+    create_sensor_backend,
     is_isaacsim_available,
     resolve_runtime_selection,
     set_runtime_selection,
@@ -359,6 +361,16 @@ class AppLauncher:
             choices={"isaacsim", "mac-sim"},
             help="Simulation backend. 'isaacsim' preserves the upstream runtime, 'mac-sim' selects the macOS port path.",
         )
+        arg_group.add_argument(
+            "--kernel-backend",
+            type=str,
+            default=AppLauncher._APPLAUNCHER_CFG_INFO["kernel_backend"][1],
+            choices={"warp", "metal", "cpu"},
+            help=(
+                "Kernel backend. Use 'warp' for the upstream Isaac Sim path, 'metal' for the macOS port path,"
+                " and 'cpu' only for correctness bring-up."
+            ),
+        )
         # Add the deprecated cpu flag to raise an error if it is used
         arg_group.add_argument("--cpu", action="store_true", help=argparse.SUPPRESS)
         arg_group.add_argument(
@@ -444,6 +456,7 @@ class AppLauncher:
         "device": ([str], "cuda:0"),
         "compute_backend": ([str], "torch-cuda"),
         "sim_backend": ([str], "isaacsim"),
+        "kernel_backend": ([str], "warp"),
         "experience": ([str], ""),
         "rendering_mode": ([str], "balanced"),
     }
@@ -775,21 +788,31 @@ class AppLauncher:
             compute_backend=launcher_args.pop("compute_backend", None),
             sim_backend=launcher_args.pop("sim_backend", None),
             device=launcher_args.get("device", AppLauncher._APPLAUNCHER_CFG_INFO["device"][1]),
+            kernel_backend=launcher_args.pop("kernel_backend", None),
         )
         set_runtime_selection(runtime)
 
         self.compute_backend = runtime.compute_backend
         self.sim_backend = runtime.sim_backend
+        self.kernel_backend = runtime.kernel_backend
+        self.sensor_backend = create_sensor_backend(runtime).name
+        self.planner_backend = create_planner_backend(runtime).name
 
         print(
             "[INFO][AppLauncher]: Using runtime backends:"
-            f" compute={self.compute_backend}, sim={self.sim_backend}"
+            f" compute={self.compute_backend}, sim={self.sim_backend}, kernel={self.kernel_backend},"
+            f" sensors={self.sensor_backend}, planners={self.planner_backend}"
         )
 
         if self.sim_backend == "mac-sim":
             if self.compute_backend != "mlx":
                 raise UnsupportedBackendError(
                     "`AppLauncher` supports `--sim-backend mac-sim` only with `--compute-backend mlx`."
+                )
+            if self.kernel_backend == "warp":
+                raise UnsupportedBackendError(
+                    "`AppLauncher` does not support `--kernel-backend warp` with `--sim-backend mac-sim`."
+                    " Use `metal` or `cpu` for the macOS port path."
                 )
             return
 
@@ -800,6 +823,12 @@ class AppLauncher:
             raise UnsupportedBackendError(
                 "`AppLauncher` only supports `--compute-backend torch-cuda` with `--sim-backend isaacsim`."
                 " Use `--compute-backend mlx --sim-backend mac-sim` for the macOS port path."
+            )
+
+        if self.kernel_backend == "metal":
+            raise UnsupportedBackendError(
+                "`AppLauncher` does not support `--kernel-backend metal` with `--sim-backend isaacsim`."
+                " Use `warp` for the upstream runtime or `metal` with `mac-sim`."
             )
 
         if not is_isaacsim_available():

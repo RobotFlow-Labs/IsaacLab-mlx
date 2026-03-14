@@ -86,6 +86,16 @@ Current public options:
 
 The current `mac-sim` implementation is intentionally narrow. It currently covers cartpole, cart-double-pendulum, and quadcopter slices needed to prove the MLX training/inference path can run without CUDA.
 
+### Kernel backend
+
+The kernel backend isolates Warp and future Metal custom-kernel paths:
+
+- `warp`: upstream Isaac Sim + Warp path
+- `metal`: Apple Silicon path for MLX + Metal-backed kernel replacements
+- `cpu`: correctness fallback for bring-up and unsupported kernels
+
+Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selection seam exists now so future Metal kernels can land without rewriting task-facing APIs again.
+
 ## MLX Quick Start
 
 This path is for Apple Silicon macOS.
@@ -95,7 +105,13 @@ This path is for Apple Silicon macOS.
 ```bash
 cd IsaacLab
 uv venv --python 3.11 .venv
-uv pip install --python .venv/bin/python mlx pytest pytest-mock toml gymnasium
+uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev]
+```
+
+If you want the upstream Isaac Sim runtime on Linux/NVIDIA instead, install the CUDA-side extra:
+
+```bash
+uv pip install --python .venv/bin/python -e source/isaaclab[cuda-isaacsim,dev]
 ```
 
 ### 2. Train the MLX cartpole baseline
@@ -163,6 +179,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/pytest \
 The backend seam is exposed through the app/runtime layer:
 
 - `--compute-backend torch-cuda|mlx`
+- `--kernel-backend warp|metal|cpu`
 - `--sim-backend isaacsim|mac-sim`
 
 These flags are published through:
@@ -173,13 +190,37 @@ Examples:
 
 ```bash
 # Upstream path
-python some_script.py --compute-backend torch-cuda --sim-backend isaacsim
+python some_script.py --compute-backend torch-cuda --kernel-backend warp --sim-backend isaacsim
 
 # macOS port path
-python some_script.py --compute-backend mlx --sim-backend mac-sim
+python some_script.py --compute-backend mlx --kernel-backend metal --sim-backend mac-sim
 ```
 
 Important constraint: `AppLauncher` now accepts `--compute-backend mlx --sim-backend mac-sim` in bootstrap mode, but it does not launch Isaac Sim/Omniverse there. Use the dedicated MLX scripts for task execution.
+
+## M5 Benchmarking
+
+The fork now includes a dedicated MLX benchmark entrypoint for the current mac-native task set:
+
+- [`scripts/benchmarks/mlx/benchmark_mac_tasks.py`](scripts/benchmarks/mlx/benchmark_mac_tasks.py)
+
+Example:
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/benchmarks/mlx/benchmark_mac_tasks.py \
+  --tasks cartpole cart-double-pendulum quadcopter train-cartpole \
+  --num-envs 256 \
+  --steps 512 \
+  --train-updates 20 \
+  --json-out logs/benchmarks/mlx/m5-baseline.json
+```
+
+The benchmark emits:
+
+- per-task `env_steps_per_s` for the current MLX/mac-sim env slices
+- cartpole `train_frames_per_s` for the first MLX training loop
+- runtime metadata including compute, kernel, sensor, and planner backend selection
 
 ## Implemented MLX Vertical Slice
 
