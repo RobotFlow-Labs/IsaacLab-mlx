@@ -73,6 +73,7 @@ def test_plane_terrain_and_contact_model_cover_flat_locomotion_semantics():
     assert bool(contact_mask[1, 0].item()) is True
     assert bool(contacts.compute_first_contact()[0, 0].item()) is True
     assert bool(contacts.compute_first_contact()[1, 1].item()) is True
+    assert contacts.state_dict()["hotpath_backend"] == "mlx-compiled"
     assert terrain.surface_normals(body_pos_w.reshape((-1, 3))).shape == (8, 3)
 
 

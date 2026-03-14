@@ -99,6 +99,8 @@ The kernel backend isolates Warp and future Metal custom-kernel paths:
 
 Today the public MLX tasks mostly use pure MLX ops. The explicit kernel selection seam exists now so future Metal kernels can land without rewriting task-facing APIs again.
 
+For the current locomotion slices, the hottest shared batched paths now run through compiled MLX helpers in `isaaclab.backends.mac_sim.hotpath`, and benchmark diagnostics surface that as `hotpath: "mlx-compiled"`.
+
 ## MLX Quick Start
 
 This path is for Apple Silicon macOS.
@@ -310,6 +312,7 @@ The benchmark emits:
 - a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
 - runtime metadata including compute, kernel, sensor, and planner backend selection
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
+- locomotion-only `output_signature` fields so hot-loop refactors can be compared on M-series Macs without relying on throughput numbers alone
 
 ## Kernel Inventory
 

@@ -103,6 +103,28 @@ def _env_runtime_state(env: Any) -> dict[str, Any]:
     return runtime_state
 
 
+def _locomotion_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture stable numeric signatures for locomotion benchmarks."""
+    policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
+    reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
+    joint_pos, joint_vel = env.sim_backend.get_joint_state(None)
+    root_lin_vel_norm = mx.linalg.norm(env.sim_backend.root_lin_vel_b, axis=1)
+    root_ang_vel_norm = mx.linalg.norm(env.sim_backend.root_ang_vel_b, axis=1)
+    return {
+        "final_policy_mean": float(mx.mean(policy).item()),
+        "final_policy_std": float(mx.std(policy).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_root_height_mean": float(mx.mean(env.sim_backend.root_pos_w[:, 2]).item()),
+        "final_root_lin_vel_norm_mean": float(mx.mean(root_lin_vel_norm).item()),
+        "final_root_ang_vel_norm_mean": float(mx.mean(root_ang_vel_norm).item()),
+        "final_joint_pos_abs_mean": float(mx.mean(mx.abs(joint_pos)).item()),
+        "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
+        "final_joint_acc_abs_mean": float(mx.mean(mx.abs(env.sim_backend.joint_acc)).item()),
+        "final_applied_torque_abs_mean": float(mx.mean(mx.abs(env.sim_backend.applied_torque)).item()),
+        "final_contact_count": float(mx.sum(env.sim_backend.contact_model.contact_mask.astype(mx.float32)).item()),
+    }
+
+
 def resolve_requested_tasks(tasks: list[str] | None, task_group: str) -> tuple[str, ...]:
     """Resolve CLI benchmark selection to an ordered task tuple."""
     if tasks:
@@ -208,6 +230,7 @@ def benchmark_anymal_c_flat(num_envs: int, steps: int, seed: int) -> dict[str, A
         extra={
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
+            "output_signature": _locomotion_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -233,6 +256,7 @@ def benchmark_h1_flat(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
         extra={
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
+            "output_signature": _locomotion_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )

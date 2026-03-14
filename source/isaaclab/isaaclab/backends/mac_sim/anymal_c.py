@@ -29,6 +29,12 @@ from isaaclab.utils.configclass import configclass
 
 from .contacts import BatchedContactSensorState
 from .env_cfgs import MacAnymalCFlatEnvCfg
+from .hotpath import (
+    HOTPATH_BACKEND,
+    anymal_body_positions_hotpath,
+    anymal_leg_extension_hotpath,
+    quadruped_support_metrics_hotpath,
+)
 from .locomotion import (
     action_rate_l2,
     base_contact_termination,
@@ -257,43 +263,18 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         self.contact_model.update(body_pos_w, mx.zeros_like(body_pos_w), self.terrain, env_ids=env_ids)
 
     def _leg_extension(self, joint_pos: mx.array) -> mx.array:
-        joint_pos = joint_pos.reshape((self.num_envs, 4, 3))
-        hip_pitch = joint_pos[:, :, 1]
-        knee = joint_pos[:, :, 2]
-        extension = (
-            0.20
-            + 0.16 * mx.cos(hip_pitch)
-            + 0.18 * mx.cos(hip_pitch + knee)
-        )
-        return mx.clip(extension, 0.22, 0.62)
+        return anymal_leg_extension_hotpath(joint_pos)
 
     def _body_positions(self) -> mx.array:
-        joint_pos = self.joint_state.joint_pos.reshape((self.num_envs, 4, 3))
-        hip_abduction = joint_pos[:, :, 0]
-        hip_pitch = joint_pos[:, :, 1]
-        knee = joint_pos[:, :, 2]
-        extension = self._leg_extension(self.joint_state.joint_pos)
-        command_speed = mx.linalg.norm(self.commands[:, :2], axis=1, keepdims=True)
-        phase = self._gait_phase.reshape((self.num_envs, 1)) + GAIT_PHASE_OFFSETS.reshape((1, 4))
-        swing = mx.maximum(mx.sin(phase), 0.0) * (0.25 + command_speed)
-
-        root_xy = self.root_state.root_pos_w[:, None, :2]
-        root_z = self.root_state.root_pos_w[:, 2:3]
-        step_x = 0.10 * self.commands[:, 0:1] * mx.cos(phase)
-        step_y = 0.06 * self.commands[:, 1:2] * mx.sin(phase)
-        foot_xy = root_xy + HIP_OFFSETS.reshape((1, 4, 2))
-        foot_xy[:, :, 0] = foot_xy[:, :, 0] + step_x - 0.04 * mx.sin(hip_pitch)
-        foot_xy[:, :, 1] = foot_xy[:, :, 1] + step_y + 0.04 * hip_abduction
-        foot_z = root_z - extension + self.cfg.foot_clearance * swing - 0.02 * mx.tanh(knee)
-        foot_pos = mx.concatenate([foot_xy, foot_z[:, :, None]], axis=-1)
-
-        thigh_xy = root_xy + 0.55 * HIP_OFFSETS.reshape((1, 4, 2))
-        thigh_xy[:, :, 1] = thigh_xy[:, :, 1] + 0.02 * hip_abduction
-        thigh_z = root_z - 0.24 - 0.05 * mx.tanh(hip_pitch)
-        thigh_pos = mx.concatenate([thigh_xy, thigh_z[:, :, None]], axis=-1)
-
-        base_pos = self.root_state.root_pos_w[:, None, :]
-        return mx.concatenate([base_pos, foot_pos, thigh_pos], axis=1)
+        return anymal_body_positions_hotpath(
+            self.root_state.root_pos_w,
+            self.joint_state.joint_pos,
+            self.commands,
+            self._gait_phase,
+            HIP_OFFSETS,
+            GAIT_PHASE_OFFSETS,
+            self.cfg.foot_clearance,
+        )
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         del render, update_fabric
@@ -318,19 +299,10 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
         self._last_body_pos_w = body_pos_w
         self.contact_model.update(body_pos_w, body_vel_w, self.terrain)
 
-        foot_ids = list(self.contact_model.foot_body_ids)
-        support = self.contact_model.contact_mask[:, foot_ids].astype(mx.float32)
-        support_ratio = mx.mean(support, axis=1)
-        left_support = mx.mean(support[:, [0, 2]], axis=1)
-        right_support = mx.mean(support[:, [1, 3]], axis=1)
-        front_support = mx.mean(support[:, [0, 1]], axis=1)
-        rear_support = mx.mean(support[:, [2, 3]], axis=1)
-
-        grouped_actions = self._action_targets.reshape((self.num_envs, 4, 3))
-        left_actions = mx.mean(grouped_actions[:, [0, 2], :], axis=(1, 2))
-        right_actions = mx.mean(grouped_actions[:, [1, 3], :], axis=(1, 2))
-        front_actions = mx.mean(grouped_actions[:, [0, 1], :], axis=(1, 2))
-        rear_actions = mx.mean(grouped_actions[:, [2, 3], :], axis=(1, 2))
+        support_ratio, left_support, right_support, front_support, rear_support, left_actions, right_actions, front_actions, rear_actions = quadruped_support_metrics_hotpath(
+            self.contact_model.contact_mask[:, list(self.contact_model.foot_body_ids)],
+            self._action_targets,
+        )
 
         lin_gain = self.cfg.command_tracking_gain * (0.35 + 0.65 * support_ratio)
         lin_xy = self.root_state.root_lin_vel_b[:, :2]
@@ -432,6 +404,7 @@ class MacAnymalCFlatSimBackend(MacSimBackend):
                 "contacts": True,
                 "deterministic_resets": True,
                 "rollout_helpers": True,
+                "hotpath": HOTPATH_BACKEND,
             },
             "root_state_shape": list(self.root_state.root_pos_w.shape),
             "joint_state_shape": list(self.joint_state.joint_pos.shape),

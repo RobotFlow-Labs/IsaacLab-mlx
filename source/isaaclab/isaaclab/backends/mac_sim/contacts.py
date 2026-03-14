@@ -12,6 +12,7 @@ from typing import Any
 
 import mlx.core as mx
 
+from .hotpath import HOTPATH_BACKEND, contact_update_hotpath
 from .state_primitives import env_ids_to_array
 from .terrain import MacPlaneTerrain
 
@@ -42,6 +43,7 @@ class BatchedContactSensorState:
         self.spring_stiffness = spring_stiffness
         self.damping = damping
         self.force_threshold = force_threshold
+        self.hotpath_backend = HOTPATH_BACKEND
 
         num_bodies = len(self.body_names)
         self.contact_mask = mx.zeros((num_envs, num_bodies), dtype=mx.bool_)
@@ -49,6 +51,7 @@ class BatchedContactSensorState:
         self.net_forces_w_history = mx.zeros((num_envs, history_length, num_bodies, 3), dtype=mx.float32)
         self.last_air_time = mx.zeros((num_envs, len(self.foot_body_ids)), dtype=mx.float32)
         self._air_time = mx.zeros((num_envs, len(self.foot_body_ids)), dtype=mx.float32)
+        self._foot_body_ids_array = mx.array(self.foot_body_ids, dtype=mx.int32)
 
     def reset_envs(self, env_ids: Sequence[int] | None = None) -> None:
         """Reset contact and air-time buffers for a subset of environments."""
@@ -81,37 +84,27 @@ class BatchedContactSensorState:
         body_vel_w = mx.array(body_vel_w, dtype=mx.float32).reshape((rows, len(self.body_names), 3))
 
         terrain_heights = terrain.sample_heights(body_pos_w.reshape((-1, 3))).reshape((rows, len(self.body_names)))
-        clearance = body_pos_w[:, :, 2] - terrain_heights
-        penetration = mx.maximum(self.contact_margin - clearance, 0.0)
-        closing_speed = mx.maximum(-body_vel_w[:, :, 2], 0.0)
-        normal_force = mx.where(
-            penetration > 0.0,
-            self.spring_stiffness * penetration + self.damping * closing_speed,
-            0.0,
+        current_contact, first_contact, history, last_air_time, air_time = contact_update_hotpath(
+            body_pos_w,
+            body_vel_w,
+            terrain_heights,
+            self.contact_mask[ids],
+            self.net_forces_w_history[ids],
+            self.last_air_time[ids],
+            self._air_time[ids],
+            self._foot_body_ids_array,
+            contact_margin=self.contact_margin,
+            spring_stiffness=self.spring_stiffness,
+            damping=self.damping,
+            force_threshold=self.force_threshold,
+            step_dt=self.step_dt,
         )
-        forces_w = mx.stack(
-            [
-                mx.zeros_like(normal_force),
-                mx.zeros_like(normal_force),
-                normal_force,
-            ],
-            axis=-1,
-        )
-        current_contact = normal_force > self.force_threshold
-        previous_contact = self.contact_mask[ids]
-        self.first_contact[ids] = current_contact & ~previous_contact
+        self.first_contact[ids] = first_contact
         self.contact_mask[ids] = current_contact
-        self.net_forces_w_history[ids] = mx.concatenate(
-            [forces_w[:, None, :, :], self.net_forces_w_history[ids, :-1, :, :]],
-            axis=1,
-        )
-
+        self.net_forces_w_history[ids] = history
         if self.foot_body_ids:
-            foot_ids = list(self.foot_body_ids)
-            foot_contact = current_contact[:, foot_ids]
-            foot_first_contact = self.first_contact[ids][:, foot_ids]
-            self.last_air_time[ids] = mx.where(foot_first_contact, self._air_time[ids], self.last_air_time[ids])
-            self._air_time[ids] = mx.where(foot_contact, 0.0, self._air_time[ids] + self.step_dt)
+            self.last_air_time[ids] = last_air_time
+            self._air_time[ids] = air_time
         return current_contact
 
     def compute_first_contact(self, step_dt: float | None = None) -> mx.array:
@@ -140,4 +133,5 @@ class BatchedContactSensorState:
             "history_length": self.history_length,
             "contact_margin": self.contact_margin,
             "force_threshold": self.force_threshold,
+            "hotpath_backend": self.hotpath_backend,
         }

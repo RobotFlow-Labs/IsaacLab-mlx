@@ -29,6 +29,12 @@ from isaaclab.utils.configclass import configclass
 
 from .contacts import BatchedContactSensorState
 from .env_cfgs import MacH1FlatEnvCfg
+from .hotpath import (
+    HOTPATH_BACKEND,
+    biped_support_metrics_hotpath,
+    h1_body_positions_hotpath,
+    h1_leg_extension_hotpath,
+)
 from .locomotion import (
     action_rate_l2,
     base_contact_termination,
@@ -278,49 +284,18 @@ class MacH1FlatSimBackend(MacSimBackend):
         self.contact_model.update(body_pos_w, mx.zeros_like(body_pos_w), self.terrain, env_ids=env_ids)
 
     def _leg_extension(self, joint_pos: mx.array) -> mx.array:
-        leg_pos = joint_pos[:, :10].reshape((self.num_envs, 2, 5))
-        hip_pitch = leg_pos[:, :, 2]
-        knee = leg_pos[:, :, 3]
-        ankle = leg_pos[:, :, 4]
-        extension = (
-            0.40
-            + 0.20 * mx.cos(hip_pitch + 0.20)
-            + 0.26 * mx.cos(hip_pitch + knee - 0.10)
-            + 0.08 * mx.cos(hip_pitch + knee + ankle)
-        )
-        return mx.clip(extension, 0.58, 0.98)
+        return h1_leg_extension_hotpath(joint_pos)
 
     def _body_positions(self) -> mx.array:
-        leg_pos = self.joint_state.joint_pos[:, :10].reshape((self.num_envs, 2, 5))
-        hip_yaw = leg_pos[:, :, 0]
-        hip_roll = leg_pos[:, :, 1]
-        hip_pitch = leg_pos[:, :, 2]
-        knee = leg_pos[:, :, 3]
-        ankle = leg_pos[:, :, 4]
-        extension = self._leg_extension(self.joint_state.joint_pos)
-        command_speed = mx.linalg.norm(self.commands[:, :2], axis=1, keepdims=True)
-        phase = self._gait_phase.reshape((self.num_envs, 1)) + GAIT_PHASE_OFFSETS.reshape((1, 2))
-        swing = mx.maximum(mx.sin(phase), 0.0) * (0.18 + 0.65 * command_speed)
-
-        root_xy = self.root_state.root_pos_w[:, None, :2]
-        root_z = self.root_state.root_pos_w[:, 2:3]
-        step_x = 0.18 * self.commands[:, 0:1] * mx.cos(phase)
-        step_y = 0.06 * self.commands[:, 1:2] * mx.sin(phase)
-
-        foot_xy = root_xy + HIP_OFFSETS.reshape((1, 2, 2))
-        foot_xy[:, :, 0] = foot_xy[:, :, 0] + step_x - 0.04 * mx.sin(hip_pitch)
-        foot_xy[:, :, 1] = foot_xy[:, :, 1] + step_y + 0.03 * hip_roll + 0.02 * hip_yaw
-        foot_z = root_z - extension + self.cfg.foot_clearance * swing - 0.03 * mx.tanh(ankle)
-        foot_pos = mx.concatenate([foot_xy, foot_z[:, :, None]], axis=-1)
-
-        knee_xy = root_xy + 0.5 * HIP_OFFSETS.reshape((1, 2, 2))
-        knee_xy[:, :, 0] = knee_xy[:, :, 0] + 0.5 * step_x - 0.02 * mx.sin(hip_pitch)
-        knee_xy[:, :, 1] = knee_xy[:, :, 1] + 0.015 * hip_roll
-        knee_z = root_z - 0.42 - 0.18 * mx.tanh(hip_pitch) - 0.08 * mx.tanh(knee)
-        knee_pos = mx.concatenate([knee_xy, knee_z[:, :, None]], axis=-1)
-
-        torso_pos = self.root_state.root_pos_w[:, None, :]
-        return mx.concatenate([torso_pos, foot_pos, knee_pos], axis=1)
+        return h1_body_positions_hotpath(
+            self.root_state.root_pos_w,
+            self.joint_state.joint_pos,
+            self.commands,
+            self._gait_phase,
+            HIP_OFFSETS,
+            GAIT_PHASE_OFFSETS,
+            self.cfg.foot_clearance,
+        )
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
         del render, update_fabric
@@ -343,14 +318,10 @@ class MacH1FlatSimBackend(MacSimBackend):
         self._last_body_pos_w = body_pos_w
         self.contact_model.update(body_pos_w, self.body_vel_w, self.terrain)
 
-        foot_ids = list(self.contact_model.foot_body_ids)
-        support = self.contact_model.contact_mask[:, foot_ids].astype(mx.float32)
-        support_ratio = mx.mean(support, axis=1)
-        left_support = support[:, 0]
-        right_support = support[:, 1]
-
-        left_actions = mx.mean(self._action_targets[:, list(LEFT_LEG_IDS)], axis=1)
-        right_actions = mx.mean(self._action_targets[:, list(RIGHT_LEG_IDS)], axis=1)
+        support_ratio, left_support, right_support, left_actions, right_actions = biped_support_metrics_hotpath(
+            self.contact_model.contact_mask[:, list(self.contact_model.foot_body_ids)],
+            self._action_targets,
+        )
 
         lin_gain = self.cfg.command_tracking_gain * (0.25 + 0.75 * support_ratio)
         lin_xy = self.root_state.root_lin_vel_b[:, :2]
@@ -444,6 +415,7 @@ class MacH1FlatSimBackend(MacSimBackend):
                 "contacts": True,
                 "deterministic_resets": True,
                 "rollout_helpers": True,
+                "hotpath": HOTPATH_BACKEND,
             },
             "root_state_shape": list(self.root_state.root_pos_w.shape),
             "joint_state_shape": list(self.joint_state.joint_pos.shape),

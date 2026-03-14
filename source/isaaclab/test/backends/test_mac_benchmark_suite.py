@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import importlib.util
+import math
 from pathlib import Path
 
 from isaaclab.backends.test_utils import require_mlx_runtime
@@ -68,3 +69,19 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
         assert benchmark["cpu_fallback"]["active_kernel_backend"] == "metal"
         assert "diagnostics" in benchmark
         assert benchmark["diagnostics"]["sim_backend"]["backend"] == "mac-sim"
+        if benchmark["task"] in {"anymal-c-flat", "h1-flat"}:
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == "mlx-compiled"
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_root_height_mean",
+                "final_root_lin_vel_norm_mean",
+                "final_root_ang_vel_norm_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_joint_acc_abs_mean",
+                "final_applied_torque_abs_mean",
+                "final_contact_count",
+            }
+            assert all(math.isfinite(value) for value in benchmark["output_signature"].values())

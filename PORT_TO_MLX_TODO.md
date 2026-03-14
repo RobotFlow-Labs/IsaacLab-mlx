@@ -441,9 +441,16 @@ without pausing for replanning after every small success.
 
 ### MLX-KERNEL-003
 
-- Status: `BLOCKED`
+- Status: `DONE`
 - Depends on: `MLX-KERNEL-001`
 - Title: Implement Metal-backed replacements for locomotion hot loops
+- Validation:
+  - `source/isaaclab/isaaclab/backends/mac_sim/hotpath.py`
+  - `source/isaaclab/isaaclab/backends/mac_sim/contacts.py`
+  - `source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`
+  - `source/isaaclab/isaaclab/backends/mac_sim/h1.py`
+  - `source/isaaclab/test/backends/test_mac_hotpath.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-KERNEL-004
 
@@ -612,6 +619,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab_rl/test/test_import_safety.py \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
+  source/isaaclab/test/backends/test_mac_hotpath.py \
   source/isaaclab/test/backends/test_portability_utils.py \
   source/isaaclab/test/backends/test_mac_cartpole.py \
   source/isaaclab/test/backends/test_mac_cartpole_showcase.py \
