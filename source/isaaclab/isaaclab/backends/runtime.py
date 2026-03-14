@@ -10,6 +10,7 @@ from __future__ import annotations
 import builtins
 import importlib.util
 import os
+import pickle
 import platform
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -110,6 +111,76 @@ class ComputeBackend(ABC):
     @abstractmethod
     def load_checkpoint(self, path: str) -> Any:
         """Load a backend-native checkpoint."""
+
+
+class TorchCudaComputeBackend(ComputeBackend):
+    """Torch/CUDA compute adapter for the upstream runtime."""
+
+    name: ComputeBackendName = "torch-cuda"
+    capabilities = ComputeCapabilities(
+        autograd=True,
+        checkpoint_io=True,
+        custom_kernels=True,
+        torch_interop=True,
+    )
+
+    def configure_device(self, device: str) -> None:
+        if not device.startswith("cuda"):
+            return
+        import torch
+
+        torch.cuda.set_device(device)
+
+    def seed(self, seed: int) -> int:
+        import torch
+
+        torch.manual_seed(seed)
+        if hasattr(torch, "cuda"):
+            torch.cuda.manual_seed_all(seed)
+        return seed
+
+    def save_checkpoint(self, path: str, payload: Any) -> None:
+        import torch
+
+        torch.save(payload, path)
+
+    def load_checkpoint(self, path: str) -> Any:
+        import torch
+
+        return torch.load(path, map_location="cpu")
+
+
+class MlxComputeBackend(ComputeBackend):
+    """MLX compute adapter for Apple Silicon runtime."""
+
+    name: ComputeBackendName = "mlx"
+    capabilities = ComputeCapabilities(
+        autograd=True,
+        checkpoint_io=True,
+        custom_kernels=True,
+        torch_interop=False,
+    )
+
+    def configure_device(self, device: str) -> None:
+        # MLX manages device placement implicitly through the runtime.
+        del device
+
+    def seed(self, seed: int) -> int:
+        if not is_mlx_available():
+            raise UnsupportedRuntimeFeatureError("MLX backend selected but `mlx` is not importable.")
+        import mlx.core as mx
+
+        mx.random.seed(seed)
+        return seed
+
+    def save_checkpoint(self, path: str, payload: Any) -> None:
+        # Use pickle as a backend-agnostic transport for now. Callers control payload structure.
+        with open(path, "wb") as file:
+            pickle.dump(payload, file)
+
+    def load_checkpoint(self, path: str) -> Any:
+        with open(path, "rb") as file:
+            return pickle.load(file)
 
 
 class SimBackend(ABC):
@@ -445,6 +516,14 @@ def create_sim_backend(runtime: RuntimeSelection | None = None, *, simulation_co
     if runtime.sim_backend == "isaacsim":
         return IsaacSimBackend(simulation_context=simulation_context)
     return MacSimBackend()
+
+
+def create_compute_backend(runtime: RuntimeSelection | None = None) -> ComputeBackend:
+    """Instantiate the compute adapter for the active runtime."""
+    runtime = runtime or current_runtime()
+    if runtime.compute_backend == "torch-cuda":
+        return TorchCudaComputeBackend()
+    return MlxComputeBackend()
 
 
 def get_runtime_state(runtime: RuntimeSelection | None = None) -> dict[str, Any]:

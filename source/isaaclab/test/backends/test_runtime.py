@@ -17,12 +17,15 @@ import pytest
 from isaaclab.app import AppLauncher
 from isaaclab.backends import (
     IsaacSimBackend,
+    MlxComputeBackend,
     MacSimBackend,
+    TorchCudaComputeBackend,
     ENV_COMPUTE_BACKEND,
     ENV_SIM_BACKEND,
     UnsupportedBackendError,
     UnsupportedRuntimeFeatureError,
     configure_torch_device,
+    create_compute_backend,
     create_sim_backend,
     get_runtime_state,
     resolve_runtime_selection,
@@ -106,6 +109,82 @@ def test_create_sim_backend_returns_macsim_adapter():
 
     assert isinstance(backend, MacSimBackend)
     assert backend.contract.articulations.effort_targets is False
+
+
+def test_create_compute_backend_returns_torch_adapter():
+    """Torch runtime should produce the torch compute adapter."""
+    backend = create_compute_backend(resolve_runtime_selection("torch-cuda", "isaacsim", "cuda:0"))
+
+    assert isinstance(backend, TorchCudaComputeBackend)
+    assert backend.capabilities.torch_interop is True
+
+
+def test_create_compute_backend_returns_mlx_adapter():
+    """MLX runtime should produce the MLX compute adapter."""
+    backend = create_compute_backend(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+
+    assert isinstance(backend, MlxComputeBackend)
+    assert backend.capabilities.torch_interop is False
+
+
+def test_torch_compute_backend_routes_device_seed_and_checkpoint(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    """Torch compute adapter should forward device, seed, and checkpoint I/O to torch."""
+    calls: list[tuple[str, object]] = []
+    payload = {"value": 123}
+
+    class FakeTorch:
+        class cuda:
+            @staticmethod
+            def set_device(device):
+                calls.append(("set_device", device))
+
+            @staticmethod
+            def manual_seed_all(seed):
+                calls.append(("manual_seed_all", seed))
+
+        @staticmethod
+        def manual_seed(seed):
+            calls.append(("manual_seed", seed))
+
+        @staticmethod
+        def save(data, path):
+            calls.append(("save", path))
+            path.write_text(str(data), encoding="utf-8")
+
+        @staticmethod
+        def load(path, map_location=None):
+            calls.append(("load", (path, map_location)))
+            return {"loaded": path.read_text(encoding="utf-8")}
+
+    monkeypatch.setitem(sys.modules, "torch", FakeTorch)
+    backend = TorchCudaComputeBackend()
+    checkpoint = tmp_path / "torch_ckpt.txt"
+
+    backend.configure_device("cuda:1")
+    backend.seed(9)
+    backend.save_checkpoint(checkpoint, payload)
+    loaded = backend.load_checkpoint(checkpoint)
+
+    assert calls[0] == ("set_device", "cuda:1")
+    assert ("manual_seed", 9) in calls
+    assert ("manual_seed_all", 9) in calls
+    assert ("save", checkpoint) in calls
+    assert ("load", (checkpoint, "cpu")) in calls
+    assert loaded == {"loaded": str(payload)}
+
+
+def test_mlx_compute_backend_seed_and_checkpoint(tmp_path):
+    """MLX compute adapter should seed the backend and round-trip checkpoints."""
+    pytest.importorskip("mlx.core")
+    backend = MlxComputeBackend()
+    checkpoint = tmp_path / "mlx_ckpt.pkl"
+    payload = {"episode": 4, "reward": 1.5}
+
+    backend.seed(17)
+    backend.save_checkpoint(str(checkpoint), payload)
+    loaded = backend.load_checkpoint(str(checkpoint))
+
+    assert loaded == payload
 
 
 def test_isaacsim_backend_proxies_simulation_and_articulation_calls():
