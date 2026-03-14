@@ -7,11 +7,20 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
-from isaaclab.backends.mac_sim import MacFrankaLiftEnv, MacFrankaLiftEnvCfg  # noqa: E402
+from isaaclab.backends.mac_sim import (  # noqa: E402
+    MacFrankaLiftEnv,
+    MacFrankaLiftEnvCfg,
+    MacFrankaLiftTrainCfg,
+    play_franka_lift_policy,
+    train_franka_lift_policy,
+)
 
 
 def test_mac_franka_lift_reset_and_step_shapes():
@@ -48,3 +57,76 @@ def test_mac_franka_lift_can_grasp_and_raise_cube():
 
     assert bool(mx.any(env.sim_backend.grasped).item())
     assert float(mx.max(env.sim_backend.cube_pos_w[:, 2]).item()) > cfg.table_height
+
+
+def test_train_and_play_franka_lift_smoke(tmp_path: Path):
+    """A tiny MLX train/play loop should produce a reusable Franka lift checkpoint."""
+
+    checkpoint_path = tmp_path / "franka_lift_policy.npz"
+    train_cfg = MacFrankaLiftTrainCfg(
+        env=MacFrankaLiftEnvCfg(num_envs=8, seed=43, episode_length_s=0.5),
+        hidden_dim=32,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint_path=str(checkpoint_path),
+        eval_interval=1,
+    )
+
+    result = train_franka_lift_policy(train_cfg)
+
+    assert checkpoint_path.exists()
+    metadata_path = Path(result["metadata_path"])
+    assert metadata_path.exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["metadata_version"] == 2
+    assert metadata["checkpoint_format"] == "isaaclab-mlx-ppo"
+    assert metadata["task_id"] == "Isaac-Lift-Cube-Franka-v0"
+    assert metadata["policy_distribution"] == "gaussian"
+    assert metadata["hidden_dim"] == 32
+    assert metadata["action_space"] == train_cfg.env.action_space
+    assert metadata["policy_action_space"] == train_cfg.env.action_space
+
+    episode_returns = play_franka_lift_policy(
+        str(checkpoint_path),
+        env_cfg=MacFrankaLiftEnvCfg(num_envs=1, seed=43, episode_length_s=0.5),
+        episodes=1,
+    )
+
+    assert len(episode_returns) == 1
+    assert isinstance(episode_returns[0], float)
+
+
+def test_train_franka_lift_resume_uses_checkpoint_hidden_dim(tmp_path: Path):
+    """Resuming Franka lift should preserve the checkpoint architecture."""
+
+    first_checkpoint = tmp_path / "franka_lift_policy_initial.npz"
+    resumed_checkpoint = tmp_path / "franka_lift_policy_resumed.npz"
+
+    initial_result = train_franka_lift_policy(
+        MacFrankaLiftTrainCfg(
+            env=MacFrankaLiftEnvCfg(num_envs=8, seed=47, episode_length_s=0.5),
+            hidden_dim=32,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            checkpoint_path=str(first_checkpoint),
+            eval_interval=1,
+        )
+    )
+    resumed_result = train_franka_lift_policy(
+        MacFrankaLiftTrainCfg(
+            env=MacFrankaLiftEnvCfg(num_envs=8, seed=47, episode_length_s=0.5),
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            checkpoint_path=str(resumed_checkpoint),
+            resume_from=initial_result["checkpoint_path"],
+            eval_interval=1,
+        )
+    )
+
+    metadata = json.loads(Path(resumed_result["metadata_path"]).read_text(encoding="utf-8"))
+    assert resumed_result["resumed_from"] == initial_result["checkpoint_path"]
+    assert metadata["metadata_version"] == 2
+    assert metadata["hidden_dim"] == 32

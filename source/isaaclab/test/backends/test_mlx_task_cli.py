@@ -33,7 +33,7 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
     module = _load_task_support_module()
 
     assert tuple(module.TASK_PREFIXES) == CURRENT_MAC_NATIVE_TASKS
-    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach")
+    assert list_trainable_mlx_tasks() == ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach", "franka-lift")
 
 
 def test_shared_task_cli_trains_first_locomotion_task(tmp_path: Path):
@@ -112,6 +112,28 @@ def test_shared_task_cli_trains_franka_reach_slice(tmp_path: Path):
     )
 
     assert payload["task"] == "franka-reach"
+    assert Path(payload["checkpoint_path"]).exists()
+    assert Path(payload["metadata_path"]).exists()
+    assert payload["completed_episodes"] >= 0
+
+
+def test_shared_task_cli_trains_franka_lift_slice(tmp_path: Path):
+    checkpoint_path = tmp_path / "franka_lift_policy.npz"
+
+    payload = train_mlx_task(
+        "franka-lift",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=29,
+    )
+
+    assert payload["task"] == "franka-lift"
     assert Path(payload["checkpoint_path"]).exists()
     assert Path(payload["metadata_path"]).exists()
     assert payload["completed_episodes"] >= 0

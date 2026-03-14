@@ -25,6 +25,7 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleTrainCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
+    MacFrankaLiftTrainCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
     MacFrankaReachTrainCfg,
@@ -35,16 +36,18 @@ from isaaclab.backends.mac_sim import (
     MacQuadcopterEnvCfg,
     play_anymal_c_policy,
     play_cartpole_policy,
+    play_franka_lift_policy,
     play_franka_reach_policy,
     play_h1_policy,
     resolve_resume_hidden_dim,
     train_anymal_c_policy,
     train_cartpole_policy,
+    train_franka_lift_policy,
     train_franka_reach_policy,
     train_h1_policy,
 )
 
-TRAINABLE_MLX_TASKS = ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach")
+TRAINABLE_MLX_TASKS = ("cartpole", "anymal-c-flat", "h1-flat", "franka-reach", "franka-lift")
 
 
 @dataclass(frozen=True)
@@ -65,7 +68,7 @@ MLX_TASK_SPECS = {
     "anymal-c-flat": MlxTaskSpec("anymal-c-flat", True, "logs/mlx/anymal_c_flat_policy.npz", 128, 0.35),
     "anymal-c-rough": MlxTaskSpec("anymal-c-rough", False, None, None),
     "franka-reach": MlxTaskSpec("franka-reach", True, "logs/mlx/franka_reach_policy.npz", 128, 0.25),
-    "franka-lift": MlxTaskSpec("franka-lift", False, None, None),
+    "franka-lift": MlxTaskSpec("franka-lift", True, "logs/mlx/franka_lift_policy.npz", 128, 0.25),
     "h1-flat": MlxTaskSpec("h1-flat", True, "logs/mlx/h1_flat_policy.npz", 192, 0.28),
 }
 
@@ -178,6 +181,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_reach_policy(cfg)
+    elif task == "franka-lift":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacFrankaLiftTrainCfg(
+            env=MacFrankaLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/franka_lift_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_franka_lift_policy(cfg)
     else:
         raise ValueError(f"Unsupported MLX training task: {task}")
 
@@ -392,7 +412,20 @@ def evaluate_mlx_task(
 
     if task == "franka-lift":
         if checkpoint is not None:
-            raise ValueError("Task 'franka-lift' does not expose checkpoint replay on the public MLX wrapper.")
+            returns = play_franka_lift_policy(
+                checkpoint,
+                env_cfg=MacFrankaLiftEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
         cfg = MacFrankaLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacFrankaLiftEnv(cfg)
         mx.random.seed(seed)

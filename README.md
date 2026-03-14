@@ -302,16 +302,17 @@ train_payload = train_mlx_task("anymal-c-flat", num_envs=128, updates=10)
 eval_payload = evaluate_mlx_task("h1-flat", num_envs=32, episodes=3)
 ```
 
-Additional eval/manual slices exposed through the same API:
+Additional task slices exposed through the same API:
 
 ```python
 rough_payload = evaluate_mlx_task("anymal-c-rough", num_envs=32, episodes=2)
 reach_train_payload = train_mlx_task("franka-reach", num_envs=64, updates=5)
-reach_payload = evaluate_mlx_task("franka-reach", num_envs=32, episodes=2)
-lift_payload = evaluate_mlx_task("franka-lift", num_envs=32, episodes=2)
+reach_payload = evaluate_mlx_task("franka-reach", checkpoint=reach_train_payload["checkpoint_path"], episodes=2)
+lift_train_payload = train_mlx_task("franka-lift", num_envs=64, updates=5)
+lift_payload = evaluate_mlx_task("franka-lift", checkpoint=lift_train_payload["checkpoint_path"], episodes=2)
 ```
 
-### 9. Train and replay the Franka reach slice
+### 9. Train and replay the Franka reach and lift slices
 
 ```bash
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -327,6 +328,23 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 PYTHONPATH=.:source/isaaclab .venv/bin/python \
   scripts/reinforcement_learning/mlx/play_franka_reach.py \
   --checkpoint logs/mlx/franka_reach_policy.npz \
+  --episodes 3
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/train_franka_lift.py \
+  --num-envs 128 \
+  --updates 10 \
+  --rollout-steps 24 \
+  --epochs-per-update 2 \
+  --checkpoint logs/mlx/franka_lift_policy.npz
+```
+
+```bash
+PYTHONPATH=.:source/isaaclab .venv/bin/python \
+  scripts/reinforcement_learning/mlx/play_franka_lift.py \
+  --checkpoint logs/mlx/franka_lift_policy.npz \
   --episodes 3
 ```
 
@@ -517,7 +535,7 @@ Current task capability matrix:
 | `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | No | Yes | `current-mac-native` | No | Procedural wave terrain plus analytic terrain raycasts |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
 | `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
-| `Isaac-Lift-Cube-Franka-v0` | No | Yes | `current-mac-native` | No | Analytic lift slice with lightweight grasp logic, public eval/manual path |
+| `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support |
 
 Implementation entrypoints:
 
