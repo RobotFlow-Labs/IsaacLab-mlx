@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import asdict
 from pathlib import Path
@@ -44,6 +43,15 @@ from .locomotion import (
     flat_orientation_l2,
     track_linear_velocity_xy_exp,
     track_yaw_rate_z_exp,
+)
+from .ppo_training import (
+    build_checkpoint_metadata,
+    compute_gae,
+    mean_recent_return,
+    normalize_advantages,
+    read_checkpoint_metadata,
+    resolve_resume_hidden_dim,
+    save_policy_checkpoint,
 )
 from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState, BatchedRootState
@@ -89,39 +97,6 @@ class MacH1TrainCfg:
     checkpoint_path: str = "logs/mlx/h1_flat_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
-
-
-def _checkpoint_metadata_path(checkpoint_path: Path) -> Path:
-    if checkpoint_path.suffix:
-        return checkpoint_path.with_suffix(f"{checkpoint_path.suffix}.json")
-    return checkpoint_path.with_suffix(".json")
-
-
-def _write_checkpoint_metadata(checkpoint_path: Path, cfg: MacH1TrainCfg) -> Path:
-    metadata_path = _checkpoint_metadata_path(checkpoint_path)
-    metadata = {
-        "hidden_dim": cfg.hidden_dim,
-        "observation_space": cfg.env.observation_space,
-        "action_space": cfg.env.action_space,
-        "action_std": cfg.action_std,
-        "train_cfg": asdict(cfg),
-    }
-    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    return metadata_path
-
-
-def _read_checkpoint_metadata(checkpoint_path: Path) -> dict[str, Any]:
-    metadata_path = _checkpoint_metadata_path(checkpoint_path)
-    if not metadata_path.exists():
-        return {}
-    return json.loads(metadata_path.read_text(encoding="utf-8"))
-
-
-def _resolve_resume_hidden_dim(cfg: MacH1TrainCfg) -> int:
-    if cfg.resume_from is None:
-        return cfg.hidden_dim
-    metadata = _read_checkpoint_metadata(Path(cfg.resume_from))
-    return int(metadata.get("hidden_dim", cfg.hidden_dim))
 
 
 def _feet_slide_penalty(contact_state: BatchedContactSensorState, body_vel_w: mx.array) -> mx.array:
@@ -651,7 +626,7 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
     """Train a lightweight continuous-control policy on the mac-native H1 flat slice."""
 
     mx.random.seed(cfg.env.seed)
-    cfg.hidden_dim = _resolve_resume_hidden_dim(cfg)
+    cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
     env = MacH1FlatEnv(cfg.env)
     model = MacH1Policy(
         obs_dim=cfg.env.observation_space,
@@ -710,17 +685,14 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
         flat_bootstrap_obs = mx.reshape(mx.stack(bootstrap_obs_rollout), (-1, cfg.env.observation_space))
         _, flat_next_values = model(flat_bootstrap_obs)
         next_values_t = mx.reshape(flat_next_values, (cfg.rollout_steps, cfg.env.num_envs))
-        advantages = []
-        gae = mx.zeros((cfg.env.num_envs,), dtype=mx.float32)
-
-        for step in reversed(range(cfg.rollout_steps)):
-            mask = 1.0 - terminated_t[step]
-            delta = rewards_t[step] + cfg.gamma * next_values_t[step] * mask - values_t[step]
-            gae = delta + cfg.gamma * cfg.gae_lambda * mask * gae
-            advantages.append(gae)
-
-        advantages = mx.stack(list(reversed(advantages)))
-        returns = advantages + values_t
+        advantages, returns = compute_gae(
+            rewards_t,
+            terminated_t,
+            values_t,
+            next_values_t,
+            gamma=cfg.gamma,
+            gae_lambda=cfg.gae_lambda,
+        )
 
         flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
         flat_actions = mx.reshape(mx.stack(actions_rollout), (-1, cfg.env.action_space))
@@ -728,9 +700,7 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
         flat_advantages = mx.reshape(advantages, (-1,))
         flat_returns = mx.reshape(returns, (-1,))
 
-        adv_mean = mx.mean(flat_advantages)
-        adv_std = mx.sqrt(mx.mean(mx.square(flat_advantages - adv_mean)) + 1e-8)
-        flat_advantages = (flat_advantages - adv_mean) / adv_std
+        flat_advantages = normalize_advantages(flat_advantages)
 
         for _ in range(cfg.epochs_per_update):
             loss, grads = loss_and_grad(
@@ -750,23 +720,32 @@ def train_h1_policy(cfg: MacH1TrainCfg) -> dict[str, Any]:
 
         if (update + 1) % cfg.eval_interval == 0 or update == 0 or update == cfg.updates - 1:
             mean_reward = float(mx.mean(rewards_t).item())
-            mean_return = sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10))
+            mean_return = mean_recent_return(completed_returns)
             print(
                 f"[mlx-h1-flat] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
-    checkpoint_path = Path(cfg.checkpoint_path)
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save_weights(str(checkpoint_path))
-    metadata_path = _write_checkpoint_metadata(checkpoint_path, cfg)
+    checkpoint_path, metadata_path = save_policy_checkpoint(
+        model,
+        cfg.checkpoint_path,
+        build_checkpoint_metadata(
+            hidden_dim=cfg.hidden_dim,
+            observation_space=cfg.env.observation_space,
+            action_space=cfg.env.action_space,
+            task_id="Isaac-Velocity-Flat-H1-v0",
+            policy_distribution="gaussian",
+            action_std=cfg.action_std,
+            train_cfg=asdict(cfg),
+        ),
+    )
     return {
-        "checkpoint_path": str(checkpoint_path),
-        "metadata_path": str(metadata_path),
+        "checkpoint_path": checkpoint_path,
+        "metadata_path": metadata_path,
         "resumed_from": resumed_from,
         "train_cfg": asdict(cfg),
         "completed_episodes": len(completed_returns),
-        "mean_recent_return": sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10)),
+        "mean_recent_return": mean_recent_return(completed_returns),
     }
 
 
@@ -782,7 +761,7 @@ def play_h1_policy(
     cfg = env_cfg or MacH1FlatEnvCfg(num_envs=1)
     env = MacH1FlatEnv(cfg)
     checkpoint = Path(checkpoint_path)
-    metadata = _read_checkpoint_metadata(checkpoint)
+    metadata = read_checkpoint_metadata(checkpoint)
     policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 192))
     model = MacH1Policy(obs_dim=cfg.observation_space, hidden_dim=policy_hidden_dim, action_dim=cfg.action_space)
     model.load_weights(str(checkpoint))

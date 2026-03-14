@@ -523,12 +523,12 @@ without pausing for replanning after every small success.
 
 ### MLX-RL-001
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Extract reusable PPO trainer substrate from cartpole-specific code
 
 ### MLX-RL-002
 
-- Status: `READY`
+- Status: `DONE`
 - Depends on: `MLX-RL-001`
 - Title: Define shared MLX policy/checkpoint format for mac-native tasks
 

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import asdict
 from pathlib import Path
@@ -28,6 +27,15 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import MacCartpoleEnvCfg
+from .ppo_training import (
+    build_checkpoint_metadata,
+    compute_gae,
+    mean_recent_return,
+    normalize_advantages,
+    read_checkpoint_metadata,
+    resolve_resume_hidden_dim,
+    save_policy_checkpoint,
+)
 from .reset_primitives import DeterministicResetSampler
 from .state_primitives import BatchedArticulationState
 
@@ -320,38 +328,6 @@ class MacCartpolePolicy(nn.Module):
         return self.policy_head(x), self.value_head(x).squeeze(-1)
 
 
-def _checkpoint_metadata_path(checkpoint_path: Path) -> Path:
-    if checkpoint_path.suffix:
-        return checkpoint_path.with_suffix(f"{checkpoint_path.suffix}.json")
-    return checkpoint_path.with_suffix(".json")
-
-
-def _write_checkpoint_metadata(checkpoint_path: Path, cfg: MacCartpoleTrainCfg) -> Path:
-    metadata_path = _checkpoint_metadata_path(checkpoint_path)
-    metadata = {
-        "hidden_dim": cfg.hidden_dim,
-        "observation_space": cfg.env.observation_space,
-        "action_space": 2,
-        "train_cfg": asdict(cfg),
-    }
-    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    return metadata_path
-
-
-def _read_checkpoint_metadata(checkpoint_path: Path) -> dict[str, Any]:
-    metadata_path = _checkpoint_metadata_path(checkpoint_path)
-    if not metadata_path.exists():
-        return {}
-    return json.loads(metadata_path.read_text(encoding="utf-8"))
-
-
-def _resolve_resume_hidden_dim(cfg: MacCartpoleTrainCfg) -> int:
-    if cfg.resume_from is None:
-        return cfg.hidden_dim
-    metadata = _read_checkpoint_metadata(Path(cfg.resume_from))
-    return int(metadata.get("hidden_dim", cfg.hidden_dim))
-
-
 def compute_rewards(
     rew_scale_alive: float,
     rew_scale_terminated: float,
@@ -414,7 +390,7 @@ def _ppo_loss(
 def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
     """Train a discrete-action cartpole policy that drives the continuous upstream-style force input."""
 
-    cfg.hidden_dim = _resolve_resume_hidden_dim(cfg)
+    cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
     mx.random.seed(cfg.env.seed)
     env = MacCartpoleEnv(cfg.env)
     model = MacCartpolePolicy(obs_dim=cfg.env.observation_space, hidden_dim=cfg.hidden_dim)
@@ -462,18 +438,15 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
         rewards_t = mx.stack(rewards_rollout)
         dones_t = mx.stack(dones_rollout)
         values_t = mx.stack(values_rollout)
-        advantages = []
-        gae = mx.zeros((cfg.env.num_envs,), dtype=mx.float32)
-
-        for step in reversed(range(cfg.rollout_steps)):
-            next_value = bootstrap_value if step == cfg.rollout_steps - 1 else values_t[step + 1]
-            mask = 1.0 - dones_t[step]
-            delta = rewards_t[step] + cfg.gamma * next_value * mask - values_t[step]
-            gae = delta + cfg.gamma * cfg.gae_lambda * mask * gae
-            advantages.append(gae)
-
-        advantages = mx.stack(list(reversed(advantages)))
-        returns = advantages + values_t
+        next_values_t = mx.concatenate([values_t[1:], bootstrap_value[None, :]], axis=0)
+        advantages, returns = compute_gae(
+            rewards_t,
+            dones_t,
+            values_t,
+            next_values_t,
+            gamma=cfg.gamma,
+            gae_lambda=cfg.gae_lambda,
+        )
 
         flat_obs = mx.reshape(mx.stack(obs_rollout), (-1, cfg.env.observation_space))
         flat_actions = mx.reshape(mx.stack(actions_rollout), (-1,))
@@ -481,9 +454,7 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
         flat_advantages = mx.reshape(advantages, (-1,))
         flat_returns = mx.reshape(returns, (-1,))
 
-        adv_mean = mx.mean(flat_advantages)
-        adv_std = mx.sqrt(mx.mean(mx.square(flat_advantages - adv_mean)) + 1e-8)
-        flat_advantages = (flat_advantages - adv_mean) / adv_std
+        flat_advantages = normalize_advantages(flat_advantages)
 
         for _ in range(cfg.epochs_per_update):
             loss, grads = loss_and_grad(
@@ -502,23 +473,32 @@ def train_cartpole_policy(cfg: MacCartpoleTrainCfg) -> dict[str, Any]:
 
         if (update + 1) % cfg.eval_interval == 0 or update == 0 or update == cfg.updates - 1:
             mean_reward = mx.mean(rewards_t).item()
-            mean_return = sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10))
+            mean_return = mean_recent_return(completed_returns)
             print(
                 f"[mlx-cartpole] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
-    checkpoint_path = Path(cfg.checkpoint_path)
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    model.save_weights(str(checkpoint_path))
-    metadata_path = _write_checkpoint_metadata(checkpoint_path, cfg)
+    checkpoint_path, metadata_path = save_policy_checkpoint(
+        model,
+        cfg.checkpoint_path,
+        build_checkpoint_metadata(
+            hidden_dim=cfg.hidden_dim,
+            observation_space=cfg.env.observation_space,
+            action_space=cfg.env.action_space,
+            task_id="Isaac-Cartpole-Direct-v0",
+            policy_distribution="categorical",
+            policy_action_space=2,
+            train_cfg=asdict(cfg),
+        ),
+    )
     return {
-        "checkpoint_path": str(checkpoint_path),
-        "metadata_path": str(metadata_path),
+        "checkpoint_path": checkpoint_path,
+        "metadata_path": metadata_path,
         "resumed_from": resumed_from,
         "train_cfg": asdict(cfg),
         "completed_episodes": len(completed_returns),
-        "mean_recent_return": sum(completed_returns[-10:]) / max(1, min(len(completed_returns), 10)),
+        "mean_recent_return": mean_recent_return(completed_returns),
     }
 
 
@@ -533,7 +513,7 @@ def play_cartpole_policy(
 
     env = MacCartpoleEnv(env_cfg or MacCartpoleEnvCfg(num_envs=1))
     checkpoint = Path(checkpoint_path)
-    metadata = _read_checkpoint_metadata(checkpoint)
+    metadata = read_checkpoint_metadata(checkpoint)
     policy_hidden_dim = hidden_dim or int(metadata.get("hidden_dim", 128))
     model = MacCartpolePolicy(obs_dim=env.cfg.observation_space, hidden_dim=policy_hidden_dim)
     model.load_weights(str(checkpoint))

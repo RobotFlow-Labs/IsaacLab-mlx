@@ -39,6 +39,8 @@ What works today:
 - a runnable `MLX + mac-sim` ANYmal-C flat locomotion slice with contact-aware rewards, resets, and training smoke
 - a runnable `MLX + mac-sim` H1 flat locomotion slice with contact-aware rewards, resets, and training smoke
 - MLX training, checkpoint save/load, and replay scripts
+- a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
+- a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, and explicit env-vs-policy action-space fields
 - portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
 - a maintained kernel inventory for the next Warp/CUDA families still blocking broader parity

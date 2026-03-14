@@ -8,10 +8,8 @@
 from __future__ import annotations
 
 import argparse
-import json
-from pathlib import Path
 
-from isaaclab.backends.mac_sim import MacH1FlatEnvCfg, MacH1TrainCfg, train_h1_policy
+from isaaclab.backends.mac_sim import MacH1FlatEnvCfg, MacH1TrainCfg, resolve_resume_hidden_dim, train_h1_policy
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,27 +28,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
-
-def _resolve_hidden_dim(args: argparse.Namespace) -> int:
-    if args.hidden_dim is not None:
-        return args.hidden_dim
-    if args.resume_from is None:
-        return 192
-
-    metadata_path = Path(args.resume_from)
-    if metadata_path.suffix:
-        metadata_path = metadata_path.with_suffix(f"{metadata_path.suffix}.json")
-    else:
-        metadata_path = metadata_path.with_suffix(".json")
-    if not metadata_path.exists():
-        return 192
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    return int(metadata.get("hidden_dim", 192))
-
-
 def main() -> int:
     args = parse_args()
-    hidden_dim = _resolve_hidden_dim(args)
+    hidden_dim = args.hidden_dim if args.hidden_dim is not None else resolve_resume_hidden_dim(args.resume_from, 192)
     cfg = MacH1TrainCfg(
         env=MacH1FlatEnvCfg(num_envs=args.num_envs, seed=args.seed, episode_length_s=args.episode_length_s),
         hidden_dim=hidden_dim,

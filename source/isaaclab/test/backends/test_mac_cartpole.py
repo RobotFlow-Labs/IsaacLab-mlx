@@ -63,7 +63,13 @@ def test_train_and_play_cartpole_smoke(tmp_path: Path):
     metadata_path = Path(result["metadata_path"])
     assert metadata_path.exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["metadata_version"] == 2
+    assert metadata["checkpoint_format"] == "isaaclab-mlx-ppo"
+    assert metadata["task_id"] == "Isaac-Cartpole-Direct-v0"
+    assert metadata["policy_distribution"] == "categorical"
     assert metadata["hidden_dim"] == 32
+    assert metadata["action_space"] == 1
+    assert metadata["policy_action_space"] == 2
 
     episode_returns = play_cartpole_policy(
         str(checkpoint_path),
@@ -106,6 +112,7 @@ def test_train_cartpole_resume_from_checkpoint(tmp_path: Path):
     assert resumed_result["resumed_from"] == str(first_checkpoint)
     assert resumed_checkpoint.exists()
     resumed_metadata = json.loads(Path(resumed_result["metadata_path"]).read_text(encoding="utf-8"))
+    assert resumed_metadata["metadata_version"] == 2
     assert resumed_metadata["hidden_dim"] == 32
 
     episode_returns = play_cartpole_policy(

@@ -133,7 +133,13 @@ def test_train_and_play_anymal_c_smoke(tmp_path: Path):
     metadata_path = Path(result["metadata_path"])
     assert metadata_path.exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["metadata_version"] == 2
+    assert metadata["checkpoint_format"] == "isaaclab-mlx-ppo"
+    assert metadata["task_id"] == "Isaac-Velocity-Flat-Anymal-C-Direct-v0"
+    assert metadata["policy_distribution"] == "gaussian"
     assert metadata["hidden_dim"] == 32
+    assert metadata["action_space"] == train_cfg.env.action_space
+    assert metadata["policy_action_space"] == train_cfg.env.action_space
 
     episode_returns = play_anymal_c_policy(
         str(checkpoint_path),
@@ -175,4 +181,5 @@ def test_train_anymal_c_resume_uses_checkpoint_hidden_dim(tmp_path: Path):
 
     metadata = json.loads(Path(resumed_result["metadata_path"]).read_text(encoding="utf-8"))
     assert resumed_result["resumed_from"] == initial_result["checkpoint_path"]
+    assert metadata["metadata_version"] == 2
     assert metadata["hidden_dim"] == 32
