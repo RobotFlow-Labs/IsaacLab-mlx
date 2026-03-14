@@ -68,6 +68,7 @@ without pausing for replanning after every small success.
 - `DONE` First humanoid locomotion slice landed for `Isaac-Velocity-Flat-H1-v0` with task registry coverage, play/train smokes, and benchmark smoke
 - `DONE` Benchmark coverage for the current mac-native task set now lives behind a stable `current-mac-native` benchmark group enforced by tests and CI
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
+- `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
 
 ## Phase A: Import And Packaging Safety
 
@@ -421,8 +422,12 @@ without pausing for replanning after every small success.
 
 ### MLX-KERNEL-001
 
-- Status: `READY`
+- Status: `DONE`
 - Title: Inventory first real Warp/custom CUDA kernels needed by planned locomotion target
+- Validation:
+  - `source/isaaclab/isaaclab/backends/kernel_inventory.py`
+  - `source/isaaclab/test/backends/test_kernel_inventory.py`
+  - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
 
 ### MLX-KERNEL-002
 

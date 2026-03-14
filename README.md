@@ -41,6 +41,7 @@ What works today:
 - MLX training, checkpoint save/load, and replay scripts
 - portability guards for optional `torch`/`warp` utility imports on macOS
 - smoke tests for the backend seam and mac-native task slices
+- a maintained kernel inventory for the next Warp/CUDA families still blocking broader parity
 
 What this does not claim yet:
 
@@ -308,6 +309,19 @@ The benchmark emits:
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, and H1 flat
 - runtime metadata including compute, kernel, sensor, and planner backend selection
+
+## Kernel Inventory
+
+The next Warp/CUDA kernel families blocking broader parity are tracked in:
+
+- [`source/isaaclab/isaaclab/backends/kernel_inventory.py`](source/isaaclab/isaaclab/backends/kernel_inventory.py)
+
+That inventory is test-backed and currently covers:
+
+- mesh raycast kernels used by ray-caster sensors and terrain sampling
+- wrench composer kernels relevant to manipulation
+- Fabric transform kernels for future engine-parity work
+- tiled-camera reshape kernels for future camera parity
 
 ## Implemented MLX Vertical Slice
 

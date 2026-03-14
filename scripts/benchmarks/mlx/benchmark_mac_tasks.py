@@ -17,6 +17,7 @@ from typing import Any
 
 import mlx.core as mx
 
+from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
 from isaaclab.backends import get_runtime_state
 from isaaclab.backends.mac_sim import (
     MacAnymalCFlatEnv,
@@ -35,7 +36,6 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
 )
 
-CURRENT_MAC_NATIVE_TASKS = ("cartpole", "cart-double-pendulum", "quadcopter", "anymal-c-flat", "h1-flat")
 TRAINING_BENCHMARK_TASKS = ("train-cartpole",)
 TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + TRAINING_BENCHMARK_TASKS
 TASK_GROUPS = {
