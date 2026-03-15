@@ -58,6 +58,8 @@ def test_current_mac_native_benchmark_group_is_stable():
         "h1-rough",
         "franka-reach",
         "franka-lift",
+        "franka-teddy-bear-lift",
+        "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
@@ -171,6 +173,40 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_cube_distance_mean",
                 "final_cube_height_mean",
                 "final_grasp_ratio",
+            }
+        elif benchmark["task"] == "franka-teddy-bear-lift":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["manipulated_object"] == "teddy-bear"
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_cube_distance_mean",
+                "final_cube_height_mean",
+                "final_grasp_ratio",
+                "final_lift_gap_mean",
+            }
+        elif benchmark["task"] == "franka-stack-instance-randomize":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["instance_randomization"] is True
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_cube_distance_mean",
+                "final_cube_height_mean",
+                "final_grasp_ratio",
+                "final_support_cube_height_mean",
+                "final_stack_distance_mean",
+                "final_stacked_ratio",
+                "final_support_variant_mean",
+                "final_movable_variant_mean",
             }
         elif benchmark["task"] == "franka-stack":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath

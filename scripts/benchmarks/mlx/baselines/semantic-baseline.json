@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-15T00:50:30Z",
+  "generated_at": "2026-03-15T07:08:38Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 17,
+  "task_count": 19,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -324,6 +324,35 @@
         "sim_backend": "mac-sim"
       }
     },
+    "franka-stack-instance-randomize": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 35,
+        "output_signature": {
+          "final_cube_distance_mean": 0.4969131052494049,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.5142015814781189,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.6519426703453064,
+          "final_joint_vel_abs_mean": 0.026411261409521103,
+          "final_movable_variant_mean": 1.5,
+          "final_policy_mean": 0.043142255395650864,
+          "final_policy_std": 0.5493648052215576,
+          "final_reward_mean": 0.012150581926107407,
+          "final_stack_distance_mean": 0.14393985271453857,
+          "final_stacked_ratio": 0.0,
+          "final_support_cube_height_mean": 0.03999999910593033,
+          "final_support_variant_mean": 1.25
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "franka-stack-rgb": {
       "contract": {
         "action_dim": 8,
@@ -342,6 +371,31 @@
           "final_support_cube_height_mean": 0.03999999910593033,
           "final_top_stack_distance_mean": 0.24102027714252472,
           "final_top_stacked_ratio": 0.0
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-teddy-bear-lift": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 27,
+        "output_signature": {
+          "final_cube_distance_mean": 0.4780619144439697,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.5087604522705078,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.6494815945625305,
+          "final_joint_vel_abs_mean": 0.03345862030982971,
+          "final_lift_gap_mean": 0.19999998807907104,
+          "final_policy_mean": 0.0442701131105423,
+          "final_policy_std": 0.5824269652366638,
+          "final_reward_mean": 0.0006490223458968103
         }
       },
       "cpu_fallback": false,

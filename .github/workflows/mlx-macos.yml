@@ -242,6 +242,8 @@ jobs:
         set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
         rough_cfg = parse_env_cfg("Isaac-Velocity-Rough-H1-v0", device="cpu", num_envs=4)
         stack_cfg = parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=4)
+        stack_instance_cfg = parse_env_cfg("Isaac-Stack-Cube-Instance-Randomize-Franka-v0", device="cpu", num_envs=4)
+        teddy_cfg = parse_env_cfg("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0", device="cpu", num_envs=4)
         payload = evaluate_mlx_task(
             "h1-rough",
             num_envs=4,
@@ -254,6 +256,8 @@ jobs:
         artifact = {
             "rough_cfg_type": type(rough_cfg).__name__,
             "stack_cfg_type": type(stack_cfg).__name__,
+            "stack_instance_cfg_type": type(stack_instance_cfg).__name__,
+            "teddy_cfg_type": type(teddy_cfg).__name__,
             "trainable_tasks": list(list_trainable_mlx_tasks()),
             "eval_task": payload["task"],
             "episodes_completed": payload["episodes_completed"],
@@ -269,6 +273,14 @@ jobs:
           --task h1-rough \
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
           --json-out logs/runtime/release-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
+          --task franka-teddy-bear-lift \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-teddy-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
+          --task franka-stack-instance-randomize \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-stack-instance-eval.json
         "$release_root/.venv-release/bin/isaaclab-mlx" train \
           --task cartpole \
           --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
@@ -309,6 +321,8 @@ jobs:
           source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
           source/isaaclab/test/backends/test_mac_franka_reach.py \
           source/isaaclab/test/backends/test_mac_franka_lift.py \
+          source/isaaclab/test/backends/test_mac_franka_teddy_bear_lift.py \
+          source/isaaclab/test/backends/test_mac_franka_stack_instance_randomize.py \
           source/isaaclab/test/backends/test_mac_franka_stack.py \
           source/isaaclab/test/backends/test_mac_franka_stack_rgb.py \
           source/isaaclab/test/backends/test_mac_franka_cabinet.py \
@@ -417,6 +431,36 @@ jobs:
           --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
           --checkpoint logs/mlx/franka_lift_policy.npz --eval-interval 1
 
+    - name: Run MLX Franka teddy-bear lift smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task franka-teddy-bear-lift \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
+
+    - name: Run MLX Franka teddy-bear lift training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task franka-teddy-bear-lift \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/franka_teddy_bear_lift_policy.npz --eval-interval 1
+
+    - name: Run MLX Franka stack instance-randomize smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/evaluate_task.py \
+          --task franka-stack-instance-randomize \
+          --num-envs 8 --episodes 1 --episode-length-s 0.5 --max-steps 512 --no-random-actions
+
+    - name: Run MLX Franka stack instance-randomize training smoke
+      run: |
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/reinforcement_learning/mlx/train_task.py \
+          --task franka-stack-instance-randomize \
+          --num-envs 8 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.5 \
+          --checkpoint logs/mlx/franka_stack_instance_randomize_policy.npz --eval-interval 1
+
     - name: Run MLX Franka stack smoke
       run: |
         PYTHONPATH=.:source/isaaclab .venv/bin/python \
@@ -491,6 +535,8 @@ jobs:
         assert "cartpole-depth-camera" in list_mlx_tasks()
         assert "franka-reach" in list_mlx_tasks()
         assert "franka-lift" in list_mlx_tasks()
+        assert "franka-teddy-bear-lift" in list_mlx_tasks()
+        assert "franka-stack-instance-randomize" in list_mlx_tasks()
         assert "franka-stack" in list_mlx_tasks()
         assert "franka-stack-rgb" in list_mlx_tasks()
         assert "franka-cabinet" in list_mlx_tasks()
@@ -653,10 +699,10 @@ jobs:
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
         dashboard = json.loads(Path("logs/benchmarks/mlx/smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert dashboard["summary"]["rollout_task_count"] == 13
+        assert dashboard["summary"]["rollout_task_count"] == 15
         assert dashboard["summary"]["training_task_count"] == 0
         trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
-        assert trend["summary"]["task_count"] == 13
+        assert trend["summary"]["task_count"] == 15
         planner_payload = json.loads(Path("logs/planner/mac-planner-smoke.json").read_text(encoding="utf-8"))
         assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
         assert planner_payload["plan"]["waypoint_count"] == 6
@@ -673,8 +719,8 @@ jobs:
         assert stereo_payload["depth_mm_mean"] is not None
         assert Path(stereo_payload["left_rgb_path"]).is_file()
         runtime_payload = json.loads(Path("logs/runtime/mac-runtime-diagnostics.json").read_text(encoding="utf-8"))
-        assert runtime_payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
-        assert runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
+        assert runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 17
+        assert runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] == 15
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
@@ -697,22 +743,34 @@ jobs:
         release_payload = json.loads(Path("logs/benchmarks/mlx/release_install_smoke.json").read_text(encoding="utf-8"))
         assert release_payload["rough_cfg_type"] == "MacH1RoughEnvCfg"
         assert release_payload["stack_cfg_type"] == "MacFrankaStackRgbEnvCfg"
+        assert release_payload["stack_instance_cfg_type"] == "MacFrankaStackInstanceRandomizeEnvCfg"
+        assert release_payload["teddy_cfg_type"] == "MacFrankaTeddyBearLiftEnvCfg"
         assert "anymal-c-rough" in release_payload["trainable_tasks"]
         assert "h1-rough" in release_payload["trainable_tasks"]
+        assert "franka-teddy-bear-lift" in release_payload["trainable_tasks"]
+        assert "franka-stack-instance-randomize" in release_payload["trainable_tasks"]
         assert release_payload["eval_task"] == "h1-rough"
         assert release_payload["episodes_completed"] == 1
         release_runtime_payload = json.loads(Path("logs/runtime/release-runtime-diagnostics.json").read_text(encoding="utf-8"))
-        assert release_runtime_payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
+        assert release_runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 17
         release_eval_payload = json.loads(Path("logs/runtime/release-eval.json").read_text(encoding="utf-8"))
         assert release_eval_payload["task"] == "h1-rough"
         assert release_eval_payload["episodes_completed"] == 1
+        release_teddy_eval_payload = json.loads(Path("logs/runtime/release-teddy-eval.json").read_text(encoding="utf-8"))
+        assert release_teddy_eval_payload["task"] == "franka-teddy-bear-lift"
+        assert release_teddy_eval_payload["episodes_completed"] == 1
+        release_stack_instance_eval_payload = json.loads(
+            Path("logs/runtime/release-stack-instance-eval.json").read_text(encoding="utf-8")
+        )
+        assert release_stack_instance_eval_payload["task"] == "franka-stack-instance-randomize"
+        assert release_stack_instance_eval_payload["episodes_completed"] == 1
         release_train_payload = json.loads(Path("logs/runtime/release-train.json").read_text(encoding="utf-8"))
         assert release_train_payload["task"] == "cartpole"
         assert Path(release_train_payload["checkpoint_path"]).exists()
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert full_dashboard["summary"]["rollout_task_count"] == 17
+        assert full_dashboard["summary"]["rollout_task_count"] == 19
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])

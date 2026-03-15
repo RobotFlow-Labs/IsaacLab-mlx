@@ -97,7 +97,9 @@ without pausing for replanning after every small success.
 - `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
 - `DONE` `uv run scripts/bootstrap_uv_mlx.py` now bootstraps the public MLX/mac editable environment in one command
 - `DONE` Upstream-compatible Franka reach/stack/open-drawer controller variants now resolve to the canonical mac-native manipulation slices through the lazy task registry, public MLX wrapper, and installed CLI without aliasing heavier visuomotor or blueprint task families
-- `DONE` Upstream-compatible Franka lift IK variants now resolve to the canonical mac-native lift slice, while teddy-bear lift and richer Franka stack visuomotor/cosmos/blueprint/skillgen/bin-mimic families remain discoverable through explicit `sim-backend=isaacsim` gating on mac
+- `DONE` Upstream-compatible Franka lift IK variants now resolve to the canonical mac-native lift slice, while richer Franka stack visuomotor/cosmos/blueprint/skillgen/bin-mimic families remain discoverable through explicit `sim-backend=isaacsim` gating on mac
+- `DONE` Seventh trainable Franka manipulation slice landed for `Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0` by reusing the shared analytic lift substrate, public MLX wrapper/CLI support, benchmark coverage, semantic baseline refresh, and focused backend tests instead of over-claiming a new simulator family
+- `DONE` Eighth trainable Franka manipulation slice landed for `Isaac-Stack-Cube-Instance-Randomize-Franka-v0` by keeping the shared analytic stack substrate but adding explicit variant-id observations, deterministic distinct support/movable object sampling, public MLX wrapper/CLI support, benchmark coverage, semantic baseline refresh, and focused backend tests instead of dishonestly aliasing it to plain stack
 
 ## Phase A: Import And Packaging Safety
 
@@ -750,12 +752,12 @@ without pausing for replanning after every small success.
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
-- Port the next manipulation milestone beyond the current six trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
+- Port the next manipulation milestone beyond the current eight trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
 - Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 - Keep the generic runtime metadata honest: only advertise generic sensor/runtime capabilities that are actually exposed through backend-neutral APIs, and push task-specific or tooling-only support into explicit diagnostic fields instead of broad parity flags.
 - Keep manipulation compatibility aliasing honest: widen upstream task-ID coverage only where the reduced mac-native slice still matches the observation/action/checkpoint contract, and keep heavier visuomotor / blueprint / skillgen families explicitly gated instead of quietly remapping them.
-- The next manipulation milestone should be a genuinely new reduced mac-native task, not more aliasing. The honest alias/gating boundary for the current Franka family is now in place.
+- The next manipulation milestone should stay genuinely new. The honest alias/gating boundary for the current Franka family now includes the separate instance-randomized stack slice, so further progress should come from another reduced mac-native task rather than re-aliasing richer upstream families.
 
 ## Validation Commands
 

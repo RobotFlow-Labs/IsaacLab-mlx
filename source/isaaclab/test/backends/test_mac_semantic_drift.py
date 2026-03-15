@@ -50,7 +50,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 17
+    assert snapshot["task_count"] == 19
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -60,6 +60,17 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["output_signature"]["final_lift_gap_mean"] >= 0.0
+    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["output_signature"][
+        "final_support_variant_mean"
+    ] >= 0.0
+    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["output_signature"][
+        "final_movable_variant_mean"
+    ] >= 0.0
     assert snapshot["tasks"]["franka-stack"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0

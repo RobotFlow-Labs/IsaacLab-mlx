@@ -42,9 +42,9 @@ What works today:
 - a runnable `MLX + mac-sim` H1 rough locomotion slice with procedural wave terrain, analytic height scans, deterministic replay coverage, and corrected rough observation sizing for the shared H1 policy path
 - trainable rough locomotion slices for ANYmal-C and H1 with shared PPO/checkpoint contracts, replay support, and CI smoke coverage
 - a Metal-backed locomotion root-step helper for the ANYmal-C and H1 slices, with benchmark and semantic-drift diagnostics that report `hotpath: "mlx-metal-root-step"` when that narrow kernel is active
-- trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, cabinet-drawer, and open-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
+- trainable `MLX + mac-sim` Franka reach, cube-lift, teddy-bear lift, instance-randomized two-cube stack, two-cube stack, three-cube stack, cabinet-drawer, and open-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
 - upstream-compatible Franka reach/lift/stack/open-drawer controller variants now resolve through the lazy task registry, public `isaaclab_rl.mlx` wrapper, and installed MLX CLI onto the existing reduced mac-native slices instead of failing on macOS import/runtime seams
-- richer Franka manipulation families such as teddy-bear lift, stack visuomotor/cosmos, blueprint, skillgen, and bin-mimic now stay discoverable on mac while failing explicitly through `sim-backend=isaacsim` gating instead of disappearing or crashing late
+- richer Franka manipulation families such as stack visuomotor/cosmos, blueprint, skillgen, and bin-mimic now stay discoverable on mac while failing explicitly through `sim-backend=isaacsim` gating instead of disappearing or crashing late
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i, including a live Terminal-hosted `zed-sdk-mlx` validation path for macOS TCC-safe raw capture
@@ -104,7 +104,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 13 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer, plus synthetic cartpole RGB/depth camera variants. The task capability matrix below is the authoritative public support surface.
+The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 15 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer, plus synthetic cartpole RGB/depth camera variants for 17 public MLX/mac task IDs overall. Thirteen of those public tasks are trainable end-to-end on the MLX/mac path. The task capability matrix below is the authoritative public support surface.
 
 ### Kernel backend
 
@@ -162,7 +162,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Shared generic batched articulation/root-state substrate plus the current mac-native task slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, Franka open-drawer, and synthetic cartpole RGB/depth camera tasks |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Shared generic batched articulation/root-state substrate plus the current mac-native task slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka cabinet, Franka open-drawer, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -550,7 +550,7 @@ The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - stable named task groups derived from the typed manifest in [`source/isaaclab/isaaclab/backends/supported_tasks.py`](source/isaaclab/isaaclab/backends/supported_tasks.py)
-- a stable public `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer
+- a stable public `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer
 - a stable `sensor-mac-native` benchmark projection that extends the public camera slices with benchmark-only height-scan variants for `anymal-c-flat` and `h1-flat`
 - a stable `full` benchmark projection that combines the public task surface with the benchmark-only sensor/training rows for one normalized dashboard/trend artifact
 - runtime metadata including compute, kernel, sensor, and planner backend selection
@@ -645,7 +645,9 @@ Current task capability matrix:
 | `Isaac-Velocity-Rough-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain, analytic terrain raycasts, rough-task checkpoint inference, and MLX PPO train/replay support |
 | `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support; compatible upstream aliases include `Isaac-Reach-Franka-IK-Abs-v0`, `Isaac-Reach-Franka-IK-Rel-v0`, `Isaac-Reach-Franka-OSC-v0`, and `Isaac-Reach-Franka-OSC-Play-v0` |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support; compatible upstream aliases include `Isaac-Lift-Cube-Franka-IK-Abs-v0` and `Isaac-Lift-Cube-Franka-IK-Rel-v0` |
-| `Isaac-Stack-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic two-cube stack slice with lightweight grasp/release logic and MLX PPO train/replay support; compatible upstream aliases include `Isaac-Stack-Cube-Franka-IK-Abs-v0`, `Isaac-Stack-Cube-Franka-IK-Rel-v0`, `Isaac-Stack-Cube-Instance-Randomize-Franka-v0`, `Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0`, `Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0`, and `Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-v0` |
+| `Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced plush-object lift slice mapped onto the analytic lift substrate with shared MLX PPO train/replay support and benchmark diagnostics keyed to the teddy-bear object contract |
+| `Isaac-Stack-Cube-Instance-Randomize-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced instance-randomized two-cube stack slice with explicit variant-id observations, deterministic distinct support/movable object sampling, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0` |
+| `Isaac-Stack-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic two-cube stack slice with lightweight grasp/release logic and MLX PPO train/replay support; compatible upstream aliases include `Isaac-Stack-Cube-Franka-IK-Abs-v0`, `Isaac-Stack-Cube-Franka-IK-Rel-v0`, `Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0`, and `Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-v0` |
 | `Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic three-cube sequential stack slice with staged terminal metrics and MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0` |
 | `Isaac-Franka-Cabinet-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced drawer-handle workflow with deterministic open-distance semantics and MLX PPO train/replay support |
 | `Isaac-Open-Drawer-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Manager-style open-drawer slice mapped onto the reduced analytic drawer substrate with MLX PPO train/replay support; compatible upstream aliases include `Isaac-Open-Drawer-Franka-IK-Abs-v0` and `Isaac-Open-Drawer-Franka-IK-Rel-v0` |
@@ -659,7 +661,7 @@ Implementation entrypoints:
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
 - ANYmal-C flat and rough locomotion environments in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
-- Franka reach/lift/stack/stack-RGB/cabinet/open-drawer manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
+- Franka reach/lift/teddy-bear-lift/stack-instance-randomize/stack/stack-RGB/cabinet/open-drawer manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
 - analytic terrain raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
 - backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
 - backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
@@ -688,12 +690,14 @@ The cartpole path preserves the important upstream task semantics:
 - H1 rough preserves the same H1 policy layout while fixing the configured observation width to include the nine default height-scan channels used by the rough task
 - Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics and now exposes checkpointed MLX PPO training/replay
 - Franka lift preserves deterministic cube placement, lightweight grasp state, explicit lift-success semantics, and multi-step replay coverage
+- Franka teddy-bear lift preserves the shared lift PPO/checkpoint/reset contract while swapping in a reduced plush-object placement and success-height envelope, so the mac-native slice stays honest to the upstream task ID without pretending full soft-body or visual parity
+- Franka stack instance-randomize preserves the shared stack PPO/checkpoint/reset contract while appending explicit variant-id observations and deterministic distinct support/movable object sampling, so the upstream randomized task ID stays honest without silently collapsing into the plain stack slice
 - Franka stack preserves deterministic support-cube placement, lightweight release-driven stack success semantics, and train/replay parity with the other manipulation slices
 - Franka stack RGB preserves a staged three-cube manipulation contract with transition-only middle-stage bonuses, top-stage terminal metrics derived from pre-reset observations, and train/replay parity with the other manipulation slices
 - Franka cabinet preserves a reduced drawer-handle workflow with deterministic open-distance semantics, lightweight handle-grasp logic, and train/replay parity with the other manipulation slices
 - Franka open-drawer preserves the reduced analytic drawer substrate while exposing the manager-style public task ID, deterministic handle-distance/open-distance terminal metrics, and the same train/replay/checkpoint contract as the other Franka slices
 - upstream-compatible reach/lift/stack/open-drawer controller variants now normalize to the canonical Franka MLX task keys in the public wrapper and installed CLI, so the mac-native surface stays recognizable without pretending separate controller-physics parity
-- richer Franka manipulation families including teddy-bear lift, stack visuomotor/cosmos, blueprint, skillgen, and bin-mimic stay explicitly discoverable but isaacsim-only on mac; they are not silently remapped onto the reduced analytic slices
+- richer Franka manipulation families including stack visuomotor/cosmos, blueprint, skillgen, and bin-mimic stay explicitly discoverable but isaacsim-only on mac; they are not silently remapped onto the reduced analytic slices
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
 - benchmark and semantic drift reports now surface `hotpath: "mlx-metal-root-step"` for the locomotion root-step seam when active, `hotpath: "mlx-metal-ee"` for the Franka reach/lift/stack/stack-RGB/cabinet slices when the Metal end-effector helper is active, and keep the remaining helpers explicit when they stay on compiled MLX

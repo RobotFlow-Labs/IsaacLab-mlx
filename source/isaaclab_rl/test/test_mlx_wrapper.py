@@ -37,6 +37,8 @@ def test_public_mlx_task_lists_are_stable():
         "h1-rough",
         "franka-reach",
         "franka-lift",
+        "franka-teddy-bear-lift",
+        "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
@@ -50,6 +52,8 @@ def test_public_mlx_task_lists_are_stable():
         "h1-rough",
         "franka-reach",
         "franka-lift",
+        "franka-teddy-bear-lift",
+        "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
@@ -58,6 +62,8 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("h1-flat").default_hidden_dim == 192
     assert get_mlx_task_spec("franka-reach").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-lift").default_hidden_dim == 128
+    assert get_mlx_task_spec("franka-teddy-bear-lift").default_hidden_dim == 128
+    assert get_mlx_task_spec("franka-stack-instance-randomize").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack-rgb").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-cabinet").default_hidden_dim == 128
@@ -69,6 +75,10 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
 
     assert get_mlx_task_spec("Isaac-Reach-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-reach")
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
+    assert get_mlx_task_spec("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-teddy-bear-lift")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0") == get_mlx_task_spec(
+        "franka-stack-instance-randomize"
+    )
     assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
     assert get_mlx_task_spec("Isaac-Open-Drawer-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-open-drawer")
 
@@ -261,7 +271,7 @@ def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
     assert depth_payload["episodes_completed"] == 1
 
 
-def test_evaluate_franka_reach_lift_stack_stack_rgb_cabinet_and_open_drawer_manual_via_public_mlx_wrapper():
+def test_evaluate_franka_reach_lift_stack_family_cabinet_and_open_drawer_manual_via_public_mlx_wrapper():
     """The public wrapper should expose manual evaluation for the current trainable manipulation slices."""
 
     reach_payload = evaluate_mlx_task(
@@ -281,6 +291,15 @@ def test_evaluate_franka_reach_lift_stack_stack_rgb_cabinet_and_open_drawer_manu
         max_steps=512,
         random_actions=False,
         seed=37,
+    )
+    stack_instance_payload = evaluate_mlx_task(
+        "franka-stack-instance-randomize",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=45,
     )
     stack_payload = evaluate_mlx_task(
         "franka-stack",
@@ -323,6 +342,8 @@ def test_evaluate_franka_reach_lift_stack_stack_rgb_cabinet_and_open_drawer_manu
     assert reach_payload["episodes_completed"] == 1
     assert lift_payload["task"] == "franka-lift"
     assert lift_payload["episodes_completed"] == 1
+    assert stack_instance_payload["task"] == "franka-stack-instance-randomize"
+    assert stack_instance_payload["episodes_completed"] == 1
     assert stack_payload["task"] == "franka-stack"
     assert stack_payload["episodes_completed"] == 1
     assert stack_rgb_payload["task"] == "franka-stack-rgb"
@@ -394,6 +415,71 @@ def test_train_and_evaluate_franka_lift_via_public_mlx_wrapper(tmp_path: Path):
     assert train_payload["task"] == "franka-lift"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-lift"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_franka_teddy_bear_lift_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for the teddy-bear lift slice."""
+
+    checkpoint_path = tmp_path / "franka-teddy-bear-lift-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "franka-teddy-bear-lift",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=47,
+    )
+    eval_payload = evaluate_mlx_task(
+        "franka-teddy-bear-lift",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=47,
+    )
+
+    assert train_payload["task"] == "franka-teddy-bear-lift"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "franka-teddy-bear-lift"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_franka_stack_instance_randomize_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for the instance-randomized stack slice."""
+
+    checkpoint_path = tmp_path / "franka-stack-instance-randomize-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "franka-stack-instance-randomize",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=49,
+    )
+    eval_payload = evaluate_mlx_task(
+        "franka-stack-instance-randomize",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=49,
+    )
+
+    assert train_payload["task"] == "franka-stack-instance-randomize"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "franka-stack-instance-randomize"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)

@@ -80,6 +80,13 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaTeddyBearLiftEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaTeddyBearLiftEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-Play-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {
@@ -102,9 +109,9 @@ MAC_SAFE_TASK_SPECS = (
     },
     {
         "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
-        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackInstanceRandomizeEnv",
         "kwargs": {
-            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackInstanceRandomizeEnvCfg",
         },
     },
     {
@@ -158,9 +165,9 @@ MAC_SAFE_TASK_SPECS = (
     },
     {
         "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
-        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackInstanceRandomizeEnv",
         "kwargs": {
-            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackInstanceRandomizeEnvCfg",
         },
     },
     {
@@ -391,13 +398,6 @@ ISAACSIM_ONLY_TASK_SPECS = (
         "kwargs": _isaacsim_only_kwargs(
             env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.pickplace_unitree_g1_inspire_hand_env_cfg:PickPlaceG1InspireFTPEnvCfg",
             robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
-        ),
-    },
-    {
-        "id": "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.lift.config.franka.ik_abs_env_cfg:FrankaTeddyBearLiftEnvCfg",
         ),
     },
     {

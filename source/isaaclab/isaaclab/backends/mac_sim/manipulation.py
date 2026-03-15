@@ -32,7 +32,9 @@ from .env_cfgs import (
     MacFrankaOpenDrawerEnvCfg,
     MacFrankaReachEnvCfg,
     MacFrankaStackEnvCfg,
+    MacFrankaStackInstanceRandomizeEnvCfg,
     MacFrankaStackRgbEnvCfg,
+    MacFrankaTeddyBearLiftEnvCfg,
 )
 from .hotpath import (
     franka_cabinet_step_hotpath,
@@ -100,6 +102,27 @@ class MacFrankaLiftTrainCfg:
 
 
 @configclass
+class MacFrankaTeddyBearLiftTrainCfg:
+    """Training configuration for the MLX Franka teddy-bear lift slice."""
+
+    env: MacFrankaTeddyBearLiftEnvCfg = MacFrankaTeddyBearLiftEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.25
+    checkpoint_path: str = "logs/mlx/franka_teddy_bear_lift_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
 class MacFrankaStackTrainCfg:
     """Training configuration for the MLX Franka stack slice."""
 
@@ -116,6 +139,27 @@ class MacFrankaStackTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.25
     checkpoint_path: str = "logs/mlx/franka_stack_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacFrankaStackInstanceRandomizeTrainCfg:
+    """Training configuration for the MLX Franka instance-randomized stack slice."""
+
+    env: MacFrankaStackInstanceRandomizeEnvCfg = MacFrankaStackInstanceRandomizeEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.25
+    checkpoint_path: str = "logs/mlx/franka_stack_instance_randomize_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -390,6 +434,19 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
         return payload
 
 
+class MacFrankaTeddyBearLiftSimBackend(MacFrankaLiftSimBackend):
+    """A lightweight batched Franka teddy-bear lift backend on MLX/mac-sim."""
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "franka-teddy-bear-lift"
+        payload["subsystems"] = {
+            **payload["subsystems"],
+            "manipulated_object": "teddy-bear",
+        }
+        return payload
+
+
 class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
     """A lightweight batched Franka cube-stack backend on MLX/mac-sim."""
 
@@ -493,6 +550,49 @@ class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
             "grasp_logic": True,
             "stack_logic": True,
             "hotpath": get_franka_hotpath_backend(),
+        }
+        return payload
+
+
+class MacFrankaStackInstanceRandomizeSimBackend(MacFrankaStackSimBackend):
+    """A lightweight batched Franka instance-randomized stack backend on MLX/mac-sim."""
+
+    def __init__(
+        self, cfg: MacFrankaStackInstanceRandomizeEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None
+    ):
+        self.support_variant_id = mx.zeros((cfg.num_envs,), dtype=mx.int32)
+        self.movable_variant_id = mx.zeros((cfg.num_envs,), dtype=mx.int32)
+        super().__init__(cfg, reset_sampler=reset_sampler)
+        self.cfg = cfg
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        super().reset_envs(env_ids)
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        support_variant_id = self.reset_sampler.integers((rows,), 0, self.cfg.variant_count, dtype=mx.int32)
+        movable_variant_id = self.reset_sampler.integers((rows,), 0, self.cfg.variant_count - 1, dtype=mx.int32)
+        movable_variant_id = mx.where(movable_variant_id >= support_variant_id, movable_variant_id + 1, movable_variant_id)
+        self.support_variant_id[ids] = support_variant_id
+        self.movable_variant_id[ids] = movable_variant_id
+
+    def variant_observations(self) -> mx.array:
+        if self.cfg.variant_count <= 1:
+            return mx.zeros((self.cfg.num_envs, 2), dtype=mx.float32)
+        scale = 2.0 / float(self.cfg.variant_count - 1)
+        support_variant = self.support_variant_id.astype(mx.float32) * scale - 1.0
+        movable_variant = self.movable_variant_id.astype(mx.float32) * scale - 1.0
+        return mx.stack((support_variant, movable_variant), axis=-1)
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "franka-stack-instance-randomize"
+        payload["subsystems"] = {
+            **payload.get("subsystems", {}),
+            "instance_randomization": True,
+            "variant_count": self.cfg.variant_count,
+            "variant_labels": self.cfg.variant_labels,
         }
         return payload
 
@@ -905,6 +1005,35 @@ class MacFrankaLiftEnv(MacFrankaReachEnv):
         return success, time_out
 
 
+class MacFrankaTeddyBearLiftEnv(MacFrankaLiftEnv):
+    """Vectorized Franka teddy-bear lift task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFrankaTeddyBearLiftEnvCfg | None = None):
+        self.cfg = cfg or MacFrankaTeddyBearLiftEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacFrankaTeddyBearLiftSimBackend(
+            self.cfg,
+            reset_sampler=self.reset_sampler.fork("sim-backend"),
+        )
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+
 class MacFrankaStackEnv(MacFrankaReachEnv):
     """Vectorized Franka cube-stack task for MLX/mac-sim."""
 
@@ -975,6 +1104,38 @@ class MacFrankaStackEnv(MacFrankaReachEnv):
         success = self.sim_backend.stack_success()
         time_out = self.episode_length_buf >= self.max_episode_length
         return success, time_out
+
+
+class MacFrankaStackInstanceRandomizeEnv(MacFrankaStackEnv):
+    """Vectorized Franka instance-randomized cube-stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFrankaStackInstanceRandomizeEnvCfg | None = None):
+        self.cfg = cfg or MacFrankaStackInstanceRandomizeEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacFrankaStackInstanceRandomizeSimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+    def _build_policy_observations(self) -> mx.array:
+        base_obs = super()._build_policy_observations()
+        return mx.concatenate((base_obs, self.sim_backend.variant_observations()), axis=-1)
 
 
 class MacFrankaCabinetEnv(MacFrankaReachEnv):
@@ -1362,12 +1523,18 @@ def play_franka_reach_policy(
     )
 
 
-def train_franka_lift_policy(cfg: MacFrankaLiftTrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control Franka lift policy on the mac-native MLX slice."""
+def _train_franka_lift_like_policy(
+    cfg: MacFrankaLiftTrainCfg | MacFrankaTeddyBearLiftTrainCfg,
+    *,
+    env_factory: type[MacFrankaLiftEnv] | type[MacFrankaTeddyBearLiftEnv],
+    task_id: str,
+    log_prefix: str,
+) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka lift-like policy on the mac-native MLX slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
-    env = MacFrankaLiftEnv(cfg.env)
+    env = env_factory(cfg.env)
     model = MacFrankaReachPolicy(
         obs_dim=cfg.env.observation_space,
         hidden_dim=cfg.hidden_dim,
@@ -1461,7 +1628,7 @@ def train_franka_lift_policy(cfg: MacFrankaLiftTrainCfg) -> dict[str, Any]:
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = mean_recent_return(completed_returns)
             print(
-                f"[mlx-franka-lift] update={update + 1}/{cfg.updates} "
+                f"[{log_prefix}] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
@@ -1472,7 +1639,7 @@ def train_franka_lift_policy(cfg: MacFrankaLiftTrainCfg) -> dict[str, Any]:
             hidden_dim=cfg.hidden_dim,
             observation_space=cfg.env.observation_space,
             action_space=cfg.env.action_space,
-            task_id="Isaac-Lift-Cube-Franka-v0",
+            task_id=task_id,
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
@@ -1486,6 +1653,53 @@ def train_franka_lift_policy(cfg: MacFrankaLiftTrainCfg) -> dict[str, Any]:
         "completed_episodes": len(completed_returns),
         "mean_recent_return": mean_recent_return(completed_returns),
     }
+
+
+def train_franka_lift_policy(cfg: MacFrankaLiftTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka lift policy on the mac-native MLX slice."""
+
+    return _train_franka_lift_like_policy(
+        cfg,
+        env_factory=MacFrankaLiftEnv,
+        task_id="Isaac-Lift-Cube-Franka-v0",
+        log_prefix="mlx-franka-lift",
+    )
+
+
+def train_franka_teddy_bear_lift_policy(cfg: MacFrankaTeddyBearLiftTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka teddy-bear lift policy on the mac-native MLX slice."""
+
+    return _train_franka_lift_like_policy(
+        cfg,
+        env_factory=MacFrankaTeddyBearLiftEnv,
+        task_id="Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
+        log_prefix="mlx-franka-teddy-bear-lift",
+    )
+
+
+def _play_franka_lift_like_policy(
+    checkpoint_path: str,
+    *,
+    env_factory: type[MacFrankaLiftEnv] | type[MacFrankaTeddyBearLiftEnv],
+    env_cfg: MacFrankaLiftEnvCfg | MacFrankaTeddyBearLiftEnvCfg,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Franka lift-like policy greedily and return episode returns."""
+
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=env_factory,
+        env_cfg=env_cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
 
 
 def play_franka_lift_policy(
@@ -1498,27 +1712,46 @@ def play_franka_lift_policy(
     """Run a trained Franka lift policy greedily and return episode returns."""
 
     cfg = env_cfg or MacFrankaLiftEnvCfg(num_envs=1)
-    return play_gaussian_policy_checkpoint(
+    return _play_franka_lift_like_policy(
         checkpoint_path,
         env_factory=MacFrankaLiftEnv,
         env_cfg=cfg,
-        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
-            obs_dim=obs_dim,
-            hidden_dim=policy_hidden_dim,
-            action_dim=action_dim,
-        ),
-        default_hidden_dim=128,
         episodes=episodes,
         hidden_dim=hidden_dim,
     )
 
 
-def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control Franka stack policy on the mac-native MLX slice."""
+def play_franka_teddy_bear_lift_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaTeddyBearLiftEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Franka teddy-bear lift policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaTeddyBearLiftEnvCfg(num_envs=1)
+    return _play_franka_lift_like_policy(
+        checkpoint_path,
+        env_factory=MacFrankaTeddyBearLiftEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def _train_franka_stack_like_policy(
+    cfg: MacFrankaStackTrainCfg | MacFrankaStackInstanceRandomizeTrainCfg,
+    *,
+    env_factory: type[MacFrankaStackEnv] | type[MacFrankaStackInstanceRandomizeEnv],
+    task_id: str,
+    log_prefix: str,
+) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka stack-like policy on the mac-native MLX slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
-    env = MacFrankaStackEnv(cfg.env)
+    env = env_factory(cfg.env)
     model = MacFrankaReachPolicy(
         obs_dim=cfg.env.observation_space,
         hidden_dim=cfg.hidden_dim,
@@ -1612,7 +1845,7 @@ def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = mean_recent_return(completed_returns)
             print(
-                f"[mlx-franka-stack] update={update + 1}/{cfg.updates} "
+                f"[{log_prefix}] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
@@ -1623,7 +1856,7 @@ def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
             hidden_dim=cfg.hidden_dim,
             observation_space=cfg.env.observation_space,
             action_space=cfg.env.action_space,
-            task_id="Isaac-Stack-Cube-Franka-v0",
+            task_id=task_id,
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
@@ -1639,6 +1872,53 @@ def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
     }
 
 
+def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacFrankaStackEnv,
+        task_id="Isaac-Stack-Cube-Franka-v0",
+        log_prefix="mlx-franka-stack",
+    )
+
+
+def train_franka_stack_instance_randomize_policy(cfg: MacFrankaStackInstanceRandomizeTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Franka instance-randomized stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacFrankaStackInstanceRandomizeEnv,
+        task_id="Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
+        log_prefix="mlx-franka-stack-instance-randomize",
+    )
+
+
+def _play_franka_stack_like_policy(
+    checkpoint_path: str,
+    *,
+    env_factory: type[MacFrankaStackEnv] | type[MacFrankaStackInstanceRandomizeEnv],
+    env_cfg: MacFrankaStackEnvCfg | MacFrankaStackInstanceRandomizeEnvCfg,
+    episodes: int,
+    hidden_dim: int | None,
+) -> list[float]:
+    """Run a trained Franka stack-like policy greedily and return episode returns."""
+
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=env_factory,
+        env_cfg=env_cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
 def play_franka_stack_policy(
     checkpoint_path: str,
     *,
@@ -1649,16 +1929,29 @@ def play_franka_stack_policy(
     """Run a trained Franka stack policy greedily and return episode returns."""
 
     cfg = env_cfg or MacFrankaStackEnvCfg(num_envs=1)
-    return play_gaussian_policy_checkpoint(
+    return _play_franka_stack_like_policy(
         checkpoint_path,
         env_factory=MacFrankaStackEnv,
         env_cfg=cfg,
-        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
-            obs_dim=obs_dim,
-            hidden_dim=policy_hidden_dim,
-            action_dim=action_dim,
-        ),
-        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_stack_instance_randomize_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackInstanceRandomizeEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Franka instance-randomized stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackInstanceRandomizeEnvCfg(num_envs=1)
+    return _play_franka_stack_like_policy(
+        checkpoint_path,
+        env_factory=MacFrankaStackInstanceRandomizeEnv,
+        env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,
     )

@@ -432,6 +432,22 @@ class MacFrankaLiftEnvCfg(MacFrankaReachEnvCfg):
 
 
 @configclass
+class MacFrankaTeddyBearLiftEnvCfg(MacFrankaLiftEnvCfg):
+    """Configuration for a reduced mac-native Franka teddy-bear lift slice."""
+
+    cube_x_range: tuple[float, float] = (0.46, 0.62)
+    cube_y_range: tuple[float, float] = (-0.10, 0.10)
+    grasp_distance_threshold: float = 0.085
+    grasp_offset_z: float = 0.07
+    lift_success_height: float = 0.24
+    reach_reward_scale: float = 1.4
+    grasp_reward_scale: float = 0.65
+    lift_reward_scale: float = 4.5
+    lift_success_bonus: float = 5.0
+    manipulated_object_label: str = "teddy-bear"
+
+
+@configclass
 class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
     """Configuration for a reduced mac-native Franka cube-stacking slice."""
 
@@ -452,6 +468,19 @@ class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
     stack_align_reward_scale: float = 2.5
     stack_distance_reward_gain: float = 9.0
     stack_success_bonus: float = 6.0
+
+
+@configclass
+class MacFrankaStackInstanceRandomizeEnvCfg(MacFrankaStackEnvCfg):
+    """Configuration for a reduced mac-native Franka instance-randomized stack slice."""
+
+    observation_space: int = 35
+    support_cube_x_range: tuple[float, float] = (0.44, 0.58)
+    support_cube_y_range: tuple[float, float] = (-0.07, 0.07)
+    movable_cube_offset_x_range: tuple[float, float] = (0.08, 0.18)
+    movable_cube_offset_y_range: tuple[float, float] = (0.05, 0.14)
+    variant_count: int = 4
+    variant_labels: tuple[str, ...] = ("blue", "red", "yellow", "green")
 
 
 @configclass

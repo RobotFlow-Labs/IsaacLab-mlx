@@ -63,6 +63,8 @@ KERNEL_PORT_INVENTORY = (
         target_tasks=(
             "manipulation-reach",
             "manipulation-lift",
+            "manipulation-teddy-bear-lift",
+            "manipulation-stack-instance-randomize",
             "manipulation-stack",
             "manipulation-stack-rgb",
             "manipulation-cabinet",

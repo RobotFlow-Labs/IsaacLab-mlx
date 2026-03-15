@@ -49,8 +49,12 @@ from isaaclab.backends.mac_sim import (
     MacFrankaReachEnvCfg,
     MacFrankaStackEnv,
     MacFrankaStackEnvCfg,
+    MacFrankaStackInstanceRandomizeEnv,
+    MacFrankaStackInstanceRandomizeEnvCfg,
     MacFrankaStackRgbEnv,
     MacFrankaStackRgbEnvCfg,
+    MacFrankaTeddyBearLiftEnv,
+    MacFrankaTeddyBearLiftEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
     MacH1RoughEnv,
@@ -254,6 +258,7 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
         "final_ee_height_mean": float(mx.mean(env.sim_backend.ee_pos_w[:, 2]).item()),
     }
+    task_name = env.sim_backend.state_dict()["task"]
     if hasattr(env.sim_backend, "drawer_open_amount"):
         if terminal_policy_observations:
             terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
@@ -274,6 +279,10 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         )
         payload["final_cube_height_mean"] = float(mx.mean(env.sim_backend.cube_pos_w[:, 2]).item())
         payload["final_grasp_ratio"] = float(mx.mean(env.sim_backend.grasped.astype(mx.float32)).item())
+        if task_name == "franka-teddy-bear-lift":
+            payload["final_lift_gap_mean"] = float(
+                mx.mean(mx.maximum(env.cfg.lift_success_height - env.sim_backend.cube_pos_w[:, 2], 0.0)).item()
+            )
         if hasattr(env.sim_backend, "support_cube_pos_w"):
             if terminal_policy_observations:
                 terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
@@ -286,6 +295,13 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
                     mx.mean(mx.linalg.norm(env.sim_backend.stack_error(), axis=1)).item()
                 )
                 payload["final_stacked_ratio"] = float(mx.mean(env.sim_backend.stacked.astype(mx.float32)).item())
+            if task_name == "franka-stack-instance-randomize":
+                payload["final_support_variant_mean"] = float(
+                    mx.mean(env.sim_backend.support_variant_id.astype(mx.float32)).item()
+                )
+                payload["final_movable_variant_mean"] = float(
+                    mx.mean(env.sim_backend.movable_variant_id.astype(mx.float32)).item()
+                )
     elif hasattr(env.sim_backend, "middle_cube_pos_w"):
         if terminal_policy_observations:
             terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
@@ -584,6 +600,33 @@ def benchmark_franka_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any
     )
 
 
+def benchmark_franka_teddy_bear_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka teddy-bear lift MLX env step loop."""
+
+    env = MacFrankaTeddyBearLiftEnv(MacFrankaTeddyBearLiftEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-teddy-bear-lift",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_franka_stack(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the Franka stack MLX env step loop."""
 
@@ -598,6 +641,33 @@ def benchmark_franka_stack(num_envs: int, steps: int, seed: int) -> dict[str, An
 
     return _make_benchmark_result(
         "franka-stack",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_franka_stack_instance_randomize(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka instance-randomized stack MLX env step loop."""
+
+    env = MacFrankaStackInstanceRandomizeEnv(MacFrankaStackInstanceRandomizeEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-stack-instance-randomize",
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
@@ -916,8 +986,12 @@ def run_benchmarks(
             benchmark = benchmark_franka_reach(num_envs, steps, seed)
         elif task == "franka-lift":
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
+        elif task == "franka-teddy-bear-lift":
+            benchmark = benchmark_franka_teddy_bear_lift(num_envs, steps, seed)
         elif task == "franka-stack":
             benchmark = benchmark_franka_stack(num_envs, steps, seed)
+        elif task == "franka-stack-instance-randomize":
+            benchmark = benchmark_franka_stack_instance_randomize(num_envs, steps, seed)
         elif task == "franka-stack-rgb":
             benchmark = benchmark_franka_stack_rgb(num_envs, steps, seed)
         elif task == "franka-cabinet":

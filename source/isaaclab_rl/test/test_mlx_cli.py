@@ -161,6 +161,38 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert eval_payload["task"] == "franka-stack-rgb"
     assert eval_payload["episodes_completed"] == 1
 
+    instance_eval_output_path = tmp_path / "module-instance-alias-eval.json"
+    instance_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
+            "--num-envs",
+            "8",
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(instance_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert instance_eval_result.returncode == 0, instance_eval_result.stderr
+    instance_eval_payload = json.loads(instance_eval_output_path.read_text(encoding="utf-8"))
+    assert instance_eval_payload["task"] == "franka-stack-instance-randomize"
+    assert instance_eval_payload["episodes_completed"] == 1
+
     train_result = subprocess.run(
         [
             sys.executable,
@@ -254,3 +286,43 @@ def test_mlx_cli_module_handles_lift_alias_and_rejects_unsupported_manipulation_
 
     assert unsupported_result.returncode != 0
     assert "invalid choice" in unsupported_result.stderr
+
+
+def test_mlx_cli_module_handles_teddy_bear_lift_alias(tmp_path: Path):
+    train_output_path = tmp_path / "module-teddy-bear-lift-train.json"
+    checkpoint_path = tmp_path / "module-teddy-bear-lift-policy.npz"
+
+    train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(checkpoint_path),
+            "--json-out",
+            str(train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert train_result.returncode == 0, train_result.stderr
+    train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
+    assert train_payload["task"] == "franka-teddy-bear-lift"
+    assert Path(train_payload["checkpoint_path"]).exists()
