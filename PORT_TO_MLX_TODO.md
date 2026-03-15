@@ -82,6 +82,7 @@ without pausing for replanning after every small success.
 - `DONE` Checkpoint/resume and replay contracts are now explicitly covered across the current mac-native task slices
 - `DONE` Maintained kernel inventory now maps the next real Warp/CUDA families to source files, target task classes, and replacement strategies
 - `DONE` Shared MLX task CLIs now cover train and replay/eval flows across the current mac-native slices
+- `DONE` Installed console entry points now expose MLX train/eval/runtime diagnostics without `PYTHONPATH`, and CI release smoke exercises them from a clean `uv` environment
 - `DONE` CI now has a dedicated import-safety lane plus benchmark artifact validation for the MLX/mac path
 - `DONE` Planner and ROS compatibility prototypes now exist as explicit backend seams with software smokes, backend tests, and capability-gated docs
 - `DONE` Planner and ROS compatibility now carry richer planner world-state obstacles plus ROS-friendly world-state / timed joint-trajectory envelopes without requiring ROS Python bindings

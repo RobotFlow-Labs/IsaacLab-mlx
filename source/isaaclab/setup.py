@@ -101,6 +101,11 @@ setup(
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     extras_require=EXTRAS_REQUIRE,
+    entry_points={
+        "console_scripts": [
+            "isaaclab-mlx-runtime-diagnostics=isaaclab.backends.runtime_cli:runtime_diagnostics_main",
+        ]
+    },
     packages=find_packages(include=["isaaclab", "isaaclab.*"]),
     classifiers=[
         "Natural Language :: English",

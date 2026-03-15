@@ -146,7 +146,13 @@ If you want one public MLX/mac bootstrap command instead of a manual install seq
 uv run scripts/bootstrap_uv_mlx.py
 ```
 
-That creates `.venv`, installs the core MLX/mac package plus the lazy task registry and public MLX wrapper, and prints the corresponding `uv run --python ...` commands for train/eval and smoke scripts.
+That creates `.venv`, installs the core MLX/mac package plus the lazy task registry and public MLX wrapper, and installs the release-facing console entry points:
+
+- `.venv/bin/isaaclab-mlx train`
+- `.venv/bin/isaaclab-mlx evaluate`
+- `.venv/bin/isaaclab-mlx-train`
+- `.venv/bin/isaaclab-mlx-evaluate`
+- `.venv/bin/isaaclab-mlx-runtime-diagnostics`
 
 ### Public Support Matrix
 
@@ -154,7 +160,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and synthetic cartpole RGB/depth camera tasks |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, Franka open-drawer, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -207,8 +213,8 @@ uv pip install --python .venv/bin/python -e source/isaaclab[cuda-isaacsim,dev]
 ### 2. Train the MLX cartpole baseline
 
 ```bash
-PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/train_cartpole.py \
+.venv/bin/isaaclab-mlx-train \
+  --task cartpole \
   --num-envs 256 \
   --updates 200 \
   --rollout-steps 64 \
@@ -219,10 +225,18 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 ### 3. Replay a trained checkpoint
 
 ```bash
-PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/reinforcement_learning/mlx/play_cartpole.py \
+.venv/bin/isaaclab-mlx-evaluate \
+  --task cartpole \
   --checkpoint logs/mlx/cartpole_policy.npz \
   --episodes 3
+```
+
+If you want the combined installed CLI instead of the split entry points:
+
+```bash
+.venv/bin/isaaclab-mlx train --task cartpole --updates 10
+.venv/bin/isaaclab-mlx evaluate --task h1-rough --episodes 1
+.venv/bin/isaaclab-mlx-runtime-diagnostics logs/runtime/runtime-diagnostics.json
 ```
 
 Optional resume flow:
@@ -558,7 +572,7 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
   then:
   `PYTHONPATH=.:source/isaaclab .venv/bin/python scripts/benchmarks/mlx/check_semantic_drift.py --results logs/benchmarks/mlx/full-smoke.json --baseline scripts/benchmarks/mlx/baselines/semantic-baseline.json --snapshot-out logs/benchmarks/mlx/full-smoke-semantic-snapshot.json --write-baseline`
   and rerun the compare command to confirm the refreshed baseline passes.
-- CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and evaluates `h1-rough` through the public wrapper.
+- CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then exercises the installed `isaaclab-mlx-runtime-diagnostics` and `isaaclab-mlx-evaluate` entry points from a clean `uv` environment.
 - Backend-local external stereo validation still lives in synthetic stereo smoke tests and optional host-specific hardware probes; the benchmark suite only covers the synthetic cartpole camera task slices and the analytic terrain/raycast slices.
 
 ## Planner And ROS Compatibility
@@ -645,6 +659,8 @@ Implementation entrypoints:
 - backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
 - backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
 - public MLX wrapper surface in [`source/isaaclab_rl/isaaclab_rl/mlx.py`](source/isaaclab_rl/isaaclab_rl/mlx.py)
+- installed MLX train/eval CLI surface in [`source/isaaclab_rl/isaaclab_rl/mlx_cli.py`](source/isaaclab_rl/isaaclab_rl/mlx_cli.py)
+- installed runtime diagnostics CLI surface in [`source/isaaclab/isaaclab/backends/runtime_cli.py`](source/isaaclab/isaaclab/backends/runtime_cli.py)
 - shared trainer entrypoint in [`scripts/reinforcement_learning/mlx/train_task.py`](scripts/reinforcement_learning/mlx/train_task.py)
 - shared replay/eval entrypoint in [`scripts/reinforcement_learning/mlx/evaluate_task.py`](scripts/reinforcement_learning/mlx/evaluate_task.py)
 - backend-local camera probe in [`scripts/tools/probe_mac_camera.py`](scripts/tools/probe_mac_camera.py)

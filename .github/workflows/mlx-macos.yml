@@ -264,6 +264,11 @@ jobs:
         out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(artifact)
         PY
+        "$release_root/.venv-release/bin/isaaclab-mlx-runtime-diagnostics" logs/runtime/release-runtime-diagnostics.json
+        "$release_root/.venv-release/bin/isaaclab-mlx-evaluate" \
+          --task h1-rough \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-eval.json
 
     - name: Run MLX backend smoke tests
       run: |
@@ -284,6 +289,7 @@ jobs:
           source/isaaclab/test/backends/test_ros2_bridge.py \
           source/isaaclab/test/backends/test_mac_semantic_drift.py \
           source/isaaclab_rl/test/test_import_safety.py \
+          source/isaaclab_rl/test/test_mlx_cli.py \
           source/isaaclab_rl/test/test_mlx_wrapper.py \
           source/isaaclab/test/backends/test_portability_utils.py \
           source/isaaclab/test/backends/test_mac_benchmark_suite.py \
@@ -690,6 +696,11 @@ jobs:
         assert "h1-rough" in release_payload["trainable_tasks"]
         assert release_payload["eval_task"] == "h1-rough"
         assert release_payload["episodes_completed"] == 1
+        release_runtime_payload = json.loads(Path("logs/runtime/release-runtime-diagnostics.json").read_text(encoding="utf-8"))
+        assert release_runtime_payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
+        release_eval_payload = json.loads(Path("logs/runtime/release-eval.json").read_text(encoding="utf-8"))
+        assert release_eval_payload["task"] == "h1-rough"
+        assert release_eval_payload["episodes_completed"] == 1
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))

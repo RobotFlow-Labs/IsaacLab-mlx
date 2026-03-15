@@ -43,3 +43,22 @@ def test_mac_runtime_diagnostics_script_writes_json(tmp_path: Path):
     assert int(result.stdout.strip()) >= 13
     assert payload["runtime"]["supported_tasks"]["trainable_task_count"] >= 10
     assert payload["kernel"]["backend"] == "metal"
+
+
+def test_mac_runtime_diagnostics_module_writes_json(tmp_path: Path):
+    """The installed runtime diagnostics module entrypoint should emit the same JSON contract."""
+
+    output_path = tmp_path / "runtime-diagnostics-module.json"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "isaaclab.backends.runtime_cli", str(output_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert int(result.stdout.strip()) >= 13
+    assert payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
+    assert payload["sim"]["generic_scene_runtime"] is False

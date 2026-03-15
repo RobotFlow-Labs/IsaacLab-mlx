@@ -80,6 +80,13 @@ setup(
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     extras_require=EXTRAS_REQUIRE,
+    entry_points={
+        "console_scripts": [
+            "isaaclab-mlx=isaaclab_rl.mlx_cli:main",
+            "isaaclab-mlx-train=isaaclab_rl.mlx_cli:train_main",
+            "isaaclab-mlx-evaluate=isaaclab_rl.mlx_cli:eval_main",
+        ]
+    },
     packages=find_packages(include=["isaaclab_rl", "isaaclab_rl.*"]),
     classifiers=[
         "Natural Language :: English",
