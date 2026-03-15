@@ -474,6 +474,11 @@ class MacFrankaCabinetEnvCfg(MacFrankaLiftEnvCfg):
 
 
 @configclass
+class MacFrankaOpenDrawerEnvCfg(MacFrankaCabinetEnvCfg):
+    """Configuration for a reduced mac-native Franka open-drawer slice."""
+
+
+@configclass
 class MacFrankaStackRgbEnvCfg(MacFrankaStackEnvCfg):
     """Configuration for a reduced three-cube Franka stack slice."""
 

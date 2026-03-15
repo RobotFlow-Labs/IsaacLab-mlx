@@ -16,7 +16,9 @@ from isaaclab.backends import (
     PlannerWorldObstacle,
     PlannerWorldState,
     create_planner_backend,
+    joint_motion_plan_batch_to_ros_envelopes,
     joint_motion_plan_to_ros_envelope,
+    planner_world_state_batch_to_ros_envelopes,
     planner_world_state_to_ros_envelope,
     resolve_runtime_selection,
 )
@@ -57,12 +59,50 @@ def main() -> int:
             duration_s=1.5,
         )
     )
+    batch = planner.plan_joint_motion_batch(
+        (
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2", "joint_3"),
+                start_positions=(0.8, 0.25, -0.1),
+                goal_positions=(0.15, -0.2, 0.35),
+                num_waypoints=5,
+                duration_s=1.0,
+            ),
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2", "joint_3"),
+                start_positions=(0.15, -0.2, 0.35),
+                goal_positions=(0.45, 0.0, 0.1),
+                num_waypoints=4,
+                duration_s=0.75,
+            ),
+        )
+    )
 
     payload = {
         "planner": planner.state_dict(),
         "plan": plan.state_dict(),
+        "batch_plans": [item.state_dict() for item in batch],
         "planner_ros_envelope": planner_world_state_to_ros_envelope(world_state).state_dict(),
         "trajectory_ros_envelope": joint_motion_plan_to_ros_envelope(plan).state_dict(),
+        "planner_ros_batch_envelopes": [
+            item.state_dict()
+            for item in planner_world_state_batch_to_ros_envelopes(
+                (
+                    world_state,
+                    PlannerWorldState(
+                        obstacles=world_state.obstacles
+                        + (
+                            PlannerWorldObstacle(
+                                "tool_fixture",
+                                center=(0.3, 0.1, 0.18),
+                                size=(0.12, 0.08, 0.2),
+                            ),
+                        ),
+                    ),
+                )
+            )
+        ],
+        "trajectory_ros_batch_envelopes": [item.state_dict() for item in joint_motion_plan_batch_to_ros_envelopes(batch)],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

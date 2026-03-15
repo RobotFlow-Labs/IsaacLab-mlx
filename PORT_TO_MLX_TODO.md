@@ -73,6 +73,7 @@ without pausing for replanning after every small success.
 - `DONE` Third trainable manipulation slice landed for `Isaac-Stack-Cube-Franka-v0` with compiled stack hotpath helpers, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
 - `DONE` Fourth trainable stack variant landed for `Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0` with a reduced three-cube sequential stack backend, staged terminal benchmark metrics, shared PPO/checkpoint contracts, public MLX wrapper training, direct thin CLI wrappers, semantic baseline refresh, and CI smoke coverage
 - `DONE` Fourth trainable manipulation slice landed for `Isaac-Franka-Cabinet-Direct-v0` with a reduced drawer workflow, compiled cabinet hotpath helper, shared PPO/checkpoint contracts, public MLX wrapper training, benchmark coverage, semantic baseline refresh, and CI smoke coverage
+- `DONE` Sixth trainable Franka manipulation slice landed for `Isaac-Open-Drawer-Franka-v0` with a reduced analytic drawer substrate, public MLX wrapper/CLI exposure, benchmark coverage, refreshed semantic baseline, and focused backend tests
 - `DONE` First raycast-driven mac-native task landed for `Isaac-Velocity-Rough-Anymal-C-Direct-v0` with procedural wave terrain, analytic terrain raycasts, benchmark coverage, and deterministic replay tests
 - `DONE` Rough locomotion slices for ANYmal-C and H1 now expose full MLX PPO train/replay surfaces with rough-task checkpoint metadata, wrapper coverage, and CI smoke coverage
 - `DONE` Synthetic cartpole RGB/depth camera slices landed as eval-only mac-native tasks with deterministic analytic `100x100` observations, public MLX wrapper exposure, sensor benchmark coverage, and CI smoke coverage
@@ -86,7 +87,9 @@ without pausing for replanning after every small success.
 - `DONE` Planner and ROS compatibility now carry richer planner world-state obstacles plus ROS-friendly world-state / timed joint-trajectory envelopes without requiring ROS Python bindings
 - `DONE` CI now proves a release-style MLX install path without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and exercises the public wrapper
 - `DONE` Generic `mac-sensors` capability metadata is now honest about the public runtime surface: analytic raycasts plus synthetic camera task slices and backend-local external stereo capture, not generic Isaac Sim camera parity
+- `DONE` Supported public MLX/mac tasks now come from a shared typed manifest with a runtime diagnostics CLI so kernel inventory, wrapper task lists, benchmark groups, and runtime capability reporting cannot drift independently
 - `DONE` ROS/planner software smokes now exercise the real `mac-planners` backend and verify typed round-trip reconstruction of planner world-state and joint trajectories
+- `DONE` Planner/ROS batch helpers now restore batches by `batch_index` and report actual batch envelope counts instead of inferring from message order or `max(index) + 1`
 - `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
 - `DONE` `uv run scripts/bootstrap_uv_mlx.py` now bootstraps the public MLX/mac editable environment in one command
 
@@ -740,7 +743,7 @@ without pausing for replanning after every small success.
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
-- Port the next manipulation milestone beyond the current five trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
+- Port the next manipulation milestone beyond the current six trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
 - Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 - Keep the generic runtime metadata honest: only advertise generic sensor/runtime capabilities that are actually exposed through backend-neutral APIs, and push task-specific or tooling-only support into explicit diagnostic fields instead of broad parity flags.
@@ -758,6 +761,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_kernel_inventory.py \
   source/isaaclab/test/backends/test_kernel_compat.py \
   source/isaaclab/test/backends/test_mac_hotpath.py \
+  source/isaaclab/test/backends/test_mac_runtime_diagnostics.py \
   source/isaaclab/test/backends/test_planner_compat.py \
   source/isaaclab/test/backends/test_ros2_bridge.py \
   source/isaaclab/test/backends/test_mac_benchmark_suite.py \
@@ -775,6 +779,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_franka_reach.py \
   source/isaaclab/test/backends/test_mac_franka_lift.py \
   source/isaaclab/test/backends/test_mac_franka_stack.py \
+  source/isaaclab/test/backends/test_mac_franka_open_drawer.py \
   source/isaaclab/test/backends/test_mac_h1.py -q
 ```
 

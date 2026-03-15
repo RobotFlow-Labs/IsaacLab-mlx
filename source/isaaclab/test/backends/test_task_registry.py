@@ -24,6 +24,7 @@ SAFE_TASK_IDS = (
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
     "Isaac-Franka-Cabinet-Direct-v0",
+    "Isaac-Open-Drawer-Franka-v0",
     "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Rough-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",

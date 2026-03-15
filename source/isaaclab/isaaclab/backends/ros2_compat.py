@@ -120,6 +120,47 @@ def planner_world_state_from_ros_envelope(envelope: Ros2MessageEnvelope) -> Plan
     )
 
 
+def planner_world_state_batch_to_ros_envelopes(
+    world_states: list[PlannerWorldState] | tuple[PlannerWorldState, ...],
+    *,
+    topic_root: str = "/planner/world_state",
+    msg_type: str = "robotflow_msgs/msg/PlannerWorldState",
+) -> list[Ros2MessageEnvelope]:
+    """Convert a planner world-state batch into ROS-friendly envelopes."""
+
+    envelopes: list[Ros2MessageEnvelope] = []
+    for index, world_state in enumerate(world_states):
+        envelope = planner_world_state_to_ros_envelope(
+            world_state,
+            topic=f"{topic_root}/{index}",
+            msg_type=msg_type,
+        )
+        payload = envelope.normalized_payload()
+        payload["batch_index"] = index
+        envelopes.append(
+            Ros2MessageEnvelope(
+                topic=envelope.topic,
+                msg_type=envelope.msg_type,
+                payload=payload,
+                frame_id=envelope.frame_id,
+                stamp_ns=envelope.stamp_ns,
+            )
+        )
+    return envelopes
+
+
+def planner_world_state_batch_from_ros_envelopes(
+    envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+) -> tuple[PlannerWorldState, ...]:
+    """Reconstruct a planner world-state batch from ROS-friendly envelopes."""
+
+    indexed_envelopes = sorted(
+        ((int(envelope.normalized_payload()["batch_index"]), envelope) for envelope in envelopes),
+        key=lambda item: item[0],
+    )
+    return tuple(planner_world_state_from_ros_envelope(envelope) for _, envelope in indexed_envelopes)
+
+
 def joint_motion_plan_to_ros_envelope(
     plan: JointMotionPlan,
     *,
@@ -172,6 +213,49 @@ def joint_motion_plan_from_ros_envelope(envelope: Ros2MessageEnvelope) -> JointM
         planner_backend=str(payload.get("planner_backend", "unknown")),
         world_state=None,
     )
+
+
+def joint_motion_plan_batch_to_ros_envelopes(
+    plans: list[JointMotionPlan] | tuple[JointMotionPlan, ...],
+    *,
+    topic_root: str = "/planner/joint_trajectory",
+    msg_type: str = "trajectory_msgs/msg/JointTrajectory",
+    frame_id: str = "world",
+) -> list[Ros2MessageEnvelope]:
+    """Convert a joint motion plan batch into ROS-friendly envelopes."""
+
+    envelopes: list[Ros2MessageEnvelope] = []
+    for index, plan in enumerate(plans):
+        envelope = joint_motion_plan_to_ros_envelope(
+            plan,
+            topic=f"{topic_root}/{index}",
+            msg_type=msg_type,
+            frame_id=frame_id,
+        )
+        payload = envelope.normalized_payload()
+        payload["batch_index"] = index
+        envelopes.append(
+            Ros2MessageEnvelope(
+                topic=envelope.topic,
+                msg_type=envelope.msg_type,
+                payload=payload,
+                frame_id=envelope.frame_id,
+                stamp_ns=envelope.stamp_ns,
+            )
+        )
+    return envelopes
+
+
+def joint_motion_plan_batch_from_ros_envelopes(
+    envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+) -> tuple[JointMotionPlan, ...]:
+    """Reconstruct a deterministic joint motion plan batch from ROS-friendly envelopes."""
+
+    indexed_envelopes = sorted(
+        ((int(envelope.normalized_payload()["batch_index"]), envelope) for envelope in envelopes),
+        key=lambda item: item[0],
+    )
+    return tuple(joint_motion_plan_from_ros_envelope(envelope) for _, envelope in indexed_envelopes)
 
 
 def ros2_cli_available(executable: str = "ros2") -> bool:
@@ -253,3 +337,24 @@ class Ros2JsonlBridge:
                 )
             )
         return messages
+
+    @staticmethod
+    def summarize_messages(messages: list[Ros2MessageEnvelope]) -> dict[str, Any]:
+        """Summarize plain ROS-like envelopes for smoke tests and CI."""
+
+        topic_counts: dict[str, int] = {}
+        msg_type_counts: dict[str, int] = {}
+        batch_topics: dict[str, int] = {}
+        for envelope in messages:
+            topic_counts[envelope.topic] = topic_counts.get(envelope.topic, 0) + 1
+            msg_type_counts[envelope.msg_type] = msg_type_counts.get(envelope.msg_type, 0) + 1
+            normalized = envelope.normalized_payload()
+            if "batch_index" in normalized:
+                topic_root = envelope.topic.rsplit("/", 1)[0]
+                batch_topics[topic_root] = batch_topics.get(topic_root, 0) + 1
+        return {
+            "message_count": len(messages),
+            "topic_counts": dict(sorted(topic_counts.items())),
+            "msg_type_counts": dict(sorted(msg_type_counts.items())),
+            "batch_topics": dict(sorted(batch_topics.items())),
+        }

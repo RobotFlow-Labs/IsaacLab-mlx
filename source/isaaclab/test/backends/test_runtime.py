@@ -83,6 +83,7 @@ def test_set_runtime_selection_persists_process_state():
     assert state["sensor_backend"] == "mac-sensors"
     assert state["planner_backend"] == "mac-planners"
     assert state["device"] == "cpu"
+    assert state["supported_tasks"]["public_task_count"] >= 15
 
 
 def test_configure_torch_device_skips_cuda_for_mlx(monkeypatch: pytest.MonkeyPatch):
@@ -179,6 +180,10 @@ def test_create_sim_backend_returns_macsim_adapter():
 
     assert isinstance(backend, MacSimBackend)
     assert backend.contract.articulations.effort_targets is False
+    state = backend.state_dict()
+    assert state["implementation"] == "task-specialized-analytic-slices"
+    assert state["generic_scene_runtime"] is False
+    assert state["supported_tasks"]["current_mac_native_count"] >= 13
 
 
 def test_create_kernel_backend_returns_warp_adapter():

@@ -80,6 +80,20 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Open-Drawer-Franka-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaOpenDrawerEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Open-Drawer-Franka-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaOpenDrawerEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Franka-Cabinet-Direct-Play-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaCabinetEnv",
         "kwargs": {

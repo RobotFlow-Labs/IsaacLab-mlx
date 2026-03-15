@@ -278,6 +278,7 @@ jobs:
           source/isaaclab/test/backends/test_mac_camera_capture.py \
           source/isaaclab/test/backends/test_mac_sensor_raycast.py \
           source/isaaclab/test/backends/test_mac_stereo_depth.py \
+          source/isaaclab/test/backends/test_mac_runtime_diagnostics.py \
           source/isaaclab/test/backends/test_mlx_task_cli.py \
           source/isaaclab/test/backends/test_planner_compat.py \
           source/isaaclab/test/backends/test_ros2_bridge.py \
@@ -300,6 +301,7 @@ jobs:
           source/isaaclab/test/backends/test_mac_franka_stack.py \
           source/isaaclab/test/backends/test_mac_franka_stack_rgb.py \
           source/isaaclab/test/backends/test_mac_franka_cabinet.py \
+          source/isaaclab/test/backends/test_mac_franka_open_drawer.py \
           source/isaaclab/test/backends/test_mac_h1.py -q
 
     - name: Run MLX cart-double-pendulum smoke script
@@ -481,6 +483,7 @@ jobs:
         assert "franka-stack" in list_mlx_tasks()
         assert "franka-stack-rgb" in list_mlx_tasks()
         assert "franka-cabinet" in list_mlx_tasks()
+        assert "franka-open-drawer" in list_mlx_tasks()
         train_payload = train_mlx_task(
             "franka-stack-rgb",
             num_envs=8,
@@ -538,6 +541,8 @@ jobs:
           logs/hardware/synthetic_depth \
           --max-disparity 4 \
           --window-size 1 \
+          --fx 700.0 \
+          --baseline-mm 120.0 \
           --summary-out logs/hardware/synthetic_depth/summary.json
         test -f logs/hardware/synthetic_depth/left_rgb.png
         test -f logs/hardware/synthetic_depth/right_rgb.png
@@ -561,6 +566,18 @@ jobs:
           --summary-out logs/hardware/ros2-bridge-smoke-summary.json
         test -f logs/hardware/ros2-bridge-smoke.jsonl
         test -f logs/hardware/ros2-bridge-smoke-summary.json
+
+    - name: Run runtime diagnostics smoke
+      run: |
+        mkdir -p logs/runtime
+        PYTHONPATH=.:source/isaaclab .venv/bin/python \
+          scripts/tools/mac_runtime_diagnostics.py \
+          logs/runtime/mac-runtime-diagnostics.json
+        test -f logs/runtime/mac-runtime-diagnostics.json
+
+    - name: Run uv bootstrap dry-run smoke
+      run: |
+        uv run scripts/bootstrap_uv_mlx.py --dry-run --venv .venv-bootstrap-smoke
 
     - name: Run MLX benchmark smoke
       run: |
@@ -625,22 +642,28 @@ jobs:
         assert len(payload["benchmarks"]) >= 5
         print(payload["tasks"])
         dashboard = json.loads(Path("logs/benchmarks/mlx/smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert dashboard["summary"]["rollout_task_count"] == 12
+        assert dashboard["summary"]["rollout_task_count"] == 13
         assert dashboard["summary"]["training_task_count"] == 0
         trend = json.loads(Path("logs/benchmarks/mlx/smoke-trend.json").read_text(encoding="utf-8"))
-        assert trend["summary"]["task_count"] == 12
+        assert trend["summary"]["task_count"] == 13
         planner_payload = json.loads(Path("logs/planner/mac-planner-smoke.json").read_text(encoding="utf-8"))
         assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
         assert planner_payload["plan"]["waypoint_count"] == 6
         ros_payload = json.loads(Path("logs/hardware/ros2-bridge-smoke-summary.json").read_text(encoding="utf-8"))
-        assert ros_payload["message_count"] == 4
+        assert ros_payload["message_count"] == 6
         assert ros_payload["pub_command"][:3] == ["ros2", "topic", "pub"]
         assert ros_payload["planner_roundtrip_ok"] is True
         assert ros_payload["trajectory_roundtrip_ok"] is True
+        assert ros_payload["planner_batch_size"] == 2
+        assert ros_payload["trajectory_batch_size"] == 2
         stereo_payload = json.loads(Path("logs/hardware/synthetic_depth/summary.json").read_text(encoding="utf-8"))
         assert stereo_payload["validated_capture"] is True
         assert stereo_payload["disparity_shape"] == [4, 4]
+        assert stereo_payload["depth_mm_mean"] is not None
         assert Path(stereo_payload["left_rgb_path"]).is_file()
+        runtime_payload = json.loads(Path("logs/runtime/mac-runtime-diagnostics.json").read_text(encoding="utf-8"))
+        assert runtime_payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
+        assert runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
@@ -670,7 +693,7 @@ jobs:
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert full_dashboard["summary"]["rollout_task_count"] == 16
+        assert full_dashboard["summary"]["rollout_task_count"] == 17
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])

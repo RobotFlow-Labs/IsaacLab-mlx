@@ -18,8 +18,8 @@ from typing import Any
 
 import mlx.core as mx
 
-from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
 from isaaclab.backends import (
+    benchmark_task_groups,
     build_benchmark_dashboard,
     build_benchmark_trend,
     detect_cpu_fallback,
@@ -43,6 +43,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaCabinetEnvCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
+    MacFrankaOpenDrawerEnv,
+    MacFrankaOpenDrawerEnvCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
     MacFrankaStackEnv,
@@ -67,12 +69,10 @@ SENSOR_BENCHMARK_TASKS = (
     "anymal-c-flat-height-scan",
     "h1-flat-height-scan",
 )
-TASK_CHOICES = CURRENT_MAC_NATIVE_TASKS + SENSOR_BENCHMARK_TASKS + TRAINING_BENCHMARK_TASKS
-TASK_GROUPS = {
-    "current-mac-native": CURRENT_MAC_NATIVE_TASKS,
-    "sensor-mac-native": SENSOR_BENCHMARK_TASKS,
-    "full": TASK_CHOICES,
-}
+TASK_GROUPS = benchmark_task_groups() | {"sensor-mac-native": SENSOR_BENCHMARK_TASKS}
+CURRENT_MAC_NATIVE_TASKS = TASK_GROUPS["current-mac-native"]
+TASK_CHOICES = tuple(dict.fromkeys(CURRENT_MAC_NATIVE_TASKS + SENSOR_BENCHMARK_TASKS + TRAINING_BENCHMARK_TASKS))
+TASK_GROUPS["full"] = TASK_CHOICES
 
 
 def parse_args() -> argparse.Namespace:
@@ -671,6 +671,33 @@ def benchmark_franka_cabinet(num_envs: int, steps: int, seed: int) -> dict[str, 
     )
 
 
+def benchmark_franka_open_drawer(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the Franka open-drawer MLX env step loop."""
+
+    env = MacFrankaOpenDrawerEnv(MacFrankaOpenDrawerEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "franka-open-drawer",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_anymal_c_flat_height_scan(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the ANYmal-C flat locomotion slice with the mac-native height scan enabled."""
     env = MacAnymalCFlatEnv(
@@ -901,6 +928,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_stack_rgb(num_envs, steps, seed)
         elif task == "franka-cabinet":
             benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
+        elif task == "franka-open-drawer":
+            benchmark = benchmark_franka_open_drawer(num_envs, steps, seed)
         elif task == "anymal-c-flat-height-scan":
             benchmark = benchmark_anymal_c_flat_height_scan(num_envs, steps, seed)
         elif task == "h1-flat-height-scan":

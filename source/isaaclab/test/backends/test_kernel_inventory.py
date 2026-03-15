@@ -27,6 +27,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
+        "franka-open-drawer",
     )
 
 

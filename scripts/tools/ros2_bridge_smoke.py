@@ -19,8 +19,12 @@ from isaaclab.backends import (
     Ros2MessageEnvelope,
     Ros2ProcessBridge,
     create_planner_backend,
+    joint_motion_plan_batch_from_ros_envelopes,
+    joint_motion_plan_batch_to_ros_envelopes,
     joint_motion_plan_from_ros_envelope,
     joint_motion_plan_to_ros_envelope,
+    planner_world_state_batch_from_ros_envelopes,
+    planner_world_state_batch_to_ros_envelopes,
     planner_world_state_from_ros_envelope,
     planner_world_state_to_ros_envelope,
     resolve_runtime_selection,
@@ -73,40 +77,68 @@ def main() -> int:
     )
     planner = create_planner_backend(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
     planner_world = planner.update_world_state(planner_world)
-    planner_plan = planner.plan_joint_motion(
-        JointMotionPlanRequest(
-            joint_names=("joint_1", "joint_2"),
-            start_positions=(0.0, -0.2),
-            goal_positions=(0.4, 0.3),
-            num_waypoints=4,
-            duration_s=1.0,
+    planner_plan = planner.plan_joint_motion_batch(
+        (
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2"),
+                start_positions=(0.0, -0.2),
+                goal_positions=(0.4, 0.3),
+                num_waypoints=4,
+                duration_s=1.0,
+            ),
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2"),
+                start_positions=(0.4, 0.3),
+                goal_positions=(0.1, -0.1),
+                num_waypoints=5,
+                duration_s=1.25,
+            ),
         )
     )
+    planner_world_batch = (
+        planner_world,
+        PlannerWorldState(
+            obstacles=planner_world.obstacles
+            + (
+                PlannerWorldObstacle("wrist_camera", kind="mesh", center=(0.0, 0.0, 0.05), size=(1.0, 1.0, 1.0), mesh_resource="package://robotflow/meshes/wrist_camera.usd", attached_to="panda_hand"),
+            ),
+        ),
+    )
     messages.extend(
-        (
-            planner_world_state_to_ros_envelope(planner_world),
-            joint_motion_plan_to_ros_envelope(planner_plan),
-        )
+        planner_world_state_batch_to_ros_envelopes(planner_world_batch)
+        + joint_motion_plan_batch_to_ros_envelopes(planner_plan)
     )
     output_path = Ros2JsonlBridge.write_messages(args.output, messages)
     restored = Ros2JsonlBridge.read_messages(output_path)
     bridge = Ros2ProcessBridge()
-    restored_world = planner_world_state_from_ros_envelope(restored[2])
-    restored_plan = joint_motion_plan_from_ros_envelope(restored[3])
+    restored_world_batch = planner_world_state_batch_from_ros_envelopes(
+        tuple(reversed([envelope for envelope in restored if envelope.topic.startswith("/planner/world_state/")]))
+    )
+    restored_plan_batch = joint_motion_plan_batch_from_ros_envelopes(
+        tuple(reversed([envelope for envelope in restored if envelope.topic.startswith("/planner/joint_trajectory/")]))
+    )
+    message_summary = Ros2JsonlBridge.summarize_messages(restored)
 
     summary = {
         "cli_available": bridge.cli_available(),
         "message_count": len(restored),
         "first_topic": restored[0].topic,
-        "planner_topic": restored[2].topic,
-        "trajectory_topic": restored[3].topic,
+        "planner_topic": next(envelope.topic for envelope in restored if envelope.topic.startswith("/planner/world_state/")),
+        "trajectory_topic": next(
+            envelope.topic for envelope in restored if envelope.topic.startswith("/planner/joint_trajectory/")
+        ),
         "pub_command": bridge.build_topic_pub_command(restored[1]),
         "echo_command": bridge.build_topic_echo_command(restored[1].topic),
         "planner_backend": planner.state_dict()["backend"],
-        "planner_roundtrip_ok": restored_world.state_dict() == planner_world.state_dict(),
-        "trajectory_roundtrip_ok": _plans_equivalent(restored_plan, planner_plan),
-        "planner_obstacle_count": restored_world.state_dict()["obstacle_count"],
-        "trajectory_waypoint_count": len(restored_plan.waypoints),
+        "planner_roundtrip_ok": [item.state_dict() for item in restored_world_batch] == [item.state_dict() for item in planner_world_batch],
+        "trajectory_roundtrip_ok": all(_plans_equivalent(restored, planned) for restored, planned in zip(restored_plan_batch, planner_plan, strict=True)),
+        "planner_obstacle_count": restored_world_batch[0].state_dict()["obstacle_count"],
+        "planner_obstacle_counts": [item.state_dict()["obstacle_count"] for item in restored_world_batch],
+        "trajectory_waypoint_count": len(restored_plan_batch[0].waypoints),
+        "trajectory_waypoint_counts": [len(item.waypoints) for item in restored_plan_batch],
+        "planner_batch_size": len(restored_world_batch),
+        "trajectory_batch_size": len(restored_plan_batch),
+        "message_summary": message_summary,
     }
     if args.summary_out is not None:
         args.summary_out.parent.mkdir(parents=True, exist_ok=True)

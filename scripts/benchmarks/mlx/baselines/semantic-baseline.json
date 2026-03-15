@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-14T23:36:37Z",
+  "generated_at": "2026-03-15T00:50:30Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 16,
+  "task_count": 17,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -241,6 +241,31 @@
           "final_policy_mean": 0.04495088383555412,
           "final_policy_std": 0.5831705331802368,
           "final_reward_mean": 0.0005667085060849786
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-open-drawer": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 28,
+        "output_signature": {
+          "final_drawer_open_mean": 0.0,
+          "final_drawer_open_ratio": 0.0,
+          "final_drawer_opened_ratio": 0.0,
+          "final_ee_height_mean": 0.5106669664382935,
+          "final_handle_distance_mean": 0.3203934133052826,
+          "final_joint_pos_abs_mean": 0.6485612988471985,
+          "final_joint_vel_abs_mean": 0.03102630004286766,
+          "final_policy_mean": 0.04606763273477554,
+          "final_policy_std": 0.5669611692428589,
+          "final_reward_mean": 0.0019011700060218573
         }
       },
       "cpu_fallback": false,

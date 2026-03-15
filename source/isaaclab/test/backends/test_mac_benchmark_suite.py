@@ -23,6 +23,8 @@ from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend, get_lo
 from isaaclab.backends.mac_sim import (  # noqa: E402
     MacFrankaCabinetEnv,
     MacFrankaCabinetEnvCfg,
+    MacFrankaOpenDrawerEnv,
+    MacFrankaOpenDrawerEnvCfg,
     MacFrankaStackEnv,
     MacFrankaStackEnvCfg,
     MacFrankaStackRgbEnv,
@@ -57,6 +59,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
+        "franka-open-drawer",
     )
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
     assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
@@ -198,6 +201,20 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_active_is_top_ratio",
             }
         elif benchmark["task"] == "franka-cabinet":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_handle_distance_mean",
+                "final_drawer_open_mean",
+                "final_drawer_open_ratio",
+                "final_drawer_opened_ratio",
+            }
+        elif benchmark["task"] == "franka-open-drawer":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
@@ -397,9 +414,9 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     assert '"task_group": "current-mac-native"' in payload
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
     trend = json.loads(trend_path.read_text(encoding="utf-8"))
-    assert dashboard["summary"]["rollout_task_count"] == 12
+    assert dashboard["summary"]["rollout_task_count"] == 13
     assert dashboard["summary"]["training_task_count"] == 0
-    assert trend["summary"]["task_count"] == 12
+    assert trend["summary"]["task_count"] == 13
 
 
 def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
@@ -421,7 +438,7 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     trend = build_benchmark_trend(results, hardware_label="m5-max")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 16
+    assert dashboard["summary"]["rollout_task_count"] == 17
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None

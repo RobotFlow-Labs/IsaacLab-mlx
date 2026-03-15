@@ -165,3 +165,8 @@ def test_mac_stereo_depth_smoke_writes_validated_summary(tmp_path: Path):
     assert Path(summary["right_rgb_path"]).exists()
     assert Path(summary["disparity_path"]).exists()
     assert Path(summary["depth_path"]).exists()
+    assert summary["depth_finite_ratio"] > 0.0
+    assert summary["depth_positive_ratio"] > 0.0
+    assert summary["depth_mm_min"] is not None
+    assert summary["depth_mm_max"] is not None
+    assert summary["depth_mm_mean"] is not None

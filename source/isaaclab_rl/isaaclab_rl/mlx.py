@@ -12,7 +12,11 @@ from typing import Any
 
 import mlx.core as mx
 
-from isaaclab.backends.kernel_inventory import CURRENT_MAC_NATIVE_TASKS
+from isaaclab.backends import (
+    list_public_mlx_tasks as list_supported_public_mlx_tasks,
+    list_trainable_mlx_tasks as list_supported_trainable_mlx_tasks,
+    mac_native_task_spec_map,
+)
 from isaaclab.backends.mac_sim import (
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
@@ -32,6 +36,9 @@ from isaaclab.backends.mac_sim import (
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
     MacFrankaLiftTrainCfg,
+    MacFrankaOpenDrawerEnv,
+    MacFrankaOpenDrawerEnvCfg,
+    MacFrankaOpenDrawerTrainCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
     MacFrankaReachTrainCfg,
@@ -52,6 +59,7 @@ from isaaclab.backends.mac_sim import (
     play_cartpole_policy,
     play_franka_cabinet_policy,
     play_franka_lift_policy,
+    play_franka_open_drawer_policy,
     play_franka_reach_policy,
     play_franka_stack_policy,
     play_franka_stack_rgb_policy,
@@ -61,25 +69,15 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
     train_franka_cabinet_policy,
     train_franka_lift_policy,
+    train_franka_open_drawer_policy,
     train_franka_reach_policy,
     train_franka_stack_policy,
     train_franka_stack_rgb_policy,
     train_h1_policy,
 )
 
-TRAINABLE_MLX_TASKS = (
-    "cartpole",
-    "anymal-c-flat",
-    "anymal-c-rough",
-    "h1-flat",
-    "h1-rough",
-    "franka-reach",
-    "franka-lift",
-    "franka-stack",
-    "franka-stack-rgb",
-    "franka-cabinet",
-)
-PUBLIC_MLX_TASKS = ("cartpole", "cartpole-rgb-camera", "cartpole-depth-camera") + CURRENT_MAC_NATIVE_TASKS[1:]
+TRAINABLE_MLX_TASKS = list_supported_trainable_mlx_tasks()
+PUBLIC_MLX_TASKS = list_supported_public_mlx_tasks()
 
 
 @dataclass(frozen=True)
@@ -93,21 +91,16 @@ class MlxTaskSpec:
     default_action_std: float | None = None
 
 
+_SUPPORTED_TASK_SPECS = mac_native_task_spec_map()
 MLX_TASK_SPECS = {
-    "cartpole": MlxTaskSpec("cartpole", True, "logs/mlx/cartpole_policy.npz", 128),
-    "cartpole-rgb-camera": MlxTaskSpec("cartpole-rgb-camera", False, None, None),
-    "cartpole-depth-camera": MlxTaskSpec("cartpole-depth-camera", False, None, None),
-    "cart-double-pendulum": MlxTaskSpec("cart-double-pendulum", False, None, None),
-    "quadcopter": MlxTaskSpec("quadcopter", False, None, None),
-    "anymal-c-flat": MlxTaskSpec("anymal-c-flat", True, "logs/mlx/anymal_c_flat_policy.npz", 128, 0.35),
-    "anymal-c-rough": MlxTaskSpec("anymal-c-rough", True, "logs/mlx/anymal_c_rough_policy.npz", 128, 0.35),
-    "franka-reach": MlxTaskSpec("franka-reach", True, "logs/mlx/franka_reach_policy.npz", 128, 0.25),
-    "franka-lift": MlxTaskSpec("franka-lift", True, "logs/mlx/franka_lift_policy.npz", 128, 0.25),
-    "franka-stack": MlxTaskSpec("franka-stack", True, "logs/mlx/franka_stack_policy.npz", 128, 0.25),
-    "franka-stack-rgb": MlxTaskSpec("franka-stack-rgb", True, "logs/mlx/franka_stack_rgb_policy.npz", 128, 0.25),
-    "franka-cabinet": MlxTaskSpec("franka-cabinet", True, "logs/mlx/franka_cabinet_policy.npz", 128, 0.25),
-    "h1-flat": MlxTaskSpec("h1-flat", True, "logs/mlx/h1_flat_policy.npz", 192, 0.28),
-    "h1-rough": MlxTaskSpec("h1-rough", True, "logs/mlx/h1_rough_policy.npz", 192, 0.28),
+    task_id: MlxTaskSpec(
+        task=task_id,
+        trainable=spec.trainable,
+        default_checkpoint=spec.default_checkpoint,
+        default_hidden_dim=spec.default_hidden_dim,
+        default_action_std=spec.default_action_std,
+    )
+    for task_id, spec in _SUPPORTED_TASK_SPECS.items()
 }
 
 
@@ -321,6 +314,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_cabinet_policy(cfg)
+    elif task == "franka-open-drawer":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacFrankaOpenDrawerTrainCfg(
+            env=MacFrankaOpenDrawerEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/franka_open_drawer_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_franka_open_drawer_policy(cfg)
     else:
         raise ValueError(f"Unsupported MLX training task: {task}")
 
@@ -798,6 +808,49 @@ def evaluate_mlx_task(
             }
         cfg = MacFrankaCabinetEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacFrankaCabinetEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "franka-open-drawer":
+        if checkpoint is not None:
+            returns = play_franka_open_drawer_policy(
+                checkpoint,
+                env_cfg=MacFrankaOpenDrawerEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacFrankaOpenDrawerEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacFrankaOpenDrawerEnv(cfg)
         mx.random.seed(seed)
         env.reset()
         completed: list[dict[str, Any]] = []

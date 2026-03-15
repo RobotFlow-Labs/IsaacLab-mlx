@@ -100,6 +100,11 @@ def main() -> None:
         summary["depth_path"] = str(depth_path)
         summary["depth_shape"] = list(depth.shape)
         summary["depth_finite_ratio"] = float(np.mean(np.isfinite(depth)))
+        finite_depth = depth[np.isfinite(depth)]
+        summary["depth_positive_ratio"] = float(np.mean((depth > 0.0) & np.isfinite(depth)))
+        summary["depth_mm_min"] = float(np.min(finite_depth)) if finite_depth.size else None
+        summary["depth_mm_max"] = float(np.max(finite_depth)) if finite_depth.size else None
+        summary["depth_mm_mean"] = float(np.mean(finite_depth)) if finite_depth.size else None
         print(f"depth_png={depth_path}")
 
     summary_out.parent.mkdir(parents=True, exist_ok=True)

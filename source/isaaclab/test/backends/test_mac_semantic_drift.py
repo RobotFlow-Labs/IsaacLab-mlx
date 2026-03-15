@@ -50,7 +50,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 16
+    assert snapshot["task_count"] == 17
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -76,6 +76,10 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-cabinet"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
+    assert snapshot["tasks"]["franka-open-drawer"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["franka-open-drawer"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-open-drawer"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["franka-open-drawer"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9
     assert snapshot["tasks"]["h1-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0

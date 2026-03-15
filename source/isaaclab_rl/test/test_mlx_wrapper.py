@@ -40,6 +40,7 @@ def test_public_mlx_task_lists_are_stable():
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
+        "franka-open-drawer",
     )
     assert list_trainable_mlx_tasks() == (
         "cartpole",
@@ -52,6 +53,7 @@ def test_public_mlx_task_lists_are_stable():
         "franka-stack",
         "franka-stack-rgb",
         "franka-cabinet",
+        "franka-open-drawer",
     )
     assert get_mlx_task_spec("h1-flat").default_hidden_dim == 192
     assert get_mlx_task_spec("franka-reach").default_hidden_dim == 128
@@ -59,6 +61,7 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("franka-stack").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack-rgb").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-cabinet").default_hidden_dim == 128
+    assert get_mlx_task_spec("franka-open-drawer").default_hidden_dim == 128
 
 
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
@@ -249,7 +252,7 @@ def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
     assert depth_payload["episodes_completed"] == 1
 
 
-def test_evaluate_franka_reach_lift_stack_stack_rgb_and_cabinet_manual_via_public_mlx_wrapper():
+def test_evaluate_franka_reach_lift_stack_stack_rgb_cabinet_and_open_drawer_manual_via_public_mlx_wrapper():
     """The public wrapper should expose manual evaluation for the current trainable manipulation slices."""
 
     reach_payload = evaluate_mlx_task(
@@ -297,6 +300,15 @@ def test_evaluate_franka_reach_lift_stack_stack_rgb_and_cabinet_manual_via_publi
         random_actions=False,
         seed=49,
     )
+    open_drawer_payload = evaluate_mlx_task(
+        "franka-open-drawer",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=50,
+    )
 
     assert reach_payload["task"] == "franka-reach"
     assert reach_payload["episodes_completed"] == 1
@@ -308,6 +320,8 @@ def test_evaluate_franka_reach_lift_stack_stack_rgb_and_cabinet_manual_via_publi
     assert stack_rgb_payload["episodes_completed"] == 1
     assert cabinet_payload["task"] == "franka-cabinet"
     assert cabinet_payload["episodes_completed"] == 1
+    assert open_drawer_payload["task"] == "franka-open-drawer"
+    assert open_drawer_payload["episodes_completed"] == 1
 
 
 def test_train_and_evaluate_franka_reach_via_public_mlx_wrapper(tmp_path: Path):
@@ -470,6 +484,39 @@ def test_train_and_evaluate_franka_cabinet_via_public_mlx_wrapper(tmp_path: Path
     assert train_payload["task"] == "franka-cabinet"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-cabinet"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_franka_open_drawer_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for the open-drawer task."""
+
+    checkpoint_path = tmp_path / "franka-open-drawer-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "franka-open-drawer",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=61,
+    )
+    eval_payload = evaluate_mlx_task(
+        "franka-open-drawer",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=61,
+    )
+
+    assert train_payload["task"] == "franka-open-drawer"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "franka-open-drawer"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)

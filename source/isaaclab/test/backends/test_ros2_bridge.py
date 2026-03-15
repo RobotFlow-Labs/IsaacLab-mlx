@@ -22,8 +22,12 @@ from isaaclab.backends import (
     Ros2MessageEnvelope,
     Ros2ProcessBridge,
     interpolate_joint_motion,
+    joint_motion_plan_batch_from_ros_envelopes,
+    joint_motion_plan_batch_to_ros_envelopes,
     joint_motion_plan_from_ros_envelope,
     joint_motion_plan_to_ros_envelope,
+    planner_world_state_batch_from_ros_envelopes,
+    planner_world_state_batch_to_ros_envelopes,
     planner_world_state_from_ros_envelope,
     planner_world_state_to_ros_envelope,
     ros2_cli_available,
@@ -191,6 +195,66 @@ def test_joint_motion_plan_round_trips_from_ros_envelope():
     assert restored.planner_backend == plan.planner_backend
 
 
+def test_planner_world_state_batch_round_trips_from_ros_envelopes():
+    """Planner world-state batches should round-trip through ROS-friendly envelopes."""
+
+    batch = (
+        PlannerWorldState(
+            frame_id="panda_link0",
+            obstacles=(PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),),
+        ),
+        PlannerWorldState(
+            frame_id="panda_link0",
+            obstacles=(
+                PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),
+                PlannerWorldObstacle("goal", kind="sphere", center=(0.4, -0.1, 0.2), radius=0.08),
+            ),
+        ),
+    )
+
+    envelopes = planner_world_state_batch_to_ros_envelopes(batch)
+    restored = planner_world_state_batch_from_ros_envelopes(tuple(reversed(envelopes)))
+
+    assert [item.state_dict() for item in restored] == [item.state_dict() for item in batch]
+
+
+def test_joint_motion_plan_batch_round_trips_from_ros_envelopes():
+    """Joint trajectory batches should round-trip through ROS-friendly envelopes."""
+
+    batch = (
+        interpolate_joint_motion(
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2"),
+                start_positions=(0.0, -0.2),
+                goal_positions=(0.6, 0.4),
+                num_waypoints=4,
+                duration_s=1.2,
+            ),
+            planner_backend="mac-planners",
+        ),
+        interpolate_joint_motion(
+            JointMotionPlanRequest(
+                joint_names=("joint_1", "joint_2"),
+                start_positions=(0.6, 0.4),
+                goal_positions=(0.1, -0.1),
+                num_waypoints=5,
+                duration_s=1.5,
+            ),
+            planner_backend="mac-planners",
+        ),
+    )
+
+    envelopes = joint_motion_plan_batch_to_ros_envelopes(batch)
+    restored = joint_motion_plan_batch_from_ros_envelopes(tuple(reversed(envelopes)))
+
+    for restored_plan, planned in zip(restored, batch, strict=True):
+        assert restored_plan.joint_names == planned.joint_names
+        assert restored_plan.waypoint_times_s == pytest.approx(planned.waypoint_times_s)
+        assert len(restored_plan.waypoints) == len(planned.waypoints)
+        for restored_waypoint, planned_waypoint in zip(restored_plan.waypoints, planned.waypoints, strict=True):
+            assert restored_waypoint == pytest.approx(planned_waypoint)
+
+
 def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
     """The smoke script should exercise the real planner backend and emit round-trip summary flags."""
 
@@ -207,7 +271,15 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
 
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
 
-    assert summary["message_count"] == 4
+    assert summary["message_count"] == 6
     assert summary["planner_backend"] == "mac-planners"
     assert summary["planner_roundtrip_ok"] is True
     assert summary["trajectory_roundtrip_ok"] is True
+    assert summary["planner_batch_size"] == 2
+    assert summary["trajectory_batch_size"] == 2
+    assert summary["message_summary"]["batch_topics"] == {
+        "/planner/joint_trajectory": 2,
+        "/planner/world_state": 2,
+    }
+    assert summary["planner_obstacle_counts"] == [2, 3]
+    assert summary["trajectory_waypoint_counts"] == [4, 5]

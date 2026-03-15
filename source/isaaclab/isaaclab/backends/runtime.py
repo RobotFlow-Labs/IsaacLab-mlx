@@ -24,6 +24,7 @@ from .planner_compat import (
     interpolate_joint_motion,
     interpolate_joint_motion_batch,
 )
+from .supported_tasks import supported_task_surface_summary
 
 ComputeBackendName = Literal["torch-cuda", "mlx"]
 SimBackendName = Literal["isaacsim", "mac-sim"]
@@ -508,7 +509,25 @@ class MacSimBackend(SimBackend):
         self._unimplemented("write_root_velocity")
 
     def state_dict(self) -> dict[str, Any]:
-        return {"attached": False, "backend": self.name}
+        return {
+            "attached": False,
+            "backend": self.name,
+            "implementation": "task-specialized-analytic-slices",
+            "generic_scene_runtime": False,
+            "scene_profile": {
+                "articulation_profile": "task-local analytic articulation buffers",
+                "contact_profile": "analytic contacts and reduced contact buffers",
+                "terrain_profile": "analytic plane and wave terrain primitives",
+                "sensor_profile": "task-local raycasts, synthetic camera slices, and external stereo tooling",
+                "reset_profile": "deterministic reset samplers and replay-friendly rollout helpers",
+            },
+            "contract": {
+                "reset_signature": self.contract.reset_signature,
+                "step_signature": self.contract.step_signature,
+                "articulations": self.contract.articulations.__dict__,
+            },
+            "supported_tasks": supported_task_surface_summary(),
+        }
 
 
 class SensorBackend(ABC):
@@ -927,7 +946,7 @@ def get_runtime_state(runtime: RuntimeSelection | None = None) -> dict[str, Any]
     """Return runtime selection plus capability metadata for diagnostics and tests."""
     runtime = runtime or current_runtime()
     capabilities = current_runtime_capabilities(runtime)
-    return {
+    payload = {
         "compute_backend": runtime.compute_backend,
         "sim_backend": runtime.sim_backend,
         "kernel_backend": runtime.kernel_backend,
@@ -941,6 +960,31 @@ def get_runtime_state(runtime: RuntimeSelection | None = None) -> dict[str, Any]
             "sensor": capabilities.sensor.__dict__,
             "planner": capabilities.planner.__dict__,
         },
+    }
+    if runtime.sim_backend == "mac-sim":
+        payload["supported_tasks"] = supported_task_surface_summary()
+    return payload
+
+
+def build_runtime_diagnostics_payload(runtime: RuntimeSelection | None = None) -> dict[str, Any]:
+    """Return a serializable runtime diagnostics snapshot for CLI and CI surfaces."""
+
+    runtime = runtime or current_runtime()
+    compute_backend = create_compute_backend(runtime)
+    kernel_backend = create_kernel_backend(runtime)
+    sim_backend = create_sim_backend(runtime)
+    sensor_backend = create_sensor_backend(runtime)
+    planner_backend = create_planner_backend(runtime)
+    return {
+        "runtime": get_runtime_state(runtime),
+        "compute": {
+            "backend": compute_backend.name,
+            "capabilities": compute_backend.capabilities.__dict__,
+        },
+        "kernel": kernel_backend.state_dict(),
+        "sim": sim_backend.state_dict(),
+        "sensor": sensor_backend.state_dict(),
+        "planner": planner_backend.state_dict(),
     }
 
 
