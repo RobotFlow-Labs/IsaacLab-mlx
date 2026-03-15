@@ -451,30 +451,76 @@ class IsaacSimBackend(SimBackend):
 
 
 class MacSimBackend(SimBackend):
-    """Placeholder adapter for the future macOS-native simulator."""
+    """Shared macOS-native simulator substrate with generic batched articulation buffers."""
 
     name: SimBackendName = "mac-sim"
-    capabilities = SimCapabilities()
+    capabilities = SimCapabilities(
+        batched_stepping=True,
+        articulated_rigid_bodies=True,
+        contacts=False,
+        proprioceptive_observations=True,
+        cameras=False,
+        planners=False,
+    )
     contract = SimBackendContract(
         reset_signature="reset(soft: bool = False) -> Any",
         step_signature="step(render: bool = True, update_fabric: bool = False) -> Any",
-        articulations=ArticulationCapabilities(),
+        articulations=ArticulationCapabilities(
+            joint_state_io=True,
+            root_state_io=True,
+            effort_targets=True,
+            batched_views=True,
+        ),
     )
 
-    def _unimplemented(self, operation: str) -> None:
+    def __init__(self, scene_state: Any | None = None):
+        self._scene_state = scene_state
+
+    def attach_scene(self, scene_state: Any) -> None:
+        """Attach a generic batched scene substrate to the backend."""
+        self._scene_state = scene_state
+
+    def create_scene(self, num_envs: int, *, physics_dt: float = 1.0 / 60.0) -> Any:
+        """Create and attach the shared mac-sim scene substrate."""
+        from .mac_sim.state_primitives import MacSimSceneState
+
+        scene_state = MacSimSceneState(num_envs=num_envs, physics_dt=physics_dt)
+        self.attach_scene(scene_state)
+        return scene_state
+
+    def _missing_scene(self, operation: str) -> None:
         raise UnsupportedRuntimeFeatureError(
-            f"`mac-sim` does not implement `{operation}` yet. The public port foundation is in place,"
-            " but the macOS simulator adapter still needs a concrete implementation."
+            f"`mac-sim` requires an attached generic scene substrate before calling `{operation}`."
+            " Use `MacSimBackend.create_scene(...)`, `attach_scene(...)`, or one of the task-specific analytic"
+            " backends that subclasses `MacSimBackend`."
         )
 
+    def _require_scene(self) -> Any:
+        if self._scene_state is None:
+            self._missing_scene("scene access")
+        return self._scene_state
+
+    def _resolve_articulation(self, articulation: Any) -> Any:
+        scene_state = self._require_scene()
+        if articulation is None:
+            if len(scene_state.articulations) == 1:
+                return next(iter(scene_state.articulations.values()))
+            raise UnsupportedRuntimeFeatureError(
+                "`mac-sim` generic articulation IO requires an explicit articulation name or view when the"
+                " scene has zero or multiple articulations."
+            )
+        if isinstance(articulation, str):
+            return scene_state.get_articulation(articulation)
+        return articulation
+
     def reset(self, *, soft: bool = False) -> Any:
-        self._unimplemented("reset")
+        return self._require_scene().reset(soft=soft)
 
     def step(self, *, render: bool = True, update_fabric: bool = False) -> Any:
-        self._unimplemented("step")
+        return self._require_scene().step(render=render, update_fabric=update_fabric)
 
     def get_joint_state(self, articulation: Any) -> tuple[Any, Any]:
-        self._unimplemented("get_joint_state")
+        return self._resolve_articulation(articulation).get_joint_state()
 
     def set_joint_effort_target(
         self,
@@ -483,7 +529,7 @@ class MacSimBackend(SimBackend):
         *,
         joint_ids: Sequence[int] | None = None,
     ) -> None:
-        self._unimplemented("set_joint_effort_target")
+        self._resolve_articulation(articulation).set_joint_effort_target(efforts, joint_ids=joint_ids)
 
     def write_joint_state(
         self,
@@ -494,10 +540,11 @@ class MacSimBackend(SimBackend):
         joint_acc: Any | None = None,
         env_ids: Sequence[int] | None = None,
     ) -> None:
-        self._unimplemented("write_joint_state")
+        del joint_acc
+        self._resolve_articulation(articulation).write_joint_state(joint_pos, joint_vel, env_ids=env_ids)
 
     def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Sequence[int] | None = None) -> None:
-        self._unimplemented("write_root_pose")
+        self._resolve_articulation(articulation).write_root_pose(root_pose, env_ids=env_ids)
 
     def write_root_velocity(
         self,
@@ -506,16 +553,16 @@ class MacSimBackend(SimBackend):
         *,
         env_ids: Sequence[int] | None = None,
     ) -> None:
-        self._unimplemented("write_root_velocity")
+        self._resolve_articulation(articulation).write_root_velocity(root_velocity, env_ids=env_ids)
 
     def state_dict(self) -> dict[str, Any]:
-        return {
-            "attached": False,
+        payload = {
+            "attached": self._scene_state is not None,
             "backend": self.name,
-            "implementation": "task-specialized-analytic-slices",
-            "generic_scene_runtime": False,
+            "implementation": "generic-articulation-layer+task-specialized-analytic-slices",
+            "generic_scene_runtime": True,
             "scene_profile": {
-                "articulation_profile": "task-local analytic articulation buffers",
+                "articulation_profile": "shared batched articulation and root-state buffers",
                 "contact_profile": "analytic contacts and reduced contact buffers",
                 "terrain_profile": "analytic plane and wave terrain primitives",
                 "sensor_profile": "task-local raycasts, synthetic camera slices, and external stereo tooling",
@@ -528,7 +575,9 @@ class MacSimBackend(SimBackend):
             },
             "supported_tasks": supported_task_surface_summary(),
         }
-
+        if self._scene_state is not None:
+            payload["scene_state"] = self._scene_state.state_dict()
+        return payload
 
 class SensorBackend(ABC):
     """Abstract backend seam for sensor implementations."""
@@ -860,7 +909,14 @@ def current_runtime_capabilities(runtime: RuntimeSelection | None = None) -> Run
             planners=True,
         )
     else:
-        sim = SimCapabilities()
+        sim = SimCapabilities(
+            batched_stepping=True,
+            articulated_rigid_bodies=True,
+            contacts=False,
+            proprioceptive_observations=True,
+            cameras=False,
+            planners=False,
+        )
 
     if runtime.kernel_backend == "warp":
         kernel = WarpKernelBackend.capabilities

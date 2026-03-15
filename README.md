@@ -102,7 +102,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is intentionally narrow. It currently covers 13 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer, plus synthetic cartpole RGB/depth camera variants. The task capability matrix below is the authoritative public support surface.
+The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 13 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer, plus synthetic cartpole RGB/depth camera variants. The task capability matrix below is the authoritative public support surface.
 
 ### Kernel backend
 
@@ -160,7 +160,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Current mac-native slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, Franka open-drawer, and synthetic cartpole RGB/depth camera tasks |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Shared generic batched articulation/root-state substrate plus the current mac-native task slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, Franka open-drawer, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -731,7 +731,7 @@ The most important fork changes are:
 
 Near-term priorities:
 
-1. Expand `mac-sim` from the current task slices into a more general articulation/scene layer.
+1. Expand the new generic `mac-sim` articulation/scene substrate to cover more shared contacts, sensors, and asset patterns.
 2. Add additional locomotion/manipulation tasks with compatible observation/action structure.
 3. Push more task code through backend capability checks instead of import-time backend assumptions.
 4. Define a stable checkpoint/config story across multiple MLX tasks.
@@ -791,7 +791,7 @@ Upstream Isaac Lab is built on top of Isaac Sim and requires compatible Isaac Si
 Contributions are welcome, especially in these areas:
 
 - additional MLX-backed task ports
-- generalized `mac-sim` asset and articulation support
+- generalized `mac-sim` contacts, sensors, assets, and scene services on top of the shared batched articulation layer
 - capability gating around CUDA-only integrations
 - Apple Silicon verification and CI
 - documentation for MLX and macOS users

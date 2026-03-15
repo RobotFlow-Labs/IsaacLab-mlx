@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from collections.abc import Sequence
 from typing import Any
 
@@ -26,6 +27,8 @@ def _reshape_rows(values: Any, rows: int, columns: int, *, dtype=mx.float32) -> 
             return array.reshape((rows, 1))
         if array.shape[0] == rows * columns:
             return array.reshape((rows, columns))
+    if array.ndim == 2 and array.shape == (1, columns):
+        return mx.broadcast_to(array, (rows, columns))
     if array.ndim == 2 and array.shape == (rows, columns):
         return array
     return array.reshape((rows, columns))
@@ -161,3 +164,150 @@ class BatchedRootState:
         self.root_lin_vel_b[ids] = velocity[:, :3]
         if velocity.shape[1] >= 6:
             self.root_ang_vel_b[ids] = velocity[:, 3:6]
+
+
+@dataclass
+class MacSimArticulationView:
+    """Generic batched articulation view for the shared mac-sim scene substrate."""
+
+    name: str
+    joint_state: BatchedArticulationState
+    root_state: BatchedRootState | None = None
+    default_joint_pos: Any = 0.0
+    default_joint_vel: Any = 0.0
+    default_joint_effort_target: Any = 0.0
+    default_root_pose: Any = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+    default_root_velocity: Any = 0.0
+    default_projected_gravity_b: Any = (0.0, 0.0, -1.0)
+
+    @property
+    def num_envs(self) -> int:
+        return self.joint_state.num_envs
+
+    @property
+    def num_joints(self) -> int:
+        return self.joint_state.num_joints
+
+    def reset_envs(self, env_ids: Sequence[int] | None = None) -> None:
+        ids = list(range(self.num_envs)) if env_ids is None else list(env_ids)
+        if not ids:
+            return
+        self.joint_state.reset_envs(
+            ids,
+            joint_pos=self.default_joint_pos,
+            joint_vel=self.default_joint_vel,
+            joint_effort_target=self.default_joint_effort_target,
+        )
+        if self.root_state is not None:
+            pose = mx.array(self.default_root_pose, dtype=mx.float32).reshape((1, -1))
+            root_pos = pose[:, :3]
+            root_quat = pose[:, 3:7] if pose.shape[1] >= 7 else (0.0, 0.0, 0.0, 1.0)
+            self.root_state.reset_envs(
+                ids,
+                root_pos_w=root_pos,
+                root_quat_w=root_quat,
+                root_lin_vel_b=self.default_root_velocity,
+                root_ang_vel_b=self.default_root_velocity,
+                projected_gravity_b=self.default_projected_gravity_b,
+            )
+
+    def get_joint_state(self) -> tuple[mx.array, mx.array]:
+        return self.joint_state.read()
+
+    def set_joint_effort_target(self, efforts: Any, *, joint_ids: Sequence[int] | None = None) -> None:
+        self.joint_state.set_effort_target(efforts, joint_ids=joint_ids)
+
+    def write_joint_state(self, joint_pos: Any, joint_vel: Any, *, env_ids: Sequence[int] | None = None) -> None:
+        self.joint_state.write(joint_pos, joint_vel, env_ids=env_ids)
+
+    def write_root_pose(self, root_pose: Any, *, env_ids: Sequence[int] | None = None) -> None:
+        if self.root_state is None:
+            raise ValueError(f"Articulation '{self.name}' does not expose root-state IO.")
+        self.root_state.write_root_pose(root_pose, env_ids=env_ids)
+
+    def write_root_velocity(self, root_velocity: Any, *, env_ids: Sequence[int] | None = None) -> None:
+        if self.root_state is None:
+            raise ValueError(f"Articulation '{self.name}' does not expose root-state IO.")
+        self.root_state.write_root_velocity(root_velocity, env_ids=env_ids)
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = {
+            "name": self.name,
+            "num_envs": self.num_envs,
+            "num_joints": self.num_joints,
+            "joint_state_shape": list(self.joint_state.joint_pos.shape),
+            "root_state_io": self.root_state is not None,
+        }
+        if self.root_state is not None:
+            payload["root_state_shape"] = list(self.root_state.root_pos_w.shape)
+        return payload
+
+
+class MacSimSceneState:
+    """Generic batched scene/articulation substrate for the shared mac-sim backend."""
+
+    def __init__(self, num_envs: int, *, physics_dt: float = 1.0 / 60.0):
+        self.num_envs = num_envs
+        self.physics_dt = physics_dt
+        self.articulations: dict[str, MacSimArticulationView] = {}
+        self.step_count = 0
+        self.reset_count = 0
+        self.last_step_args: tuple[bool, bool] | None = None
+
+    def add_articulation(
+        self,
+        name: str,
+        *,
+        num_joints: int,
+        with_root_state: bool = False,
+        origin_grid: EnvironmentOriginGrid | None = None,
+        default_joint_pos: Any = 0.0,
+        default_joint_vel: Any = 0.0,
+        default_joint_effort_target: Any = 0.0,
+        default_root_pose: Any = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0),
+        default_root_velocity: Any = 0.0,
+    ) -> MacSimArticulationView:
+        root_state = BatchedRootState(self.num_envs, origin_grid=origin_grid) if with_root_state else None
+        articulation = MacSimArticulationView(
+            name=name,
+            joint_state=BatchedArticulationState(self.num_envs, num_joints=num_joints),
+            root_state=root_state,
+            default_joint_pos=default_joint_pos,
+            default_joint_vel=default_joint_vel,
+            default_joint_effort_target=default_joint_effort_target,
+            default_root_pose=default_root_pose,
+            default_root_velocity=default_root_velocity,
+        )
+        articulation.reset_envs()
+        self.articulations[name] = articulation
+        return articulation
+
+    def get_articulation(self, name: str) -> MacSimArticulationView:
+        try:
+            return self.articulations[name]
+        except KeyError as error:
+            raise KeyError(f"Unknown mac-sim articulation '{name}'.") from error
+
+    def reset(self, *, soft: bool = False) -> dict[str, Any]:
+        self.reset_count += 1
+        if not soft:
+            self.step_count = 0
+        for articulation in self.articulations.values():
+            articulation.reset_envs()
+        return self.state_dict()
+
+    def step(self, *, render: bool = True, update_fabric: bool = False) -> dict[str, Any]:
+        self.step_count += 1
+        self.last_step_args = (render, update_fabric)
+        return self.state_dict()
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "num_envs": self.num_envs,
+            "physics_dt": self.physics_dt,
+            "step_count": self.step_count,
+            "reset_count": self.reset_count,
+            "articulation_count": len(self.articulations),
+            "articulations": {name: articulation.state_dict() for name, articulation in self.articulations.items()},
+            "last_step_args": self.last_step_args,
+        }

@@ -19,7 +19,7 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
     payload = build_runtime_diagnostics_payload(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
 
     assert payload["runtime"]["compute_backend"] == "mlx"
-    assert payload["sim"]["implementation"] == "task-specialized-analytic-slices"
+    assert payload["sim"]["implementation"] == "generic-articulation-layer+task-specialized-analytic-slices"
     assert payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
     assert payload["sensor"]["capabilities"]["analytic_camera_tasks"] is True
     assert payload["planner"]["backend"] == "mac-planners"
@@ -61,4 +61,4 @@ def test_mac_runtime_diagnostics_module_writes_json(tmp_path: Path):
 
     assert int(result.stdout.strip()) >= 13
     assert payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
-    assert payload["sim"]["generic_scene_runtime"] is False
+    assert payload["sim"]["generic_scene_runtime"] is True

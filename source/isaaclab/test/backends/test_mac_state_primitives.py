@@ -17,6 +17,7 @@ from isaaclab.backends.mac_sim.state_primitives import (  # noqa: E402
     BatchedArticulationState,
     BatchedRootState,
     EnvironmentOriginGrid,
+    MacSimSceneState,
 )
 
 
@@ -56,3 +57,35 @@ def test_root_state_uses_shared_origin_grid_and_io_helpers():
     assert mx.allclose(state.root_quat_w[0], mx.array([0.0, 0.0, 0.0, 1.0], dtype=mx.float32)).item()
     assert mx.allclose(state.root_lin_vel_b[0], mx.array([0.4, 0.0, -0.2], dtype=mx.float32)).item()
     assert mx.allclose(state.root_ang_vel_b[0], mx.array([0.01, 0.02, 0.03], dtype=mx.float32)).item()
+
+
+def test_mac_sim_scene_state_registers_articulations_and_tracks_step_reset():
+    """The shared mac-sim scene substrate should manage batched articulations and scene counters."""
+    scene = MacSimSceneState(num_envs=3, physics_dt=0.02)
+    origin_grid = EnvironmentOriginGrid(num_envs=3, spacing=1.5)
+    articulation = scene.add_articulation(
+        "robot",
+        num_joints=2,
+        with_root_state=True,
+        origin_grid=origin_grid,
+        default_joint_pos=(0.1, -0.1),
+        default_root_pose=(0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0),
+    )
+
+    articulation.write_joint_state([[1.0, 2.0]], [[0.1, 0.2]], env_ids=[1])
+    articulation.set_joint_effort_target([0.5, -0.5, 0.25], joint_ids=[0])
+    articulation.write_root_pose([[0.2, 0.3, 0.8, 0.0, 0.0, 0.0, 1.0]], env_ids=[2])
+    articulation.write_root_velocity([[0.4, 0.0, -0.1, 0.01, 0.02, 0.03]], env_ids=[2])
+
+    scene.step(render=False, update_fabric=True)
+    scene.reset()
+    scene_state = scene.state_dict()
+
+    assert scene_state["articulation_count"] == 1
+    assert scene_state["step_count"] == 0
+    assert scene_state["reset_count"] == 1
+    assert scene_state["articulations"]["robot"]["root_state_io"] is True
+    joint_pos, joint_vel = articulation.get_joint_state()
+    assert mx.allclose(joint_pos[0], mx.array([0.1, -0.1], dtype=mx.float32)).item()
+    assert mx.allclose(joint_vel[0], mx.array([0.0, 0.0], dtype=mx.float32)).item()
+    assert mx.allclose(articulation.root_state.root_pos_w[0], mx.array([0.0, 0.0, 0.5], dtype=mx.float32)).item()

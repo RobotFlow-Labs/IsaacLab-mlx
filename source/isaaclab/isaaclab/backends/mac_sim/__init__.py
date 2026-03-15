@@ -86,6 +86,8 @@ _EXPORTS = {
     "BatchedArticulationState": (".state_primitives", "BatchedArticulationState"),
     "BatchedRootState": (".state_primitives", "BatchedRootState"),
     "EnvironmentOriginGrid": (".state_primitives", "EnvironmentOriginGrid"),
+    "MacSimArticulationView": (".state_primitives", "MacSimArticulationView"),
+    "MacSimSceneState": (".state_primitives", "MacSimSceneState"),
     "MacPlaneTerrain": (".terrain", "MacPlaneTerrain"),
     "MacWaveTerrain": (".terrain", "MacWaveTerrain"),
     "MacAnymalCFlatEnv": (".anymal_c", "MacAnymalCFlatEnv"),
