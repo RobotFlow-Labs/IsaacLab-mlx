@@ -112,6 +112,8 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Reach-Franka-OSC-Play-v0": "franka-reach",
     "Isaac-Lift-Cube-Franka-v0": "franka-lift",
     "Isaac-Lift-Cube-Franka-Play-v0": "franka-lift",
+    "Isaac-Lift-Cube-Franka-IK-Abs-v0": "franka-lift",
+    "Isaac-Lift-Cube-Franka-IK-Rel-v0": "franka-lift",
     "Isaac-Stack-Cube-Franka-v0": "franka-stack",
     "Isaac-Stack-Cube-Franka-Play-v0": "franka-stack",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0": "franka-stack",

@@ -195,3 +195,62 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
     assert train_payload["task"] == "franka-open-drawer"
     assert Path(train_payload["checkpoint_path"]).exists()
+
+
+def test_mlx_cli_module_handles_lift_alias_and_rejects_unsupported_manipulation_id(tmp_path: Path):
+    train_output_path = tmp_path / "module-lift-alias-train.json"
+    checkpoint_path = tmp_path / "module-lift-alias-policy.npz"
+
+    train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(checkpoint_path),
+            "--json-out",
+            str(train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert train_result.returncode == 0, train_result.stderr
+    train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
+    assert train_payload["task"] == "franka-lift"
+    assert Path(train_payload["checkpoint_path"]).exists()
+
+    unsupported_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert unsupported_result.returncode != 0
+    assert "invalid choice" in unsupported_result.stderr

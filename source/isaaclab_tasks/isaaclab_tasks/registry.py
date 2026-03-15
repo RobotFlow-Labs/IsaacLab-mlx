@@ -66,6 +66,20 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Lift-Cube-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaLiftEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaLiftEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-Play-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {
@@ -377,6 +391,52 @@ ISAACSIM_ONLY_TASK_SPECS = (
         "kwargs": _isaacsim_only_kwargs(
             env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.pickplace_unitree_g1_inspire_hand_env_cfg:PickPlaceG1InspireFTPEnvCfg",
             robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
+        ),
+    },
+    {
+        "id": "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.lift.config.franka.ik_abs_env_cfg:FrankaTeddyBearLiftEnvCfg",
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_visuomotor_env_cfg:FrankaCubeStackVisuomotorEnvCfg",
+            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_image_200.json",
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_visuomotor_cosmos_env_cfg:FrankaCubeStackVisuomotorCosmosEnvCfg",
+            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_image_cosmos.json",
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_blueprint_env_cfg:FrankaCubeStackBlueprintEnvCfg",
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_env_cfg_skillgen:FrankaCubeStackSkillgenEnvCfg",
+            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_low_dim.json",
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
+        "kwargs": _isaacsim_only_kwargs(
+            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.bin_stack_ik_rel_env_cfg:FrankaBinStackEnvCfg",
+            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_low_dim.json",
         ),
     },
     {

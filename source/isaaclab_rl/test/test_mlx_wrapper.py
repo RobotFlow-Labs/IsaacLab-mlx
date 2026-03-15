@@ -68,6 +68,7 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     """Upstream Franka task ids should resolve to the canonical public MLX task specs."""
 
     assert get_mlx_task_spec("Isaac-Reach-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-reach")
+    assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
     assert get_mlx_task_spec("Isaac-Open-Drawer-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-open-drawer")
 
@@ -549,6 +550,32 @@ def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper
     assert reach_train_payload["task"] == "franka-reach"
     assert Path(reach_train_payload["checkpoint_path"]).exists()
 
+    lift_checkpoint = tmp_path / "franka-lift-alias-policy.npz"
+    lift_train_payload = train_mlx_task(
+        "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(lift_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=69,
+    )
+    lift_eval_payload = evaluate_mlx_task(
+        "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+        checkpoint=str(lift_checkpoint),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=69,
+    )
+    assert lift_train_payload["task"] == "franka-lift"
+    assert Path(lift_train_payload["checkpoint_path"]).exists()
+    assert lift_eval_payload["task"] == "franka-lift"
+    assert lift_eval_payload["mode"] == "checkpoint"
+    assert lift_eval_payload["episodes_completed"] == 1
+
     stack_rgb_payload = evaluate_mlx_task(
         "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
         num_envs=8,
@@ -600,8 +627,14 @@ def test_public_mlx_wrapper_rejects_unknown_tasks():
     with pytest.raises(ValueError, match="Unsupported MLX task"):
         get_mlx_task_spec("shadow-hand-vision")
 
+    with pytest.raises(ValueError, match="Unsupported MLX task"):
+        get_mlx_task_spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
+
     with pytest.raises(ValueError, match="Unsupported MLX evaluation task"):
         evaluate_mlx_task("shadow-hand-vision")
+
+    with pytest.raises(ValueError, match="Unsupported MLX evaluation task"):
+        evaluate_mlx_task("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
 
 
 def test_public_mlx_wrapper_rejects_checkpoint_for_eval_only_tasks():
