@@ -213,6 +213,16 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
     ),
 )
 
+BENCHMARK_ONLY_TASK_GROUPS: dict[str, tuple[str, ...]] = {
+    "sensor-mac-native": (
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
+        "anymal-c-flat-height-scan",
+        "h1-flat-height-scan",
+    ),
+    "training-mac-native": ("train-cartpole",),
+}
+
 
 def mac_native_task_specs() -> tuple[MacNativeTaskSpec, ...]:
     """Return the stable ordered public MLX/mac task specs."""
@@ -244,15 +254,31 @@ def list_trainable_mlx_tasks() -> tuple[str, ...]:
     return tuple(task.key for task in MAC_NATIVE_TASK_SPECS if task.trainable)
 
 
-def benchmark_task_groups() -> dict[str, tuple[str, ...]]:
-    """Return the stable benchmark task groups exposed on the public MLX/mac path."""
-
+def public_benchmark_task_groups() -> dict[str, tuple[str, ...]]:
+    """Return benchmark groups derived only from the public typed task manifest."""
     groups: dict[str, list[str]] = {}
     for task in MAC_NATIVE_TASK_SPECS:
         for group in task.benchmark_groups:
             groups.setdefault(group, []).append(task.key)
+    return {group: tuple(tasks) for group, tasks in groups.items()}
+
+
+def benchmark_task_groups() -> dict[str, tuple[str, ...]]:
+    """Return the stable benchmark task groups exposed on the public MLX/mac path."""
+
+    groups = {group: list(tasks) for group, tasks in public_benchmark_task_groups().items()}
+    for group, tasks in BENCHMARK_ONLY_TASK_GROUPS.items():
+        groups.setdefault(group, [])
+        groups[group].extend(tasks)
+        groups[group] = list(dict.fromkeys(groups[group]))
     payload = {group: tuple(tasks) for group, tasks in groups.items()}
-    payload["full"] = list_public_mlx_tasks()
+    payload["full"] = tuple(
+        dict.fromkeys(
+            list_public_mlx_tasks()
+            + BENCHMARK_ONLY_TASK_GROUPS["sensor-mac-native"]
+            + BENCHMARK_ONLY_TASK_GROUPS["training-mac-native"]
+        )
+    )
     return payload
 
 
@@ -261,6 +287,10 @@ def supported_task_surface_summary() -> dict[str, Any]:
 
     families = Counter(task.family for task in MAC_NATIVE_TASK_SPECS)
     sensor_contracts = Counter(contract for task in MAC_NATIVE_TASK_SPECS for contract in task.sensor_contract)
+    public_benchmark_groups_payload = {
+        group: list(tasks)
+        for group, tasks in public_benchmark_task_groups().items()
+    }
     benchmark_groups_payload = {
         group: list(tasks)
         for group, tasks in benchmark_task_groups().items()
@@ -269,8 +299,11 @@ def supported_task_surface_summary() -> dict[str, Any]:
         "public_task_count": len(MAC_NATIVE_TASK_SPECS),
         "current_mac_native_count": len(list_current_mac_native_tasks()),
         "trainable_task_count": len(list_trainable_mlx_tasks()),
+        "benchmark_only_group_count": len(BENCHMARK_ONLY_TASK_GROUPS),
         "families": dict(sorted(families.items())),
         "sensor_contracts": dict(sorted(sensor_contracts.items())),
-        "benchmark_groups": benchmark_groups_payload,
+        "public_benchmark_groups": public_benchmark_groups_payload,
+        "benchmark_task_groups": benchmark_groups_payload,
+        "benchmark_only_groups": {group: list(tasks) for group, tasks in BENCHMARK_ONLY_TASK_GROUPS.items()},
         "tasks": [task.state_dict() for task in MAC_NATIVE_TASK_SPECS],
     }

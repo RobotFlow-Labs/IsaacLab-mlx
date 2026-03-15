@@ -89,7 +89,9 @@ without pausing for replanning after every small success.
 - `DONE` CI now proves a release-style MLX install path without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and exercises the public wrapper
 - `DONE` Generic `mac-sensors` capability metadata is now honest about the public runtime surface: analytic raycasts plus synthetic camera task slices and backend-local external stereo capture, not generic Isaac Sim camera parity
 - `DONE` Supported public MLX/mac tasks now come from a shared typed manifest with a runtime diagnostics CLI so wrapper task lists, runtime diagnostics, and the public task surface stay aligned without hand-maintained duplication
+- `DONE` Benchmark group ownership now lives behind the same typed manifest, with runtime diagnostics separating public benchmark groups from benchmark-only projections so sensor/training benchmark rows do not masquerade as public tasks
 - `DONE` `mac-sim` now includes a shared generic batched articulation/scene substrate for reset/step and joint/root-state IO, while task-specific contacts, sensors, and reward logic still layer on top
+- `DONE` Env/runtime diagnostics now prove the articulated `mac-sim` contract on a real locomotion backend instead of only reporting the high-level backend seam
 - `DONE` ROS/planner software smokes now exercise the real `mac-planners` backend and verify typed round-trip reconstruction of planner world-state and joint trajectories
 - `DONE` Planner/ROS batch helpers now restore batches by `batch_index` and report actual batch envelope counts instead of inferring from message order or `max(index) + 1`
 - `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
@@ -602,6 +604,7 @@ without pausing for replanning after every small success.
 - Title: Add benchmark coverage for sensor-heavy mac-native tasks
 - Progress:
   - `sensor-mac-native` now covers `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`
+  - benchmark task-group ownership now comes from `supported_tasks.py`, and `training-mac-native` has a direct execution test instead of only indirect `full` coverage
 - Validation:
   - `scripts/benchmarks/mlx/benchmark_mac_tasks.py`
   - `.github/workflows/mlx-macos.yml`

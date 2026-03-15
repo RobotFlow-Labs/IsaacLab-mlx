@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from isaaclab.backends import build_benchmark_dashboard, build_benchmark_trend
+from isaaclab.backends.supported_tasks import benchmark_task_groups
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
@@ -45,6 +46,7 @@ def _load_benchmark_module():
 def test_current_mac_native_benchmark_group_is_stable():
     """The benchmark suite should keep all current mac-native slices in one named task group."""
     benchmark_module = _load_benchmark_module()
+    expected_groups = benchmark_task_groups()
 
     assert benchmark_module.CURRENT_MAC_NATIVE_TASKS == (
         "cartpole",
@@ -61,6 +63,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "franka-cabinet",
         "franka-open-drawer",
     )
+    assert benchmark_module.TASK_GROUPS == expected_groups
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
     assert benchmark_module.resolve_requested_tasks(None, "sensor-mac-native") == (
         "cartpole-rgb-camera",
@@ -68,6 +71,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "anymal-c-flat-height-scan",
         "h1-flat-height-scan",
     )
+    assert benchmark_module.resolve_requested_tasks(None, "training-mac-native") == ("train-cartpole",)
 
 
 def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
@@ -381,6 +385,33 @@ def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
             assert benchmark["output_signature"]["height_scan_mean"] > 0.0
 
 
+def test_run_benchmarks_covers_training_mac_native_tasks(tmp_path: Path):
+    """The training benchmark group should remain executable as a named projection of the manifest."""
+    benchmark_module = _load_benchmark_module()
+
+    results = benchmark_module.run_benchmarks(
+        benchmark_module.resolve_requested_tasks(None, "training-mac-native"),
+        num_envs=8,
+        steps=8,
+        train_updates=1,
+        rollout_steps=4,
+        epochs_per_update=1,
+        seed=17,
+        quadcopter_thrust_action=0.2,
+        artifact_dir=tmp_path,
+    )
+
+    assert results["task_group"] == "training-mac-native"
+    assert results["cpu_fallback_detected"] is False
+    assert [benchmark["task"] for benchmark in results["benchmarks"]] == ["train-cartpole"]
+    benchmark = results["benchmarks"][0]
+    assert benchmark["runtime"]["compute_backend"] == "mlx"
+    assert benchmark["runtime"]["sim_backend"] == "mac-sim"
+    assert benchmark["cpu_fallback"]["detected"] is False
+    assert benchmark["train_frames_per_s"] > 0.0
+    assert benchmark["completed_episodes"] >= 0
+
+
 def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     """The benchmark CLI should persist its JSON, dashboard, and trend payloads for CI artifact upload."""
     benchmark_module = _load_benchmark_module()
@@ -414,9 +445,9 @@ def test_benchmark_cli_writes_json_output(tmp_path: Path, monkeypatch):
     assert '"task_group": "current-mac-native"' in payload
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
     trend = json.loads(trend_path.read_text(encoding="utf-8"))
-    assert dashboard["summary"]["rollout_task_count"] == 13
+    assert dashboard["summary"]["rollout_task_count"] == len(benchmark_module.resolve_requested_tasks(None, "current-mac-native"))
     assert dashboard["summary"]["training_task_count"] == 0
-    assert trend["summary"]["task_count"] == 13
+    assert trend["summary"]["task_count"] == len(benchmark_module.resolve_requested_tasks(None, "current-mac-native"))
 
 
 def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
@@ -436,15 +467,17 @@ def test_dashboard_and_trend_cover_multi_task_training_runs(tmp_path: Path):
     )
     dashboard = build_benchmark_dashboard(results, hardware_label="m5-max")
     trend = build_benchmark_trend(results, hardware_label="m5-max")
+    expected_full = benchmark_module.resolve_requested_tasks(None, "full")
 
     assert dashboard["hardware_label"] == "m5-max"
-    assert dashboard["summary"]["rollout_task_count"] == 17
+    assert dashboard["summary"]["rollout_task_count"] == len([task for task in expected_full if task != "train-cartpole"])
     assert dashboard["summary"]["training_task_count"] == 1
     assert dashboard["summary"]["fastest_rollout"] is not None
     assert dashboard["summary"]["fastest_training"] is not None
-    assert {entry["task"] for entry in dashboard["tasks"]} == set(benchmark_module.resolve_requested_tasks(None, "full"))
+    assert {entry["task"] for entry in dashboard["tasks"]} == set(expected_full)
 
     trend_entries = {entry["task"]: entry for entry in trend["tasks"]}
+    assert trend["summary"]["task_count"] == len(expected_full)
     assert trend_entries["train-cartpole"]["kind"] == "training"
     assert trend_entries["train-cartpole"]["completed_episodes"] >= 0
     assert trend_entries["cartpole"]["kind"] == "rollout"

@@ -62,17 +62,11 @@ from isaaclab.backends.mac_sim import (
     train_cartpole_policy,
 )
 
-TRAINING_BENCHMARK_TASKS = ("train-cartpole",)
-SENSOR_BENCHMARK_TASKS = (
-    "cartpole-rgb-camera",
-    "cartpole-depth-camera",
-    "anymal-c-flat-height-scan",
-    "h1-flat-height-scan",
-)
-TASK_GROUPS = benchmark_task_groups() | {"sensor-mac-native": SENSOR_BENCHMARK_TASKS}
+TASK_GROUPS = benchmark_task_groups()
 CURRENT_MAC_NATIVE_TASKS = TASK_GROUPS["current-mac-native"]
-TASK_CHOICES = tuple(dict.fromkeys(CURRENT_MAC_NATIVE_TASKS + SENSOR_BENCHMARK_TASKS + TRAINING_BENCHMARK_TASKS))
-TASK_GROUPS["full"] = TASK_CHOICES
+SENSOR_BENCHMARK_TASKS = TASK_GROUPS["sensor-mac-native"]
+TRAINING_BENCHMARK_TASKS = TASK_GROUPS["training-mac-native"]
+TASK_CHOICES = TASK_GROUPS["full"]
 
 
 def parse_args() -> argparse.Namespace:

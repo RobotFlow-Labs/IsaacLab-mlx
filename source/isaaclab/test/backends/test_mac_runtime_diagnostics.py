@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 from isaaclab.backends import build_runtime_diagnostics_payload, resolve_runtime_selection
+from isaaclab.backends.test_utils import require_mlx_runtime
 
 
 def test_build_runtime_diagnostics_payload_reports_supported_surface():
@@ -21,6 +22,18 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
     assert payload["runtime"]["compute_backend"] == "mlx"
     assert payload["sim"]["implementation"] == "generic-articulation-layer+task-specialized-analytic-slices"
     assert payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
+    assert payload["sim"]["supported_tasks"]["public_benchmark_groups"]["sensor-mac-native"] == [
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
+    ]
+    assert payload["sim"]["supported_tasks"]["benchmark_task_groups"]["sensor-mac-native"] == [
+        "cartpole-rgb-camera",
+        "cartpole-depth-camera",
+        "anymal-c-flat-height-scan",
+        "h1-flat-height-scan",
+    ]
+    assert "training-mac-native" not in payload["sim"]["supported_tasks"]["public_benchmark_groups"]
+    assert payload["sim"]["supported_tasks"]["benchmark_task_groups"]["training-mac-native"] == ["train-cartpole"]
     assert payload["sensor"]["capabilities"]["analytic_camera_tasks"] is True
     assert payload["planner"]["backend"] == "mac-planners"
 
@@ -62,3 +75,33 @@ def test_mac_runtime_diagnostics_module_writes_json(tmp_path: Path):
     assert int(result.stdout.strip()) >= 13
     assert payload["runtime"]["supported_tasks"]["public_task_count"] >= 15
     assert payload["sim"]["generic_scene_runtime"] is True
+
+
+def test_anymal_env_diagnostics_expose_articulated_runtime_contract():
+    """Env-level diagnostics should expose the articulated mac-sim contract on a real locomotion backend."""
+    require_mlx_runtime()
+    from isaaclab.backends.mac_sim import MacAnymalCFlatEnv, MacAnymalCFlatEnvCfg, mac_env_diagnostics
+    from isaaclab.backends.mac_sim.hotpath import get_locomotion_hotpath_backend
+
+    env = MacAnymalCFlatEnv(MacAnymalCFlatEnvCfg(num_envs=4, seed=5, episode_length_s=0.5))
+
+    payload = mac_env_diagnostics(env)
+    sim_backend = payload["sim_backend"]
+
+    assert sim_backend["backend"] == "mac-sim"
+    assert sim_backend["capabilities"]["batched_stepping"] is True
+    assert sim_backend["capabilities"]["articulated_rigid_bodies"] is True
+    assert sim_backend["contract"]["articulations"] == {
+        "joint_state_io": True,
+        "root_state_io": True,
+        "effort_targets": True,
+        "batched_views": True,
+    }
+    assert sim_backend["root_state_shape"] == [4, 3]
+    assert sim_backend["joint_state_shape"] == [4, env.cfg.action_space]
+    assert sim_backend["subsystems"]["terrain"] is True
+    assert sim_backend["subsystems"]["contacts"] is True
+    assert sim_backend["subsystems"]["hotpath"] == get_locomotion_hotpath_backend()
+    assert payload["terrain"]["num_envs"] == 4
+    assert payload["contacts"]["history_length"] >= 1
+    assert payload["contacts"]["hotpath_backend"] == "mlx-compiled"

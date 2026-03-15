@@ -49,7 +49,7 @@ What works today:
 - a basic MLX stereo/depth smoke path on raw side-by-side YUYV dumps
 - MLX training, checkpoint save/load, and replay scripts
 - a public `isaaclab_rl.mlx` wrapper surface for the current MLX/mac task set
-- a runtime diagnostics surface that reports the supported public task manifest, backend seams, and honest mac capability metadata
+- a runtime diagnostics surface that reports the supported public task manifest, backend seams, honest mac capability metadata, and the concrete articulated `mac-sim` contract without overstating full Isaac Sim parity
 - a shared MLX PPO helper substrate for checkpoint metadata, GAE, advantage normalization, and resume-hidden-dim recovery
 - a shared checkpoint sidecar schema with metadata versioning, task IDs, policy distribution tags, explicit env-vs-policy action-space fields, and rough-task replay config inference
 - a planner compatibility seam for `mac-planners` with deterministic joint-space interpolation, timed waypoint payloads, richer obstacle metadata, and world-state updates
@@ -547,10 +547,12 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
-- a stable `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer
-- a stable `sensor-mac-native` task group for `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`
-- a stable `full` task group that adds the current sensor slices plus a lightweight cartpole training benchmark for shared dashboard coverage
+- stable named task groups derived from the typed manifest in [`source/isaaclab/isaaclab/backends/supported_tasks.py`](source/isaaclab/isaaclab/backends/supported_tasks.py)
+- a stable public `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, Franka lift, Franka stack, Franka stack RGB, Franka cabinet, and Franka open-drawer
+- a stable `sensor-mac-native` benchmark projection that extends the public camera slices with benchmark-only height-scan variants for `anymal-c-flat` and `h1-flat`
+- a stable `full` benchmark projection that combines the public task surface with the benchmark-only sensor/training rows for one normalized dashboard/trend artifact
 - runtime metadata including compute, kernel, sensor, and planner backend selection
+- runtime metadata that now separates `public_benchmark_groups` from `benchmark_task_groups`, so benchmark-only rows do not masquerade as public tasks
 - per-task and suite-level `cpu_fallback` reporting so benchmark JSON shows when the run silently dropped to the CPU kernel backend
 - rollout `output_signature` fields for control, locomotion, and sensor slices so semantic drift can be tracked without relying on throughput numbers alone
 - companion `*-dashboard.json` and `*-trend.json` artifacts for normalized MLX/mac regression reporting and M-series comparisons
@@ -560,8 +562,8 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
 ### Benchmark Expectations
 
 - `current-mac-native` is the stable public regression suite for the current MLX/mac task set.
-- `sensor-mac-native` is the stable regression suite for the first analytic sensor slices: `cartpole-rgb-camera`, `cartpole-depth-camera`, `anymal-c-flat-height-scan`, and `h1-flat-height-scan`.
-- `full` is the normalized dashboard/trend suite used by CI when one artifact needs to cover rollout plus training health together.
+- `sensor-mac-native` is a benchmark projection, not a second public task catalog. It includes the two public cartpole camera slices plus the benchmark-only `anymal-c-flat-height-scan` and `h1-flat-height-scan` variants.
+- `full` is the normalized dashboard/trend projection used by CI when one artifact needs to cover rollout plus training health together.
 - CI benchmark smokes are regression signals, not public performance claims.
 - A benchmark run is only considered healthy when `cpu_fallback.detected == false`.
 - Use `logs/benchmarks/mlx/m5-baseline.json` for local M5 comparisons and `logs/benchmarks/mlx/m5-baseline-trend.json` when you want a compact comparison payload across M-series machines. Do not compare against CI smoke numbers.
@@ -574,6 +576,7 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
   and rerun the compare command to confirm the refreshed baseline passes.
 - CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then exercises the installed `isaaclab-mlx-runtime-diagnostics` and `isaaclab-mlx-evaluate` entry points from a clean `uv` environment.
 - Backend-local external stereo validation still lives in synthetic stereo smoke tests and optional host-specific hardware probes; the benchmark suite only covers the synthetic cartpole camera task slices and the analytic terrain/raycast slices.
+- The runtime diagnostics artifact now proves two distinct things: the public typed task manifest and the concrete articulated `mac-sim` substrate. It does not claim full scene-graph, RTX, or Isaac Sim engine parity.
 
 ## Planner And ROS Compatibility
 
@@ -634,9 +637,9 @@ Current task capability matrix:
 | `Isaac-Cartpole-Depth-Camera-Direct-v0` | No | Yes | `sensor-mac-native` | No | Synthetic analytic depth camera observations on cartpole control/reward semantics |
 | `Isaac-Cart-Double-Pendulum-Direct-v0` | No | Yes | `current-mac-native` | No | MARL dict observations/actions |
 | `Isaac-Quadcopter-Direct-v0` | No | Yes | `current-mac-native` | No | Root-state thrust/moment control |
-| `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Velocity-Flat-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Flat-terrain locomotion with an optional benchmark-only height-scan variant |
 | `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain plus analytic terrain raycasts with MLX PPO train/replay support |
-| `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native`, `sensor-mac-native` | Yes | Flat-terrain locomotion, optional height scan |
+| `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Flat-terrain locomotion with an optional benchmark-only height-scan variant |
 | `Isaac-Velocity-Rough-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain, analytic terrain raycasts, rough-task checkpoint inference, and MLX PPO train/replay support |
 | `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support |
