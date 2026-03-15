@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .mlx import evaluate_mlx_task, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
+from .mlx import MLX_TASK_ALIASES, evaluate_mlx_task, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
 
 TASK_PREFIXES = {
     "cartpole": "mlx-cartpole",
@@ -34,6 +34,17 @@ TASK_PREFIXES = {
 }
 
 
+def _task_choices(*, trainable_only: bool) -> tuple[str, ...]:
+    """Return canonical task ids plus accepted upstream-compatible aliases."""
+
+    canonical_tasks = list_trainable_mlx_tasks() if trainable_only else list_mlx_tasks()
+    canonical_set = set(canonical_tasks)
+    alias_tasks = tuple(
+        alias for alias, canonical in sorted(MLX_TASK_ALIASES.items()) if canonical in canonical_set
+    )
+    return canonical_tasks + alias_tasks
+
+
 def _write_json(path: str | Path | None, payload: dict[str, Any]) -> None:
     if path is None:
         return
@@ -48,7 +59,7 @@ def _build_train_parser(default_task: str | None) -> argparse.ArgumentParser:
         description = f"Train the MLX/mac-sim {default_task} slice."
     parser = argparse.ArgumentParser(description=description)
     if default_task is None:
-        parser.add_argument("--task", choices=list_trainable_mlx_tasks(), required=True)
+        parser.add_argument("--task", choices=_task_choices(trainable_only=True), required=True)
     parser.add_argument("--num-envs", type=int, default=256)
     parser.add_argument("--updates", type=int, default=10)
     parser.add_argument("--rollout-steps", type=int, default=24)
@@ -71,7 +82,7 @@ def _build_eval_parser(default_task: str | None) -> argparse.ArgumentParser:
         description = f"Evaluate or replay the MLX/mac-sim {default_task} slice."
     parser = argparse.ArgumentParser(description=description)
     if default_task is None:
-        parser.add_argument("--task", choices=list_mlx_tasks(), required=True)
+        parser.add_argument("--task", choices=_task_choices(trainable_only=False), required=True)
     parser.add_argument("--num-envs", type=int, default=64)
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--seed", type=int, default=42)

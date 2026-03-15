@@ -96,6 +96,7 @@ without pausing for replanning after every small success.
 - `DONE` Planner/ROS batch helpers now restore batches by `batch_index` and report actual batch envelope counts instead of inferring from message order or `max(index) + 1`
 - `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
 - `DONE` `uv run scripts/bootstrap_uv_mlx.py` now bootstraps the public MLX/mac editable environment in one command
+- `DONE` Upstream-compatible Franka reach/stack/open-drawer controller variants now resolve to the canonical mac-native manipulation slices through the lazy task registry, public MLX wrapper, and installed CLI without aliasing heavier visuomotor or blueprint task families
 
 ## Phase A: Import And Packaging Safety
 
@@ -752,6 +753,7 @@ This queue exists so work can continue without waiting for a new plan. The docum
 - Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 - Keep the generic runtime metadata honest: only advertise generic sensor/runtime capabilities that are actually exposed through backend-neutral APIs, and push task-specific or tooling-only support into explicit diagnostic fields instead of broad parity flags.
+- Keep manipulation compatibility aliasing honest: widen upstream task-ID coverage only where the reduced mac-native slice still matches the observation/action/checkpoint contract, and keep heavier visuomotor / blueprint / skillgen families explicitly gated instead of quietly remapping them.
 
 ## Validation Commands
 

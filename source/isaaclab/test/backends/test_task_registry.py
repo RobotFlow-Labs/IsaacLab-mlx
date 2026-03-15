@@ -21,10 +21,16 @@ SAFE_TASK_IDS = (
     "Isaac-Cartpole-RGB-Camera-Direct-v0",
     "Isaac-Cartpole-Depth-Camera-Direct-v0",
     "Isaac-Reach-Franka-v0",
+    "Isaac-Reach-Franka-IK-Abs-v0",
+    "Isaac-Reach-Franka-IK-Rel-v0",
+    "Isaac-Reach-Franka-OSC-v0",
     "Isaac-Lift-Cube-Franka-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-v0",
+    "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
     "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Open-Drawer-Franka-v0",
+    "Isaac-Open-Drawer-Franka-IK-Abs-v0",
     "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Rough-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
@@ -183,27 +189,43 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
 
     reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-v0", device="cpu", num_envs=6)
+    reach_ik_abs_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-IK-Abs-v0", device="cpu", num_envs=7)
+    reach_osc_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-OSC-v0", device="cpu", num_envs=8)
     lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-v0", device="cpu", num_envs=5)
     stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-v0", device="cpu", num_envs=4)
+    stack_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=9)
     stack_rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=2)
+    stack_rgb_alt_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0", device="cpu", num_envs=3)
     cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
+    open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-Franka-IK-Abs-v0", device="cpu", num_envs=4)
 
     assert type(reach_cfg).__name__ == "MacFrankaReachEnvCfg"
     assert reach_cfg.num_envs == 6
     assert reach_cfg.action_space == 7
+    assert type(reach_ik_abs_cfg).__name__ == "MacFrankaReachEnvCfg"
+    assert reach_ik_abs_cfg.num_envs == 7
+    assert type(reach_osc_cfg).__name__ == "MacFrankaReachEnvCfg"
+    assert reach_osc_cfg.num_envs == 8
     assert type(lift_cfg).__name__ == "MacFrankaLiftEnvCfg"
     assert lift_cfg.num_envs == 5
     assert lift_cfg.action_space == 8
     assert type(stack_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_cfg.num_envs == 4
     assert stack_cfg.action_space == 8
+    assert type(stack_ik_rel_cfg).__name__ == "MacFrankaStackEnvCfg"
+    assert stack_ik_rel_cfg.num_envs == 9
     assert type(stack_rgb_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
     assert stack_rgb_cfg.num_envs == 2
     assert stack_rgb_cfg.action_space == 8
     assert stack_rgb_cfg.observation_space == 42
+    assert type(stack_rgb_alt_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
+    assert stack_rgb_alt_cfg.num_envs == 3
     assert type(cabinet_cfg).__name__ == "MacFrankaCabinetEnvCfg"
     assert cabinet_cfg.num_envs == 3
     assert cabinet_cfg.action_space == 8
+    assert type(open_drawer_cfg).__name__ == "MacFrankaOpenDrawerEnvCfg"
+    assert open_drawer_cfg.num_envs == 4
+    assert open_drawer_cfg.action_space == 8
 
 
 def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):

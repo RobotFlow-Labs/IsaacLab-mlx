@@ -123,3 +123,75 @@ def test_mlx_cli_module_train_writes_json_payload(tmp_path: Path):
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["task"] == "cartpole"
     assert Path(payload["checkpoint_path"]).exists()
+
+
+def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path):
+    eval_output_path = tmp_path / "module-alias-eval.json"
+    train_output_path = tmp_path / "module-alias-train.json"
+    checkpoint_path = tmp_path / "module-alias-train-policy.npz"
+
+    eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
+            "--num-envs",
+            "8",
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert eval_result.returncode == 0, eval_result.stderr
+    eval_payload = json.loads(eval_output_path.read_text(encoding="utf-8"))
+    assert eval_payload["task"] == "franka-stack-rgb"
+    assert eval_payload["episodes_completed"] == 1
+
+    train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Open-Drawer-Franka-IK-Rel-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(checkpoint_path),
+            "--json-out",
+            str(train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert train_result.returncode == 0, train_result.stderr
+    train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
+    assert train_payload["task"] == "franka-open-drawer"
+    assert Path(train_payload["checkpoint_path"]).exists()

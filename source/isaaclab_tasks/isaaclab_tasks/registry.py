@@ -31,6 +31,34 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Reach-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Reach-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Reach-Franka-OSC-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Reach-Franka-OSC-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaReachEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaReachEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {
@@ -59,6 +87,27 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
         "id": "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
         "kwargs": {
@@ -70,6 +119,34 @@ MAC_SAFE_TASK_SPECS = (
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackRgbEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackRgbEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
         },
     },
     {
@@ -88,6 +165,20 @@ MAC_SAFE_TASK_SPECS = (
     },
     {
         "id": "Isaac-Open-Drawer-Franka-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaOpenDrawerEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Open-Drawer-Franka-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaOpenDrawerEnv",
+        "kwargs": {
+            "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",
+        },
+    },
+    {
+        "id": "Isaac-Open-Drawer-Franka-IK-Rel-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaOpenDrawerEnv",
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",

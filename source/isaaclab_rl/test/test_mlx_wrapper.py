@@ -64,6 +64,14 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("franka-open-drawer").default_hidden_dim == 128
 
 
+def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
+    """Upstream Franka task ids should resolve to the canonical public MLX task specs."""
+
+    assert get_mlx_task_spec("Isaac-Reach-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-reach")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
+    assert get_mlx_task_spec("Isaac-Open-Drawer-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-open-drawer")
+
+
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
     """The MLX wrapper should provide a stable train/evaluate surface for locomotion tasks."""
     checkpoint_path = tmp_path / "anymal-wrapper-policy.npz"
@@ -520,6 +528,65 @@ def test_train_and_evaluate_franka_open_drawer_via_public_mlx_wrapper(tmp_path: 
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper(tmp_path: Path):
+    """Upstream-compatible Franka task ids should route through the canonical MLX manipulation slices."""
+
+    reach_checkpoint = tmp_path / "franka-reach-alias-policy.npz"
+    reach_train_payload = train_mlx_task(
+        "Isaac-Reach-Franka-IK-Abs-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(reach_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=67,
+    )
+    assert reach_train_payload["task"] == "franka-reach"
+    assert Path(reach_train_payload["checkpoint_path"]).exists()
+
+    stack_rgb_payload = evaluate_mlx_task(
+        "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=71,
+    )
+    assert stack_rgb_payload["task"] == "franka-stack-rgb"
+    assert stack_rgb_payload["mode"] == "manual"
+    assert stack_rgb_payload["episodes_completed"] == 1
+
+    open_drawer_checkpoint = tmp_path / "franka-open-drawer-alias-policy.npz"
+    open_drawer_train_payload = train_mlx_task(
+        "Isaac-Open-Drawer-Franka-IK-Rel-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(open_drawer_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=73,
+    )
+    open_drawer_eval_payload = evaluate_mlx_task(
+        "Isaac-Open-Drawer-Franka-IK-Rel-v0",
+        checkpoint=str(open_drawer_checkpoint),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=73,
+    )
+    assert open_drawer_train_payload["task"] == "franka-open-drawer"
+    assert Path(open_drawer_train_payload["checkpoint_path"]).exists()
+    assert open_drawer_eval_payload["task"] == "franka-open-drawer"
+    assert open_drawer_eval_payload["mode"] == "checkpoint"
+    assert open_drawer_eval_payload["episodes_completed"] == 1
 
 
 def test_public_mlx_wrapper_rejects_non_trainable_tasks():

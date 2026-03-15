@@ -103,11 +103,45 @@ MLX_TASK_SPECS = {
     for task_id, spec in _SUPPORTED_TASK_SPECS.items()
 }
 
+MLX_TASK_ALIASES: dict[str, str] = {
+    "Isaac-Reach-Franka-v0": "franka-reach",
+    "Isaac-Reach-Franka-Play-v0": "franka-reach",
+    "Isaac-Reach-Franka-IK-Abs-v0": "franka-reach",
+    "Isaac-Reach-Franka-IK-Rel-v0": "franka-reach",
+    "Isaac-Reach-Franka-OSC-v0": "franka-reach",
+    "Isaac-Reach-Franka-OSC-Play-v0": "franka-reach",
+    "Isaac-Lift-Cube-Franka-v0": "franka-lift",
+    "Isaac-Lift-Cube-Franka-Play-v0": "franka-lift",
+    "Isaac-Stack-Cube-Franka-v0": "franka-stack",
+    "Isaac-Stack-Cube-Franka-Play-v0": "franka-stack",
+    "Isaac-Stack-Cube-Instance-Randomize-Franka-v0": "franka-stack",
+    "Isaac-Stack-Cube-Franka-IK-Rel-v0": "franka-stack",
+    "Isaac-Stack-Cube-Franka-IK-Abs-v0": "franka-stack",
+    "Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0": "franka-stack",
+    "Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-v0": "franka-stack",
+    "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0": "franka-stack",
+    "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0": "franka-stack-rgb",
+    "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-Play-v0": "franka-stack-rgb",
+    "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0": "franka-stack-rgb",
+    "Isaac-Franka-Cabinet-Direct-v0": "franka-cabinet",
+    "Isaac-Franka-Cabinet-Direct-Play-v0": "franka-cabinet",
+    "Isaac-Open-Drawer-Franka-v0": "franka-open-drawer",
+    "Isaac-Open-Drawer-Franka-Play-v0": "franka-open-drawer",
+    "Isaac-Open-Drawer-Franka-IK-Abs-v0": "franka-open-drawer",
+    "Isaac-Open-Drawer-Franka-IK-Rel-v0": "franka-open-drawer",
+}
+
 
 def _serialize_task_spec(spec: MlxTaskSpec) -> dict[str, Any]:
     """Return a JSON-safe task spec payload for CLI and artifact surfaces."""
 
     return asdict(spec)
+
+
+def _normalize_mlx_task(task: str) -> str:
+    """Normalize upstream-compatible task aliases to canonical MLX/mac task ids."""
+
+    return MLX_TASK_ALIASES.get(task, task)
 
 
 def list_mlx_tasks() -> tuple[str, ...]:
@@ -125,6 +159,7 @@ def list_trainable_mlx_tasks() -> tuple[str, ...]:
 def get_mlx_task_spec(task: str) -> MlxTaskSpec:
     """Return the stable MLX task metadata for a supported task."""
 
+    task = _normalize_mlx_task(task)
     try:
         return MLX_TASK_SPECS[task]
     except KeyError as exc:
@@ -149,6 +184,7 @@ def train_mlx_task(
 ) -> dict[str, Any]:
     """Train a supported MLX/mac-sim task and return a normalized payload."""
 
+    task = _normalize_mlx_task(task)
     spec = get_mlx_task_spec(task)
     if not spec.trainable:
         raise ValueError(f"Task '{task}' does not expose an MLX training surface.")
@@ -366,6 +402,7 @@ def evaluate_mlx_task(
 ) -> dict[str, Any]:
     """Evaluate or replay a supported MLX/mac-sim task."""
 
+    task = _normalize_mlx_task(task)
     if task == "cartpole":
         if checkpoint is None:
             raise ValueError("Cartpole evaluation requires a checkpoint.")

@@ -43,6 +43,7 @@ What works today:
 - trainable rough locomotion slices for ANYmal-C and H1 with shared PPO/checkpoint contracts, replay support, and CI smoke coverage
 - a Metal-backed locomotion root-step helper for the ANYmal-C and H1 slices, with benchmark and semantic-drift diagnostics that report `hotpath: "mlx-metal-root-step"` when that narrow kernel is active
 - trainable `MLX + mac-sim` Franka reach, cube-lift, two-cube stack, three-cube stack, cabinet-drawer, and open-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
+- upstream-compatible Franka reach/stack/open-drawer controller variants now resolve through the lazy task registry, public `isaaclab_rl.mlx` wrapper, and installed MLX CLI onto the existing reduced mac-native slices instead of failing on macOS import/runtime seams
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
 - a backend-local macOS external stereo camera discovery/capture path for UVC devices such as ZED 2i, including a live Terminal-hosted `zed-sdk-mlx` validation path for macOS TCC-safe raw capture
@@ -641,12 +642,12 @@ Current task capability matrix:
 | `Isaac-Velocity-Rough-Anymal-C-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain plus analytic terrain raycasts with MLX PPO train/replay support |
 | `Isaac-Velocity-Flat-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Flat-terrain locomotion with an optional benchmark-only height-scan variant |
 | `Isaac-Velocity-Rough-H1-v0` | Yes | Yes | `current-mac-native` | Yes | Procedural wave terrain, analytic terrain raycasts, rough-task checkpoint inference, and MLX PPO train/replay support |
-| `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support |
+| `Isaac-Reach-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic joint-space reach slice with MLX PPO train/replay support; compatible upstream aliases include `Isaac-Reach-Franka-IK-Abs-v0`, `Isaac-Reach-Franka-IK-Rel-v0`, `Isaac-Reach-Franka-OSC-v0`, and `Isaac-Reach-Franka-OSC-Play-v0` |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support |
-| `Isaac-Stack-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic two-cube stack slice with lightweight grasp/release logic and MLX PPO train/replay support |
-| `Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic three-cube sequential stack slice with staged terminal metrics and MLX PPO train/replay support |
+| `Isaac-Stack-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic two-cube stack slice with lightweight grasp/release logic and MLX PPO train/replay support; compatible upstream aliases include `Isaac-Stack-Cube-Franka-IK-Abs-v0`, `Isaac-Stack-Cube-Franka-IK-Rel-v0`, `Isaac-Stack-Cube-Instance-Randomize-Franka-v0`, `Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0`, `Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0`, and `Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-v0` |
+| `Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic three-cube sequential stack slice with staged terminal metrics and MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0` |
 | `Isaac-Franka-Cabinet-Direct-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced drawer-handle workflow with deterministic open-distance semantics and MLX PPO train/replay support |
-| `Isaac-Open-Drawer-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Manager-style open-drawer slice mapped onto the reduced analytic drawer substrate with MLX PPO train/replay support |
+| `Isaac-Open-Drawer-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Manager-style open-drawer slice mapped onto the reduced analytic drawer substrate with MLX PPO train/replay support; compatible upstream aliases include `Isaac-Open-Drawer-Franka-IK-Abs-v0` and `Isaac-Open-Drawer-Franka-IK-Rel-v0` |
 
 Implementation entrypoints:
 
@@ -690,6 +691,7 @@ The cartpole path preserves the important upstream task semantics:
 - Franka stack RGB preserves a staged three-cube manipulation contract with transition-only middle-stage bonuses, top-stage terminal metrics derived from pre-reset observations, and train/replay parity with the other manipulation slices
 - Franka cabinet preserves a reduced drawer-handle workflow with deterministic open-distance semantics, lightweight handle-grasp logic, and train/replay parity with the other manipulation slices
 - Franka open-drawer preserves the reduced analytic drawer substrate while exposing the manager-style public task ID, deterministic handle-distance/open-distance terminal metrics, and the same train/replay/checkpoint contract as the other Franka slices
+- upstream-compatible reach/stack/open-drawer controller variants now normalize to the canonical Franka MLX task keys in the public wrapper and installed CLI, so the mac-native surface stays recognizable without pretending separate controller-physics parity
 - the first mac-native sensor slice is an analytic terrain raycast / height-scan path for locomotion benchmarks
 - the `sensor-mac-native` benchmark rows now cover the synthetic cartpole RGB/depth camera tasks plus `height_scan_enabled=True` variants of the ANYmal-C and H1 flat locomotion tasks
 - benchmark and semantic drift reports now surface `hotpath: "mlx-metal-root-step"` for the locomotion root-step seam when active, `hotpath: "mlx-metal-ee"` for the Franka reach/lift/stack/stack-RGB/cabinet slices when the Metal end-effector helper is active, and keep the remaining helpers explicit when they stay on compiled MLX
