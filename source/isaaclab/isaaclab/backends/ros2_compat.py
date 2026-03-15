@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from typing import Any
 
-from .planner_compat import JointMotionPlan, PlannerWorldState
+from .planner_compat import JointMotionPlan, PlannerWorldObstacle, PlannerWorldState
 
 
 def _normalize_message_value(value: Any) -> Any:
@@ -81,6 +81,45 @@ def planner_world_state_to_ros_envelope(
     )
 
 
+def planner_world_state_from_ros_envelope(envelope: Ros2MessageEnvelope) -> PlannerWorldState:
+    """Reconstruct a planner world-state from a ROS-friendly envelope payload."""
+
+    payload = envelope.normalized_payload()
+    obstacle_payloads = payload.get("obstacles", [])
+    obstacles: list[PlannerWorldObstacle] = []
+    for obstacle_payload in obstacle_payloads:
+        obstacles.append(
+            PlannerWorldObstacle(
+                name=str(obstacle_payload["name"]),
+                center=tuple(float(value) for value in obstacle_payload.get("center", (0.0, 0.0, 0.0))),
+                size=(
+                    None
+                    if obstacle_payload.get("size") is None
+                    else tuple(float(value) for value in obstacle_payload["size"])
+                ),
+                kind=str(obstacle_payload.get("kind", "box")),
+                radius=None if obstacle_payload.get("radius") is None else float(obstacle_payload["radius"]),
+                length=None if obstacle_payload.get("length") is None else float(obstacle_payload["length"]),
+                quaternion_wxyz=tuple(
+                    float(value) for value in obstacle_payload.get("quaternion_wxyz", (1.0, 0.0, 0.0, 0.0))
+                ),
+                frame_id=str(obstacle_payload.get("frame_id", payload.get("frame_id", envelope.frame_id or "world"))),
+                attached_to=obstacle_payload.get("attached_to"),
+                touch_links=tuple(str(value) for value in obstacle_payload.get("touch_links", ())),
+                mesh_resource=obstacle_payload.get("mesh_resource"),
+                metadata=(
+                    None
+                    if obstacle_payload.get("metadata") in (None, {})
+                    else dict(obstacle_payload["metadata"])
+                ),
+            )
+        )
+    return PlannerWorldState(
+        frame_id=str(payload.get("frame_id", envelope.frame_id or "world")),
+        obstacles=tuple(obstacles),
+    )
+
+
 def joint_motion_plan_to_ros_envelope(
     plan: JointMotionPlan,
     *,
@@ -109,6 +148,29 @@ def joint_motion_plan_to_ros_envelope(
             "planner_backend": plan.planner_backend,
         },
         frame_id=frame_id,
+    )
+
+
+def joint_motion_plan_from_ros_envelope(envelope: Ros2MessageEnvelope) -> JointMotionPlan:
+    """Reconstruct a deterministic joint motion plan from a ROS-friendly envelope payload."""
+
+    payload = envelope.normalized_payload()
+    joint_names = tuple(str(name) for name in payload.get("joint_names", ()))
+    points = payload.get("points", [])
+    waypoints = tuple(tuple(float(value) for value in point.get("positions", ())) for point in points)
+    waypoint_times_s = tuple(
+        float(point.get("time_from_start", {}).get("sec", 0))
+        + float(point.get("time_from_start", {}).get("nanosec", 0)) / 1_000_000_000.0
+        for point in points
+    )
+    duration_s = waypoint_times_s[-1] if waypoint_times_s else 0.0
+    return JointMotionPlan(
+        joint_names=joint_names,
+        waypoints=waypoints,
+        waypoint_times_s=waypoint_times_s,
+        duration_s=duration_s,
+        planner_backend=str(payload.get("planner_backend", "unknown")),
+        world_state=None,
     )
 
 

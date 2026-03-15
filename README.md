@@ -139,6 +139,14 @@ Use the smallest extra set that matches the workflow you actually need.
 | Optional IsaacLab task extras for CUDA AutoMate | `uv pip install --python .venv/bin/python -e source/isaaclab_tasks[cuda-automate]` |
 | Optional RL logging/video extras | `uv pip install --python .venv/bin/python -e source/isaaclab_rl[rl-logging,video]` |
 
+If you want one public MLX/mac bootstrap command instead of a manual install sequence:
+
+```bash
+uv run scripts/bootstrap_uv_mlx.py
+```
+
+That creates `.venv`, installs the core MLX/mac package plus the lazy task registry and public MLX wrapper, and prints the corresponding `uv run --python ...` commands for train/eval and smoke scripts.
+
 ### Public Support Matrix
 
 This is the current public support contract for runtime combinations, not just what can be installed.
@@ -173,13 +181,20 @@ Isaac Sim objects continue to fail through explicit backend checks when they are
 For sensors specifically, the import-safe `isaaclab.sensors.camera` and `isaaclab.sensors.ray_caster` surfaces are
 currently config-oriented on macOS; the supported runtime sensor path today is the backend-local analytic terrain height scan in
 [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py).
+The generic `mac-sensors` backend now intentionally reports:
+
+- `raycast = true`
+- `analytic_camera_tasks = true`
+- `external_stereo_capture = true`
+- `cameras = false`, `depth = false`, `rgb = false`
+
+That is deliberate. Synthetic cartpole camera tasks and backend-local ZED/UVC capture are supported, but they are not being presented as generic Isaac Sim camera parity.
 
 ### 1. Create the environment with `uv`
 
 ```bash
 cd IsaacLab
-uv venv --python 3.11 .venv
-uv pip install --python .venv/bin/python -e source/isaaclab[macos-mlx,dev]
+uv run scripts/bootstrap_uv_mlx.py
 ```
 
 If you want the upstream Isaac Sim runtime on Linux/NVIDIA instead, install the CUDA-side extra:
@@ -429,11 +444,11 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 Stereo/depth smoke on a raw side-by-side YUYV dump:
 
 ```bash
-PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/tools/mac_stereo_depth_smoke.py \
+uv run --python .venv/bin/python scripts/tools/mac_stereo_depth_smoke.py \
   logs/hardware/synthetic_stereo.raw \
   logs/hardware/synthetic_depth \
-  --max-disparity 64
+  --max-disparity 64 \
+  --summary-out logs/hardware/synthetic_depth/summary.json
 ```
 
 The current live-camera validation path is intentionally separated from the main CI ring because camera ownership, TCC attribution, and device ownership depend on the host app. The software path is still fully test-backed through synthetic stereo dumps, and the live ZED path now has a hardware-validated Terminal-hosted workflow.
@@ -568,8 +583,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 Example ROS 2 bridge smoke:
 
 ```bash
-PYTHONPATH=.:source/isaaclab .venv/bin/python \
-  scripts/tools/ros2_bridge_smoke.py \
+uv run --python .venv/bin/python scripts/tools/ros2_bridge_smoke.py \
   logs/hardware/ros2-bridge-smoke.jsonl \
   --summary-out logs/hardware/ros2-bridge-smoke-summary.json
 ```
@@ -577,7 +591,7 @@ PYTHONPATH=.:source/isaaclab .venv/bin/python \
 This is the current compatibility contract:
 
 - planner compatibility on macOS means serializable box/sphere/capsule/mesh world updates, attachment metadata, and deterministic timed joint-space plans
-- ROS compatibility on macOS means plain message/process interoperability first, including ROS-friendly world-state and joint-trajectory envelopes without importing ROS Python bindings
+- ROS compatibility on macOS means plain message/process interoperability first, including ROS-friendly world-state and joint-trajectory envelopes plus typed round-trip reconstruction without importing ROS Python bindings
 - CUDA stream transport, NITROS, and GXF remain future follow-on work
 
 ## Kernel Inventory

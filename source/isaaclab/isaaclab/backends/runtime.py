@@ -87,6 +87,8 @@ class SensorCapabilities:
     depth: bool = False
     segmentation: bool = False
     rgb: bool = False
+    analytic_camera_tasks: bool = False
+    external_stereo_capture: bool = False
 
 
 @dataclass(frozen=True)
@@ -551,17 +553,20 @@ class MacSensorBackend(SensorBackend):
     capabilities = SensorCapabilities(
         proprioception=True,
         raycast=True,
-        cameras=True,
-        depth=True,
+        cameras=False,
+        depth=False,
         segmentation=False,
-        rgb=True,
+        rgb=False,
+        analytic_camera_tasks=True,
+        external_stereo_capture=True,
     )
 
     def state_dict(self) -> dict[str, Any]:
         return {
             "backend": self.name,
             "capabilities": self.capabilities.__dict__,
-            "implementation": "analytic-plane-raycast+external-stereo-depth",
+            "implementation": "analytic-plane-raycast+synthetic-camera-tasks+external-stereo-depth-tooling",
+            "camera_contract": "synthetic-task-slices+external-capture-only",
         }
 
 

@@ -269,6 +269,7 @@ jobs:
       run: |
         PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
           scripts/tools/test/test_bootstrap_isaac_sources.py \
+          scripts/tools/test/test_bootstrap_uv_mlx.py \
           source/isaaclab/test/backends/test_runtime.py \
           source/isaaclab/test/backends/test_task_registry.py \
           source/isaaclab/test/backends/test_kernel_inventory.py \
@@ -526,7 +527,7 @@ jobs:
         raw_path = root / "synthetic_stereo.raw"
         raw_path.write_bytes(frame.tobytes())
         Path(f"{raw_path}.txt").write_text(
-            "width=8\nheight=4\nchannels=2\npixel_format=yuyv422\n",
+            "width=8\nheight=4\nchannels=2\npixel_format=yuyv422\ntimestamp=1\nframe_id=1\n",
             encoding="utf-8",
         )
         print(raw_path)
@@ -536,10 +537,12 @@ jobs:
           logs/hardware/synthetic_stereo.raw \
           logs/hardware/synthetic_depth \
           --max-disparity 4 \
-          --window-size 1
+          --window-size 1 \
+          --summary-out logs/hardware/synthetic_depth/summary.json
         test -f logs/hardware/synthetic_depth/left_rgb.png
         test -f logs/hardware/synthetic_depth/right_rgb.png
         test -f logs/hardware/synthetic_depth/disparity.png
+        test -f logs/hardware/synthetic_depth/summary.json
 
     - name: Run mac planner compatibility smoke
       run: |
@@ -630,8 +633,14 @@ jobs:
         assert planner_payload["planner"]["implementation"] == "joint-space-linear-interpolation"
         assert planner_payload["plan"]["waypoint_count"] == 6
         ros_payload = json.loads(Path("logs/hardware/ros2-bridge-smoke-summary.json").read_text(encoding="utf-8"))
-        assert ros_payload["message_count"] == 2
+        assert ros_payload["message_count"] == 4
         assert ros_payload["pub_command"][:3] == ["ros2", "topic", "pub"]
+        assert ros_payload["planner_roundtrip_ok"] is True
+        assert ros_payload["trajectory_roundtrip_ok"] is True
+        stereo_payload = json.loads(Path("logs/hardware/synthetic_depth/summary.json").read_text(encoding="utf-8"))
+        assert stereo_payload["validated_capture"] is True
+        assert stereo_payload["disparity_shape"] == [4, 4]
+        assert Path(stereo_payload["left_rgb_path"]).is_file()
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
@@ -640,7 +649,8 @@ jobs:
         for task in ("cartpole-rgb-camera", "cartpole-depth-camera"):
             benchmark = benchmark_by_task[task]
             assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-cartpole-camera"
-            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is True
+            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is False
+            assert benchmark["runtime"]["capabilities"]["sensor"]["analytic_camera_tasks"] is True
             assert benchmark["image_shape"][:2] == [100, 100]
             assert benchmark["output_signature"]["final_frame_energy"] > 0.0
         for task in ("anymal-c-flat-height-scan", "h1-flat-height-scan"):

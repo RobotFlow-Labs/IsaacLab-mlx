@@ -18,10 +18,26 @@ from isaaclab.backends import (
     Ros2JsonlBridge,
     Ros2MessageEnvelope,
     Ros2ProcessBridge,
-    interpolate_joint_motion,
+    create_planner_backend,
+    joint_motion_plan_from_ros_envelope,
     joint_motion_plan_to_ros_envelope,
+    planner_world_state_from_ros_envelope,
     planner_world_state_to_ros_envelope,
+    resolve_runtime_selection,
 )
+
+
+def _plans_equivalent(lhs, rhs, *, tol: float = 1e-9) -> bool:
+    if lhs.joint_names != rhs.joint_names or lhs.planner_backend != rhs.planner_backend:
+        return False
+    if len(lhs.waypoints) != len(rhs.waypoints) or len(lhs.waypoint_times_s) != len(rhs.waypoint_times_s):
+        return False
+    for lhs_waypoint, rhs_waypoint in zip(lhs.waypoints, rhs.waypoints, strict=True):
+        if len(lhs_waypoint) != len(rhs_waypoint):
+            return False
+        if any(abs(float(left) - float(right)) > tol for left, right in zip(lhs_waypoint, rhs_waypoint, strict=True)):
+            return False
+    return all(abs(float(left) - float(right)) <= tol for left, right in zip(lhs.waypoint_times_s, rhs.waypoint_times_s, strict=True))
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,16 +71,16 @@ def main() -> int:
             PlannerWorldObstacle("goal", kind="sphere", center=(0.4, -0.1, 0.2), radius=0.08),
         )
     )
-    planner_plan = interpolate_joint_motion(
+    planner = create_planner_backend(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+    planner_world = planner.update_world_state(planner_world)
+    planner_plan = planner.plan_joint_motion(
         JointMotionPlanRequest(
             joint_names=("joint_1", "joint_2"),
             start_positions=(0.0, -0.2),
             goal_positions=(0.4, 0.3),
             num_waypoints=4,
             duration_s=1.0,
-        ),
-        planner_backend="mac-planners",
-        world_state=planner_world,
+        )
     )
     messages.extend(
         (
@@ -75,6 +91,8 @@ def main() -> int:
     output_path = Ros2JsonlBridge.write_messages(args.output, messages)
     restored = Ros2JsonlBridge.read_messages(output_path)
     bridge = Ros2ProcessBridge()
+    restored_world = planner_world_state_from_ros_envelope(restored[2])
+    restored_plan = joint_motion_plan_from_ros_envelope(restored[3])
 
     summary = {
         "cli_available": bridge.cli_available(),
@@ -84,6 +102,11 @@ def main() -> int:
         "trajectory_topic": restored[3].topic,
         "pub_command": bridge.build_topic_pub_command(restored[1]),
         "echo_command": bridge.build_topic_echo_command(restored[1].topic),
+        "planner_backend": planner.state_dict()["backend"],
+        "planner_roundtrip_ok": restored_world.state_dict() == planner_world.state_dict(),
+        "trajectory_roundtrip_ok": _plans_equivalent(restored_plan, planner_plan),
+        "planner_obstacle_count": restored_world.state_dict()["obstacle_count"],
+        "trajectory_waypoint_count": len(restored_plan.waypoints),
     }
     if args.summary_out is not None:
         args.summary_out.parent.mkdir(parents=True, exist_ok=True)

@@ -85,6 +85,10 @@ without pausing for replanning after every small success.
 - `DONE` Planner and ROS compatibility prototypes now exist as explicit backend seams with software smokes, backend tests, and capability-gated docs
 - `DONE` Planner and ROS compatibility now carry richer planner world-state obstacles plus ROS-friendly world-state / timed joint-trajectory envelopes without requiring ROS Python bindings
 - `DONE` CI now proves a release-style MLX install path without `dev` extras or `PYTHONPATH`, then parses rough locomotion/manipulation configs and exercises the public wrapper
+- `DONE` Generic `mac-sensors` capability metadata is now honest about the public runtime surface: analytic raycasts plus synthetic camera task slices and backend-local external stereo capture, not generic Isaac Sim camera parity
+- `DONE` ROS/planner software smokes now exercise the real `mac-planners` backend and verify typed round-trip reconstruction of planner world-state and joint trajectories
+- `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
+- `DONE` `uv run scripts/bootstrap_uv_mlx.py` now bootstraps the public MLX/mac editable environment in one command
 
 ## Phase A: Import And Packaging Safety
 
@@ -739,12 +743,14 @@ This queue exists so work can continue without waiting for a new plan. The docum
 - Port the next manipulation milestone beyond the current five trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
 - Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
+- Keep the generic runtime metadata honest: only advertise generic sensor/runtime capabilities that are actually exposed through backend-neutral APIs, and push task-specific or tooling-only support into explicit diagnostic fields instead of broad parity flags.
 
 ## Validation Commands
 
 ```bash
 PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
+  scripts/tools/test/test_bootstrap_uv_mlx.py \
   source/isaaclab_rl/test/test_import_safety.py \
   source/isaaclab_rl/test/test_mlx_wrapper.py \
   source/isaaclab/test/backends/test_runtime.py \

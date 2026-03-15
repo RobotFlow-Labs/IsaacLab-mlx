@@ -352,7 +352,8 @@ def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):
     for benchmark in results["benchmarks"]:
         if benchmark["task"] in {"cartpole-rgb-camera", "cartpole-depth-camera"}:
             assert benchmark["diagnostics"]["sensor"]["implementation"] == "analytic-cartpole-camera"
-            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is True
+            assert benchmark["runtime"]["capabilities"]["sensor"]["cameras"] is False
+            assert benchmark["runtime"]["capabilities"]["sensor"]["analytic_camera_tasks"] is True
             assert benchmark["image_shape"][:2] == [100, 100]
             assert benchmark["output_signature"]["final_frame_energy"] > 0.0
         else:

@@ -7,7 +7,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import subprocess
+import sys
+
+import pytest
 
 from isaaclab.backends import (
     JointMotionPlanRequest,
@@ -17,7 +22,9 @@ from isaaclab.backends import (
     Ros2MessageEnvelope,
     Ros2ProcessBridge,
     interpolate_joint_motion,
+    joint_motion_plan_from_ros_envelope,
     joint_motion_plan_to_ros_envelope,
+    planner_world_state_from_ros_envelope,
     planner_world_state_to_ros_envelope,
     ros2_cli_available,
 )
@@ -133,3 +140,74 @@ def test_planner_world_state_to_ros_envelope_preserves_richer_obstacle_metadata(
     assert envelope.payload["obstacle_count"] == 3
     assert envelope.payload["attached_obstacle_count"] == 1
     assert envelope.payload["obstacle_type_counts"] == {"box": 1, "mesh": 1, "sphere": 1}
+
+
+def test_planner_world_state_round_trips_from_ros_envelope():
+    """Planner world envelopes should reconstruct the original typed world state."""
+
+    world_state = PlannerWorldState(
+        frame_id="panda_link0",
+        obstacles=(
+            PlannerWorldObstacle("table", center=(0.0, 0.0, 0.5), size=(1.0, 1.0, 0.1)),
+            PlannerWorldObstacle("goal", kind="sphere", center=(0.4, -0.1, 0.2), radius=0.08),
+            PlannerWorldObstacle(
+                "tool",
+                kind="mesh",
+                center=(0.0, 0.0, 0.05),
+                size=(1.0, 1.0, 1.0),
+                mesh_resource="package://robotflow/meshes/tool.usd",
+                attached_to="panda_hand",
+                touch_links=("panda_hand",),
+            ),
+        ),
+    )
+
+    restored = planner_world_state_from_ros_envelope(planner_world_state_to_ros_envelope(world_state))
+
+    assert restored.state_dict() == world_state.state_dict()
+
+
+def test_joint_motion_plan_round_trips_from_ros_envelope():
+    """Joint trajectory envelopes should reconstruct the original deterministic motion plan."""
+
+    plan = interpolate_joint_motion(
+        JointMotionPlanRequest(
+            joint_names=("joint_1", "joint_2"),
+            start_positions=(0.0, -0.2),
+            goal_positions=(0.6, 0.4),
+            num_waypoints=4,
+            duration_s=1.2,
+        ),
+        planner_backend="mac-planners",
+    )
+
+    restored = joint_motion_plan_from_ros_envelope(joint_motion_plan_to_ros_envelope(plan))
+
+    assert restored.joint_names == plan.joint_names
+    for restored_waypoint, planned_waypoint in zip(restored.waypoints, plan.waypoints, strict=True):
+        assert restored_waypoint == pytest.approx(planned_waypoint)
+    assert restored.waypoint_times_s == pytest.approx(plan.waypoint_times_s)
+    assert restored.duration_s == pytest.approx(plan.duration_s)
+    assert restored.planner_backend == plan.planner_backend
+
+
+def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
+    """The smoke script should exercise the real planner backend and emit round-trip summary flags."""
+
+    script = Path(__file__).resolve().parents[4] / "scripts" / "tools" / "ros2_bridge_smoke.py"
+    output_path = tmp_path / "ros2-bridge.jsonl"
+    summary_path = tmp_path / "ros2-bridge-summary.json"
+
+    subprocess.run(
+        [sys.executable, str(script), str(output_path), "--summary-out", str(summary_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+    assert summary["message_count"] == 4
+    assert summary["planner_backend"] == "mac-planners"
+    assert summary["planner_roundtrip_ok"] is True
+    assert summary["trajectory_roundtrip_ok"] is True
