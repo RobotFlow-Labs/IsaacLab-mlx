@@ -284,7 +284,7 @@ jobs:
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
           --json-out logs/runtime/release-stack-instance-eval.json
         "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
-          --task franka-bin-stack \
+          --task Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0 \
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
           --json-out logs/runtime/release-bin-stack-eval.json
         "$release_root/.venv-release/bin/isaaclab-mlx" train \
@@ -787,6 +787,9 @@ jobs:
         release_bin_stack_eval_payload = json.loads(Path("logs/runtime/release-bin-stack-eval.json").read_text(encoding="utf-8"))
         assert release_bin_stack_eval_payload["task"] == "franka-bin-stack"
         assert release_bin_stack_eval_payload["episodes_completed"] == 1
+        assert release_bin_stack_eval_payload["task_spec"]["task"] == "franka-bin-stack"
+        assert release_bin_stack_eval_payload["task_spec"]["semantic_contract"] == "reduced-no-mimic"
+        assert release_bin_stack_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
         release_stack_instance_eval_payload = json.loads(
             Path("logs/runtime/release-stack-instance-eval.json").read_text(encoding="utf-8")
         )
