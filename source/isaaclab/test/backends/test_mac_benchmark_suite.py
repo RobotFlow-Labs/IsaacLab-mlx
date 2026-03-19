@@ -22,6 +22,8 @@ mx = require_mlx_runtime()
 
 from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend, get_locomotion_hotpath_backend  # noqa: E402
 from isaaclab.backends.mac_sim import (  # noqa: E402
+    MacFrankaBinStackEnv,
+    MacFrankaBinStackEnvCfg,
     MacFrankaCabinetEnv,
     MacFrankaCabinetEnvCfg,
     MacFrankaOpenDrawerEnv,
@@ -62,6 +64,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
+        "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
     )
@@ -240,6 +243,25 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_top_stacked_ratio",
                 "final_active_is_top_ratio",
             }
+        elif benchmark["task"] == "franka-bin-stack":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["bin_stack_logic"] is True
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_support_cube_height_mean",
+                "final_middle_stack_distance_mean",
+                "final_top_stack_distance_mean",
+                "final_middle_stacked_ratio",
+                "final_top_stacked_ratio",
+                "final_active_is_top_ratio",
+                "final_bin_anchor_height_mean",
+                "final_support_bin_offset_mean",
+            }
         elif benchmark["task"] == "franka-cabinet":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
@@ -379,6 +401,50 @@ def test_franka_stack_rgb_benchmark_signature_uses_terminal_stack_snapshots():
     assert math.isclose(signature["final_top_stacked_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
     assert signature["final_top_stack_distance_mean"] <= cfg.stack_z_threshold
     assert math.isclose(signature["final_active_is_top_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
+
+
+def test_franka_bin_stack_benchmark_signature_uses_terminal_stack_snapshots():
+    """Bin-stack benchmark metrics should use terminal pre-reset observations when successes auto-reset in-step."""
+
+    benchmark_module = _load_benchmark_module()
+    cfg = MacFrankaBinStackEnvCfg(num_envs=2, seed=71, episode_length_s=0.5)
+    env = MacFrankaBinStackEnv(cfg)
+    stack_offset = mx.array([0.0, 0.0, cfg.stack_offset_z], dtype=mx.float32)
+    grasp_offset = mx.array([0.0, 0.0, -cfg.grasp_offset_z], dtype=mx.float32)
+
+    env.sim_backend.middle_stacked[:] = True
+    env.sim_backend.top_stacked[:] = False
+    env.sim_backend.middle_grasped[:] = False
+    env.sim_backend.top_grasped[:] = True
+    env.sim_backend.bin_anchor_pos_w[:, :] = env.sim_backend.ee_pos_w + mx.array(
+        [0.0, 0.0, -(cfg.grasp_offset_z + 2.0 * cfg.stack_offset_z)],
+        dtype=mx.float32,
+    )
+    env.sim_backend.support_cube_pos_w[:, :] = env.sim_backend.bin_anchor_pos_w
+    env.sim_backend.middle_cube_pos_w[:, :] = env.sim_backend.support_cube_pos_w + stack_offset
+    env.sim_backend.top_cube_pos_w[:, :] = env.sim_backend.ee_pos_w + grasp_offset
+    env.sim_backend.state.joint_pos[:, 7] = 0.0
+
+    actions = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+    actions[:, -1] = 1.0
+    next_obs, reward, terminated, truncated, extras = env.step(actions)
+    trace = SimpleNamespace(
+        initial_observations={"policy": mx.zeros((cfg.num_envs, cfg.observation_space), dtype=mx.float32)},
+        observations=[next_obs],
+        rewards=[reward],
+        terminated=[terminated],
+        truncated=[truncated],
+        extras=[extras],
+    )
+
+    signature = benchmark_module._franka_output_signature(env, trace)
+
+    assert float(mx.mean(env.sim_backend.top_stacked.astype(mx.float32)).item()) == 0.0
+    assert math.isclose(signature["final_middle_stacked_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
+    assert math.isclose(signature["final_top_stacked_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
+    assert signature["final_top_stack_distance_mean"] <= cfg.stack_z_threshold
+    assert math.isclose(signature["final_active_is_top_ratio"], 1.0, rel_tol=0.0, abs_tol=1e-6)
+    assert math.isclose(signature["final_support_bin_offset_mean"], 0.0, rel_tol=0.0, abs_tol=1e-6)
 
 
 def test_run_benchmarks_covers_sensor_mac_native_tasks(tmp_path: Path):

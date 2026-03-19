@@ -27,6 +27,8 @@ class MacNativeTaskSpec:
     default_checkpoint: str | None
     default_hidden_dim: int | None
     default_action_std: float | None = None
+    semantic_contract: str = "aligned"
+    upstream_alias_semantics_preserved: bool = True
     notes: str = ""
 
     def state_dict(self) -> dict[str, Any]:
@@ -210,6 +212,24 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         default_hidden_dim=128,
         default_action_std=0.25,
         notes="Analytic three-cube sequential stack slice.",
+    ),
+    MacNativeTaskSpec(
+        key="franka-bin-stack",
+        upstream_task_id="Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/franka_bin_stack_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.25,
+        semantic_contract="reduced-no-mimic",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced bin-anchored three-cube stack slice. The upstream task id includes Mimic "
+            "semantics, but the mac-native slice is a reduced PPO-style contract without imitation "
+            "behavior. The appended bin-anchor observation tail explicitly mirrors the anchored support cube."
+        ),
     ),
     MacNativeTaskSpec(
         key="franka-cabinet",

@@ -48,6 +48,7 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
+        "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
     )
@@ -329,6 +330,28 @@ def test_shared_task_cli_trains_franka_stack_rgb_slice(tmp_path: Path):
     assert payload["completed_episodes"] >= 0
 
 
+def test_shared_task_cli_trains_franka_bin_stack_slice(tmp_path: Path):
+    checkpoint_path = tmp_path / "franka_bin_stack_policy.npz"
+
+    payload = train_mlx_task(
+        "franka-bin-stack",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=37,
+    )
+
+    assert payload["task"] == "franka-bin-stack"
+    assert Path(payload["checkpoint_path"]).exists()
+    assert Path(payload["metadata_path"]).exists()
+    assert payload["completed_episodes"] >= 0
+
+
 def test_shared_task_cli_evaluates_franka_stack_manual_slice():
     payload = evaluate_mlx_task(
         "franka-stack",
@@ -341,6 +364,24 @@ def test_shared_task_cli_evaluates_franka_stack_manual_slice():
     )
 
     assert payload["task"] == "franka-stack"
+    assert payload["mode"] == "manual"
+    assert payload["episodes_requested"] == 1
+    assert payload["episodes_completed"] == 1
+    assert payload["completed"][0]["length"] > 0
+
+
+def test_shared_task_cli_evaluates_franka_bin_stack_manual_slice():
+    payload = evaluate_mlx_task(
+        "franka-bin-stack",
+        num_envs=8,
+        episodes=1,
+        seed=49,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+    )
+
+    assert payload["task"] == "franka-bin-stack"
     assert payload["mode"] == "manual"
     assert payload["episodes_requested"] == 1
     assert payload["episodes_completed"] == 1
@@ -529,6 +570,26 @@ def test_franka_stack_rgb_thin_wrappers_are_directly_runnable():
         assert "usage:" in result.stdout.lower()
 
 
+def test_franka_bin_stack_thin_wrappers_are_directly_runnable():
+    repo_root = Path(__file__).resolve().parents[4]
+    scripts = (
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "train_franka_bin_stack.py",
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "play_franka_bin_stack.py",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
+
+    for script in scripts:
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage:" in result.stdout.lower()
 def test_franka_open_drawer_thin_wrappers_are_directly_runnable():
     repo_root = Path(__file__).resolve().parents[4]
     scripts = (

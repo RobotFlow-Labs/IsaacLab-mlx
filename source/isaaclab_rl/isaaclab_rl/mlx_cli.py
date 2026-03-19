@@ -8,12 +8,13 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 import sys
 from pathlib import Path
 from typing import Any
 
-from .mlx import MLX_TASK_ALIASES, evaluate_mlx_task, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
+from .mlx import MLX_TASK_ALIASES, evaluate_mlx_task, get_mlx_task_spec, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
 
 TASK_PREFIXES = {
     "cartpole": "mlx-cartpole",
@@ -31,6 +32,7 @@ TASK_PREFIXES = {
     "franka-stack-instance-randomize": "mlx-franka-stack-instance-randomize",
     "franka-stack": "mlx-franka-stack",
     "franka-stack-rgb": "mlx-franka-stack-rgb",
+    "franka-bin-stack": "mlx-franka-bin-stack",
     "franka-cabinet": "mlx-franka-cabinet",
     "franka-open-drawer": "mlx-franka-open-drawer",
 }
@@ -53,6 +55,12 @@ def _write_json(path: str | Path | None, payload: dict[str, Any]) -> None:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _ensure_task_spec(payload: dict[str, Any], task: str) -> dict[str, Any]:
+    if "task_spec" not in payload:
+        payload["task_spec"] = asdict(get_mlx_task_spec(task))
+    return payload
 
 
 def _build_train_parser(default_task: str | None) -> argparse.ArgumentParser:
@@ -162,6 +170,7 @@ def _train_from_args(args: argparse.Namespace, default_task: str | None) -> int:
         episode_length_s=args.episode_length_s,
         seed=args.seed,
     )
+    payload = _ensure_task_spec(payload, task)
     _write_json(args.json_out, payload)
     _print_train_payload(payload)
     return 0
@@ -186,6 +195,7 @@ def _eval_from_args(args: argparse.Namespace, default_task: str | None) -> int:
         pitch_action=args.pitch_action,
         yaw_action=args.yaw_action,
     )
+    payload = _ensure_task_spec(payload, task)
     _write_json(args.json_out, payload)
     _print_eval_payload(payload)
     return 0

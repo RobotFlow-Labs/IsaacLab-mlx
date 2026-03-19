@@ -27,6 +27,7 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import (
+    MacFrankaBinStackEnvCfg,
     MacFrankaCabinetEnvCfg,
     MacFrankaLiftEnvCfg,
     MacFrankaOpenDrawerEnvCfg,
@@ -223,6 +224,27 @@ class MacFrankaStackRgbTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.25
     checkpoint_path: str = "logs/mlx/franka_stack_rgb_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacFrankaBinStackTrainCfg:
+    """Training configuration for the MLX bin-anchored three-cube Franka stack slice."""
+
+    env: MacFrankaBinStackEnvCfg = MacFrankaBinStackEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.25
+    checkpoint_path: str = "logs/mlx/franka_bin_stack_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -852,6 +874,74 @@ class MacFrankaStackRgbSimBackend(MacFrankaReachSimBackend):
         return payload
 
 
+class MacFrankaBinStackSimBackend(MacFrankaStackRgbSimBackend):
+    """A lightweight batched bin-anchored three-cube Franka stack backend on MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFrankaBinStackEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
+        self.bin_anchor_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        super().__init__(cfg, reset_sampler=reset_sampler)
+        self.cfg = cfg
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        MacFrankaReachSimBackend.reset_envs(self, env_ids)
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        bin_x = self.reset_sampler.uniform((rows,), self.cfg.bin_anchor_x_range[0], self.cfg.bin_anchor_x_range[1])
+        bin_y = self.reset_sampler.uniform((rows,), self.cfg.bin_anchor_y_range[0], self.cfg.bin_anchor_y_range[1])
+        direction = mx.where(self.reset_sampler.uniform((rows,), 0.0, 1.0) > 0.5, 1.0, -1.0)
+        middle_x = self.reset_sampler.uniform((rows,), self.cfg.middle_cube_x_range[0], self.cfg.middle_cube_x_range[1])
+        middle_y = bin_y + direction * self.reset_sampler.uniform(
+            (rows,),
+            self.cfg.middle_cube_y_abs_range[0],
+            self.cfg.middle_cube_y_abs_range[1],
+        )
+        top_x = self.reset_sampler.uniform((rows,), self.cfg.top_cube_x_range[0], self.cfg.top_cube_x_range[1])
+        top_y = bin_y - direction * self.reset_sampler.uniform(
+            (rows,),
+            self.cfg.top_cube_y_abs_range[0],
+            self.cfg.top_cube_y_abs_range[1],
+        )
+        support = mx.stack((bin_x, bin_y, mx.full((rows,), self.cfg.table_height, dtype=mx.float32)), axis=-1)
+        self.bin_anchor_pos_w[ids] = support
+        self.support_cube_pos_w[ids] = support
+        self.middle_cube_pos_w[ids] = mx.stack(
+            (
+                mx.clip(middle_x, self.cfg.cube_x_range[0], self.cfg.cube_x_range[1]),
+                mx.clip(middle_y, self.cfg.cube_y_range[0], self.cfg.cube_y_range[1]),
+                mx.full((rows,), self.cfg.table_height, dtype=mx.float32),
+            ),
+            axis=-1,
+        )
+        self.top_cube_pos_w[ids] = mx.stack(
+            (
+                mx.clip(top_x, self.cfg.cube_x_range[0], self.cfg.cube_x_range[1]),
+                mx.clip(top_y, self.cfg.cube_y_range[0], self.cfg.cube_y_range[1]),
+                mx.full((rows,), self.cfg.table_height, dtype=mx.float32),
+            ),
+            axis=-1,
+        )
+        self.middle_grasped[ids] = False
+        self.top_grasped[ids] = False
+        self.middle_stacked[ids] = False
+        self.top_stacked[ids] = False
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "franka-bin-stack"
+        payload["semantic_contract"] = self.cfg.semantic_contract
+        payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
+        payload["contract_notes"] = self.cfg.contract_notes
+        payload["subsystems"] = {
+            **payload["subsystems"],
+            "bin_stack_logic": True,
+            "bin_anchor_observation_mode": self.cfg.bin_anchor_observation_mode,
+            "mimic_semantics": False,
+        }
+        return payload
+
+
 class MacFrankaReachEnv:
     """Vectorized Franka reach task for MLX/mac-sim."""
 
@@ -1319,6 +1409,37 @@ class MacFrankaStackRgbEnv(MacFrankaReachEnv):
         success = self.sim_backend.stack_success()
         time_out = self.episode_length_buf >= self.max_episode_length
         return success, time_out
+
+
+class MacFrankaBinStackEnv(MacFrankaStackRgbEnv):
+    """Vectorized bin-anchored three-cube Franka stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFrankaBinStackEnvCfg | None = None):
+        self.cfg = cfg or MacFrankaBinStackEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacFrankaBinStackSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self._previous_middle_stacked = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset()
+
+    def _build_policy_observations(self) -> mx.array:
+        base_obs = super()._build_policy_observations()
+        return mx.concatenate((base_obs, self.sim_backend.bin_anchor_pos_w), axis=-1)
 
 
 class MacFrankaReachPolicy(nn.Module):
@@ -2171,12 +2292,18 @@ def play_franka_open_drawer_policy(
     )
 
 
-def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, Any]:
-    """Train a lightweight continuous-control three-cube Franka stack policy on the mac-native MLX slice."""
+def _train_franka_multi_stack_policy(
+    cfg: MacFrankaStackRgbTrainCfg | MacFrankaBinStackTrainCfg,
+    *,
+    env_factory: type[MacFrankaStackRgbEnv] | type[MacFrankaBinStackEnv],
+    task_id: str,
+    log_prefix: str,
+) -> dict[str, Any]:
+    """Train a lightweight continuous-control multi-object Franka stack policy on the mac-native MLX slice."""
 
     mx.random.seed(cfg.env.seed)
     cfg.hidden_dim = resolve_resume_hidden_dim(cfg.resume_from, cfg.hidden_dim)
-    env = MacFrankaStackRgbEnv(cfg.env)
+    env = env_factory(cfg.env)
     model = MacFrankaReachPolicy(
         obs_dim=cfg.env.observation_space,
         hidden_dim=cfg.hidden_dim,
@@ -2270,7 +2397,7 @@ def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, A
             mean_reward = float(mx.mean(rewards_t).item())
             mean_return = mean_recent_return(completed_returns)
             print(
-                f"[mlx-franka-stack-rgb] update={update + 1}/{cfg.updates} "
+                f"[{log_prefix}] update={update + 1}/{cfg.updates} "
                 f"mean_step_reward={mean_reward:.4f} mean_recent_return={mean_return:.4f}"
             )
 
@@ -2281,7 +2408,7 @@ def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, A
             hidden_dim=cfg.hidden_dim,
             observation_space=cfg.env.observation_space,
             action_space=cfg.env.action_space,
-            task_id="Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
+            task_id=task_id,
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
@@ -2297,6 +2424,53 @@ def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, A
     }
 
 
+def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control three-cube Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_multi_stack_policy(
+        cfg,
+        env_factory=MacFrankaStackRgbEnv,
+        task_id="Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
+        log_prefix="mlx-franka-stack-rgb",
+    )
+
+
+def train_franka_bin_stack_policy(cfg: MacFrankaBinStackTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control bin-anchored Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_multi_stack_policy(
+        cfg,
+        env_factory=MacFrankaBinStackEnv,
+        task_id="Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+        log_prefix="mlx-franka-bin-stack",
+    )
+
+
+def _play_franka_multi_stack_policy(
+    checkpoint_path: str,
+    *,
+    env_factory: type[MacFrankaStackRgbEnv] | type[MacFrankaBinStackEnv],
+    env_cfg: MacFrankaStackRgbEnvCfg | MacFrankaBinStackEnvCfg,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained multi-object Franka stack policy greedily and return episode returns."""
+
+    return play_gaussian_policy_checkpoint(
+        checkpoint_path,
+        env_factory=env_factory,
+        env_cfg=env_cfg,
+        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
+            obs_dim=obs_dim,
+            hidden_dim=policy_hidden_dim,
+            action_dim=action_dim,
+        ),
+        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
 def play_franka_stack_rgb_policy(
     checkpoint_path: str,
     *,
@@ -2307,16 +2481,29 @@ def play_franka_stack_rgb_policy(
     """Run a trained three-cube Franka stack policy greedily and return episode returns."""
 
     cfg = env_cfg or MacFrankaStackRgbEnvCfg(num_envs=1)
-    return play_gaussian_policy_checkpoint(
+    return _play_franka_multi_stack_policy(
         checkpoint_path,
         env_factory=MacFrankaStackRgbEnv,
         env_cfg=cfg,
-        model_factory=lambda obs_dim, policy_hidden_dim, action_dim: MacFrankaReachPolicy(
-            obs_dim=obs_dim,
-            hidden_dim=policy_hidden_dim,
-            action_dim=action_dim,
-        ),
-        default_hidden_dim=128,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_bin_stack_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaBinStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained bin-anchored Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaBinStackEnvCfg(num_envs=1)
+    return _play_franka_multi_stack_policy(
+        checkpoint_path,
+        env_factory=MacFrankaBinStackEnv,
+        env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,
     )

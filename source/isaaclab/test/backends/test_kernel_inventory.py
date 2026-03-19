@@ -28,6 +28,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "franka-stack-instance-randomize",
         "franka-stack",
         "franka-stack-rgb",
+        "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
     )

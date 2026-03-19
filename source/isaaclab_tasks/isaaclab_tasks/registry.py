@@ -8,10 +8,16 @@
 from __future__ import annotations
 
 RUNTIME_REQUIREMENTS_KEY = "__runtime_requirements__"
+TASK_CONTRACT_KEY = "__task_contract__"
 
 
 def _isaacsim_only_kwargs(**kwargs):
     kwargs[RUNTIME_REQUIREMENTS_KEY] = {"sim_backends": ("isaacsim",)}
+    return kwargs
+
+
+def _with_task_contract(kwargs: dict, **contract):
+    kwargs[TASK_CONTRACT_KEY] = contract
     return kwargs
 
 
@@ -155,6 +161,21 @@ MAC_SAFE_TASK_SPECS = (
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackRgbEnvCfg",
         },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackEnvCfg",
+            },
+            semantic_contract="reduced-no-mimic",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "Upstream mimic/imitation semantics are not implemented on mac-sim; "
+                "this task resolves to the reduced bin-anchored stack slice."
+            ),
+        ),
     },
     {
         "id": "Isaac-Stack-Cube-Franka-IK-Abs-v0",
@@ -428,14 +449,6 @@ ISAACSIM_ONLY_TASK_SPECS = (
         "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
         "kwargs": _isaacsim_only_kwargs(
             env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_env_cfg_skillgen:FrankaCubeStackSkillgenEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_low_dim.json",
-        ),
-    },
-    {
-        "id": "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.bin_stack_ik_rel_env_cfg:FrankaBinStackEnvCfg",
             robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_low_dim.json",
         ),
     },

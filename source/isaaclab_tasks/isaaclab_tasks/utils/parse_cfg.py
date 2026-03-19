@@ -18,7 +18,7 @@ import gymnasium as gym
 
 from isaaclab.backends import UnsupportedBackendError, current_runtime
 
-from isaaclab_tasks.registry import RUNTIME_REQUIREMENTS_KEY
+from isaaclab_tasks.registry import RUNTIME_REQUIREMENTS_KEY, TASK_CONTRACT_KEY
 
 try:
     import yaml
@@ -140,6 +140,14 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
             cfg = cfg_cls()
         else:
             cfg = cfg_cls
+    contract_metadata = spec.kwargs.get(TASK_CONTRACT_KEY)
+    if contract_metadata:
+        if isinstance(cfg, dict):
+            cfg[TASK_CONTRACT_KEY] = dict(contract_metadata)
+        else:
+            for key, value in contract_metadata.items():
+                setattr(cfg, key, value)
+
     return cfg
 
 

@@ -525,3 +525,30 @@ class MacFrankaStackRgbEnvCfg(MacFrankaStackEnvCfg):
     top_stack_align_reward_scale: float = 3.0
     top_stack_distance_reward_gain: float = 10.0
     stack_success_bonus: float = 8.0
+
+
+@configclass
+class MacFrankaBinStackEnvCfg(MacFrankaStackRgbEnvCfg):
+    """Configuration for a reduced bin-anchored three-cube Franka stack slice.
+
+    The upstream task id includes ``Mimic`` semantics. The mac-native slice does not
+    implement imitation or demonstration-conditioned behavior, so this config carries
+    an explicit reduced-contract marker.
+    """
+
+    observation_space: int = 45
+    semantic_contract: str = "reduced-no-mimic"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "Upstream mimic/imitation semantics are not implemented on mac-sim; "
+        "this task resolves to the reduced bin-anchored stack slice."
+    )
+    bin_anchor_observation_mode: str = "mirrored-support-anchor-tail"
+    cube_x_range: tuple[float, float] = (0.36, 0.74)
+    cube_y_range: tuple[float, float] = (-0.22, 0.22)
+    bin_anchor_x_range: tuple[float, float] = (0.38, 0.44)
+    bin_anchor_y_range: tuple[float, float] = (-0.04, 0.04)
+    middle_cube_x_range: tuple[float, float] = (0.62, 0.70)
+    middle_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)
+    top_cube_x_range: tuple[float, float] = (0.62, 0.70)
+    top_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-15T07:08:38Z",
+  "generated_at": "2026-03-19T22:59:49Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 19,
+  "task_count": 20,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -193,6 +193,35 @@
           "final_reward_mean": 0.9424142837524414
         },
         "sensor_implementation": "analytic-cartpole-camera"
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "franka-bin-stack": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 45,
+        "output_signature": {
+          "final_active_is_top_ratio": 0.0,
+          "final_bin_anchor_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.5095078945159912,
+          "final_joint_pos_abs_mean": 0.6499584913253784,
+          "final_joint_vel_abs_mean": 0.025217102840542793,
+          "final_middle_stack_distance_mean": 0.2873309552669525,
+          "final_middle_stacked_ratio": 0.0,
+          "final_policy_mean": 0.05970136076211929,
+          "final_policy_std": 0.47450998425483704,
+          "final_reward_mean": 0.0004771256062667817,
+          "final_support_bin_offset_mean": 0.0,
+          "final_support_cube_height_mean": 0.03999999910593033,
+          "final_top_stack_distance_mean": 0.27425581216812134,
+          "final_top_stacked_ratio": 0.0
+        }
       },
       "cpu_fallback": false,
       "runtime": {

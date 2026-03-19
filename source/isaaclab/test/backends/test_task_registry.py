@@ -33,6 +33,7 @@ SAFE_TASK_IDS = (
     "Isaac-Stack-Cube-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
+    "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
     "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Open-Drawer-Franka-v0",
     "Isaac-Open-Drawer-Franka-IK-Abs-v0",
@@ -56,7 +57,6 @@ UNSUPPORTED_MAC_TASK_IDS = (
     "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
-    "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
 )
 
 
@@ -80,9 +80,14 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
 
     importlib.import_module("isaaclab_tasks")
+    registry = importlib.import_module("isaaclab_tasks.registry")
 
     for task_id in SAFE_TASK_IDS:
         assert gym.spec(task_id).id == task_id
+
+    bin_stack_spec = gym.spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0")
+    assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-mimic"
+    assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     for task_id in UNSUPPORTED_MAC_TASK_IDS:
         assert gym.spec(task_id).id == task_id
@@ -213,6 +218,10 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     stack_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=9)
     stack_rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=2)
     stack_rgb_alt_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0", device="cpu", num_envs=3)
+    bin_stack_cfg_entry = parse_cfg.load_cfg_from_registry(
+        "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", "env_cfg_entry_point"
+    )
+    bin_stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", device="cpu", num_envs=5)
     cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
     open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-Franka-IK-Abs-v0", device="cpu", num_envs=4)
 
@@ -250,6 +259,15 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_rgb_cfg.observation_space == 42
     assert type(stack_rgb_alt_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
     assert stack_rgb_alt_cfg.num_envs == 3
+    assert type(bin_stack_cfg_entry).__name__ == "MacFrankaBinStackEnvCfg"
+    assert type(bin_stack_cfg).__name__ == "MacFrankaBinStackEnvCfg"
+    assert bin_stack_cfg.num_envs == 5
+    assert bin_stack_cfg.action_space == 8
+    assert bin_stack_cfg.observation_space == 45
+    assert bin_stack_cfg.semantic_contract == "reduced-no-mimic"
+    assert bin_stack_cfg.upstream_alias_semantics_preserved is False
+    assert "mimic" in bin_stack_cfg.contract_notes.lower()
+    assert bin_stack_cfg.bin_anchor_observation_mode == "mirrored-support-anchor-tail"
     assert type(cabinet_cfg).__name__ == "MacFrankaCabinetEnvCfg"
     assert cabinet_cfg.num_envs == 3
     assert cabinet_cfg.action_space == 8
@@ -344,6 +362,3 @@ def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", device="cpu")
-
-    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
-        parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", device="cpu")

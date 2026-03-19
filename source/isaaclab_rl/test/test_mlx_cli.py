@@ -193,6 +193,79 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert instance_eval_payload["task"] == "franka-stack-instance-randomize"
     assert instance_eval_payload["episodes_completed"] == 1
 
+    bin_eval_output_path = tmp_path / "module-bin-alias-eval.json"
+    bin_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+            "--num-envs",
+            "8",
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(bin_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert bin_eval_result.returncode == 0, bin_eval_result.stderr
+    bin_eval_payload = json.loads(bin_eval_output_path.read_text(encoding="utf-8"))
+    assert bin_eval_payload["task"] == "franka-bin-stack"
+    assert bin_eval_payload["episodes_completed"] == 1
+    assert bin_eval_payload["task_spec"]["semantic_contract"] == "reduced-no-mimic"
+    assert bin_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+    bin_train_output_path = tmp_path / "module-bin-alias-train.json"
+    bin_checkpoint_path = tmp_path / "module-bin-alias-train-policy.npz"
+    bin_train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(bin_checkpoint_path),
+            "--json-out",
+            str(bin_train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert bin_train_result.returncode == 0, bin_train_result.stderr
+    bin_train_payload = json.loads(bin_train_output_path.read_text(encoding="utf-8"))
+    assert bin_train_payload["task"] == "franka-bin-stack"
+    assert Path(bin_train_payload["checkpoint_path"]).exists()
+    assert bin_train_payload["task_spec"]["semantic_contract"] == "reduced-no-mimic"
+    assert bin_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     train_result = subprocess.run(
         [
             sys.executable,

@@ -67,6 +67,7 @@ KERNEL_PORT_INVENTORY = (
             "manipulation-stack-instance-randomize",
             "manipulation-stack",
             "manipulation-stack-rgb",
+            "manipulation-bin-stack",
             "manipulation-cabinet",
             "external-wrench-controls",
         ),

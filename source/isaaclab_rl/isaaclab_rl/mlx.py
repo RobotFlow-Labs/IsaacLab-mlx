@@ -30,6 +30,9 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleEnvCfg,
     MacCartpoleRGBCameraEnvCfg,
     MacCartpoleTrainCfg,
+    MacFrankaBinStackEnv,
+    MacFrankaBinStackEnvCfg,
+    MacFrankaBinStackTrainCfg,
     MacFrankaCabinetEnv,
     MacFrankaCabinetEnvCfg,
     MacFrankaCabinetTrainCfg,
@@ -63,6 +66,7 @@ from isaaclab.backends.mac_sim import (
     MacQuadcopterEnvCfg,
     play_anymal_c_policy,
     play_cartpole_policy,
+    play_franka_bin_stack_policy,
     play_franka_cabinet_policy,
     play_franka_lift_policy,
     play_franka_open_drawer_policy,
@@ -75,6 +79,7 @@ from isaaclab.backends.mac_sim import (
     resolve_resume_hidden_dim,
     train_anymal_c_policy,
     train_cartpole_policy,
+    train_franka_bin_stack_policy,
     train_franka_cabinet_policy,
     train_franka_lift_policy,
     train_franka_open_drawer_policy,
@@ -99,6 +104,9 @@ class MlxTaskSpec:
     default_checkpoint: str | None
     default_hidden_dim: int | None
     default_action_std: float | None = None
+    semantic_contract: str = "aligned"
+    upstream_alias_semantics_preserved: bool = True
+    notes: str = ""
 
 
 _SUPPORTED_TASK_SPECS = mac_native_task_spec_map()
@@ -109,6 +117,9 @@ MLX_TASK_SPECS = {
         default_checkpoint=spec.default_checkpoint,
         default_hidden_dim=spec.default_hidden_dim,
         default_action_std=spec.default_action_std,
+        semantic_contract=spec.semantic_contract,
+        upstream_alias_semantics_preserved=spec.upstream_alias_semantics_preserved,
+        notes=spec.notes,
     )
     for task_id, spec in _SUPPORTED_TASK_SPECS.items()
 }
@@ -136,6 +147,7 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0": "franka-stack-rgb",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-Play-v0": "franka-stack-rgb",
     "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0": "franka-stack-rgb",
+    "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0": "franka-bin-stack",
     "Isaac-Franka-Cabinet-Direct-v0": "franka-cabinet",
     "Isaac-Franka-Cabinet-Direct-Play-v0": "franka-cabinet",
     "Isaac-Open-Drawer-Franka-v0": "franka-open-drawer",
@@ -380,6 +392,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_stack_rgb_policy(cfg)
+    elif task == "franka-bin-stack":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacFrankaBinStackTrainCfg(
+            env=MacFrankaBinStackEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/franka_bin_stack_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_franka_bin_stack_policy(cfg)
     elif task == "franka-cabinet":
         resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
             resume_from, spec.default_hidden_dim or 128
@@ -937,6 +966,49 @@ def evaluate_mlx_task(
             }
         cfg = MacFrankaStackRgbEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacFrankaStackRgbEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "franka-bin-stack":
+        if checkpoint is not None:
+            returns = play_franka_bin_stack_policy(
+                checkpoint,
+                env_cfg=MacFrankaBinStackEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacFrankaBinStackEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacFrankaBinStackEnv(cfg)
         mx.random.seed(seed)
         env.reset()
         completed: list[dict[str, Any]] = []
