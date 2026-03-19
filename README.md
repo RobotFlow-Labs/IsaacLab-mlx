@@ -595,7 +595,7 @@ CI now preserves benchmark JSON, dashboard/trend JSON, a dedicated import-safety
   then:
   `PYTHONPATH=.:source/isaaclab .venv/bin/python scripts/benchmarks/mlx/check_semantic_drift.py --results logs/benchmarks/mlx/full-smoke.json --baseline scripts/benchmarks/mlx/baselines/semantic-baseline.json --snapshot-out logs/benchmarks/mlx/full-smoke-semantic-snapshot.json --write-baseline`
   and rerun the compare command to confirm the refreshed baseline passes.
-- CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then exercises the installed `isaaclab-mlx-runtime-diagnostics` and `isaaclab-mlx-evaluate` entry points from a clean `uv` environment.
+- CI now includes a release-surface smoke that installs the MLX runtime without `dev` extras or `PYTHONPATH`, then exercises the installed `isaaclab-mlx-runtime-diagnostics`, `isaaclab-mlx`, `isaaclab-mlx-evaluate`, and `isaaclab-mlx-train` entry points from a clean `uv` environment.
 - Backend-local external stereo validation still lives in synthetic stereo smoke tests and optional host-specific hardware probes; the benchmark suite only covers the synthetic cartpole camera task slices and the analytic terrain/raycast slices.
 - The runtime diagnostics artifact now proves two distinct things: the public typed task manifest and the concrete articulated `mac-sim` substrate. It does not claim full scene-graph, RTX, or Isaac Sim engine parity.
 

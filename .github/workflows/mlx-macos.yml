@@ -275,6 +275,10 @@ jobs:
           --task h1-rough \
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
           --json-out logs/runtime/release-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx-evaluate" \
+          --task h1-rough \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-eval-split.json
         "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
           --task franka-teddy-bear-lift \
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
@@ -292,6 +296,11 @@ jobs:
           --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
           --checkpoint logs/runtime/release-cartpole-policy.npz \
           --json-out logs/runtime/release-train.json
+        "$release_root/.venv-release/bin/isaaclab-mlx-train" \
+          --task cartpole \
+          --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
+          --checkpoint logs/runtime/release-cartpole-policy-split.npz \
+          --json-out logs/runtime/release-train-split.json
 
     - name: Run MLX backend smoke tests
       run: |
@@ -781,6 +790,13 @@ jobs:
         release_eval_payload = json.loads(Path("logs/runtime/release-eval.json").read_text(encoding="utf-8"))
         assert release_eval_payload["task"] == "h1-rough"
         assert release_eval_payload["episodes_completed"] == 1
+        assert release_eval_payload["task_spec"]["task"] == "h1-rough"
+        assert release_eval_payload["task_spec"]["semantic_contract"] == "aligned"
+        release_eval_split_payload = json.loads(Path("logs/runtime/release-eval-split.json").read_text(encoding="utf-8"))
+        assert release_eval_split_payload["task"] == "h1-rough"
+        assert release_eval_split_payload["episodes_completed"] == 1
+        assert release_eval_split_payload["task_spec"]["task"] == "h1-rough"
+        assert release_eval_split_payload["task_spec"]["semantic_contract"] == "aligned"
         release_teddy_eval_payload = json.loads(Path("logs/runtime/release-teddy-eval.json").read_text(encoding="utf-8"))
         assert release_teddy_eval_payload["task"] == "franka-teddy-bear-lift"
         assert release_teddy_eval_payload["episodes_completed"] == 1
@@ -797,7 +813,14 @@ jobs:
         assert release_stack_instance_eval_payload["episodes_completed"] == 1
         release_train_payload = json.loads(Path("logs/runtime/release-train.json").read_text(encoding="utf-8"))
         assert release_train_payload["task"] == "cartpole"
+        assert release_train_payload["task_spec"]["task"] == "cartpole"
+        assert release_train_payload["task_spec"]["semantic_contract"] == "aligned"
         assert Path(release_train_payload["checkpoint_path"]).exists()
+        release_train_split_payload = json.loads(Path("logs/runtime/release-train-split.json").read_text(encoding="utf-8"))
+        assert release_train_split_payload["task"] == "cartpole"
+        assert release_train_split_payload["task_spec"]["task"] == "cartpole"
+        assert release_train_split_payload["task_spec"]["semantic_contract"] == "aligned"
+        assert Path(release_train_split_payload["checkpoint_path"]).exists()
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
