@@ -27,6 +27,7 @@ TASK_PREFIXES = {
     "h1-flat": "mlx-h1-flat",
     "h1-rough": "mlx-h1-rough",
     "franka-reach": "mlx-franka-reach",
+    "ur10e-deploy-reach": "mlx-ur10e-deploy-reach",
     "franka-lift": "mlx-franka-lift",
     "franka-teddy-bear-lift": "mlx-franka-teddy-bear-lift",
     "franka-stack-instance-randomize": "mlx-franka-stack-instance-randomize",

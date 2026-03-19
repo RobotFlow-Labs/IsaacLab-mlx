@@ -65,6 +65,36 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Deploy-Reach-UR10e-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eDeployReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eDeployReachEnvCfg",
+            },
+            semantic_contract="reduced-analytic-pose",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e deploy reach slice preserves the joint-space pose-command workflow "
+                "with an analytic pose surrogate instead of the full deployed-robot frame transformer stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Deploy-Reach-UR10e-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eDeployReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eDeployReachEnvCfg",
+            },
+            semantic_contract="reduced-analytic-pose",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e deploy reach slice preserves the joint-space pose-command workflow "
+                "with an analytic pose surrogate instead of the full deployed-robot frame transformer stack."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {

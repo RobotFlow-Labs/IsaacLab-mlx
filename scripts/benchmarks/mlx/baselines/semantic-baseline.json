@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-19T22:59:49Z",
+  "generated_at": "2026-03-19T23:38:13Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 20,
+  "task_count": 21,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -533,6 +533,29 @@
           "final_root_height_mean": 1.018649935722351
         },
         "thrust_action": 0.2
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "ur10e-deploy-reach": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_ee_height_mean": 0.4130062460899353,
+          "final_joint_pos_abs_mean": 1.0610690116882324,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.18647357821464539,
+          "final_policy_mean": -0.1208295226097107,
+          "final_policy_std": 0.7770656943321228,
+          "final_reward_mean": 0.009998437948524952,
+          "final_target_distance_mean": 0.3093169629573822
+        }
       },
       "cpu_fallback": false,
       "runtime": {

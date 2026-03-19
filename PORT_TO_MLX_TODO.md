@@ -102,6 +102,7 @@ without pausing for replanning after every small success.
 - `DONE` Eighth trainable Franka manipulation slice landed for `Isaac-Stack-Cube-Instance-Randomize-Franka-v0` by keeping the shared analytic stack substrate but adding explicit variant-id observations, deterministic distinct support/movable object sampling, public MLX wrapper/CLI support, benchmark coverage, semantic baseline refresh, and focused backend tests instead of dishonestly aliasing it to plain stack
 - `DONE` Ninth trainable Franka manipulation slice landed for `Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0` by keeping the shared three-cube stack substrate, pinning the support cube to an explicit bin anchor, exposing that anchor through the observation and benchmark contracts, refreshing the semantic baseline, and validating replay/train plus wrapper/CLI coverage
 - `DONE` The `Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0` alias now carries explicit reduced-contract metadata across the lazy registry, parsed env config, public MLX task spec, installed CLI payloads, and backend diagnostics so the mac path does not silently imply upstream mimic/imitation parity
+- `DONE` Tenth trainable manipulation slice landed for `Isaac-Deploy-Reach-UR10e-v0` with a reduced analytic pose-tracking backend, honest reduced-contract metadata (`semantic_contract="reduced-analytic-pose"`), public MLX wrapper/CLI support, benchmark coverage, semantic baseline refresh, and direct replay/train smoke coverage; the upstream `Isaac-Deploy-Reach-UR10e-Play-v0` alias now resolves to the same canonical mac-native slice
 
 ## Phase A: Import And Packaging Safety
 
@@ -754,7 +755,7 @@ without pausing for replanning after every small success.
 This queue exists so work can continue without waiting for a new plan. The documented v1 board above is now closed for the current public MLX/mac slice, so the next queue is follow-on parity work:
 
 - Hardware validation is now done for the backend-local stereo path against live ZED 2i capture through a camera-authorized Terminal host plus `zed-sdk-mlx`; retained host-local probe artifacts include `/tmp/isaaclab-zed-probe-live-final.json` and `/tmp/isaaclab-zed-probe-live-final.yuv`.
-- Port the next manipulation milestone beyond the current nine trainable Franka slices, likely a richer cabinet/drawer variant or the next multi-object manipulation workflow.
+- Port the next genuinely new manipulation milestone beyond the current ten trainable manipulation slices, likely a richer non-Franka cabinet/drawer variant or the next multi-object workflow that cannot be represented honestly as an alias of the existing reduced slices.
 - Replace the next remaining locomotion or contact/support `mx.compile` helper with a true custom Metal kernel only after the root-step tranche proves benchmark-positive and semantically stable.
 - Grow the planner/ROS prototypes carefully: richer process/message interoperability layers around the new world-state and joint-trajectory envelopes while still avoiding CUDA/NITROS assumptions.
 - Keep the generic runtime metadata honest: only advertise generic sensor/runtime capabilities that are actually exposed through backend-neutral APIs, and push task-specific or tooling-only support into explicit diagnostic fields instead of broad parity flags.
@@ -768,6 +769,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   scripts/tools/test/test_bootstrap_isaac_sources.py \
   scripts/tools/test/test_bootstrap_uv_mlx.py \
   source/isaaclab_rl/test/test_import_safety.py \
+  source/isaaclab_rl/test/test_mlx_cli.py \
   source/isaaclab_rl/test/test_mlx_wrapper.py \
   source/isaaclab/test/backends/test_runtime.py \
   source/isaaclab/test/backends/test_task_registry.py \
@@ -790,9 +792,14 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_anymal_c.py \
   source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
   source/isaaclab/test/backends/test_mac_franka_reach.py \
+  source/isaaclab/test/backends/test_mac_ur10e_deploy_reach.py \
   source/isaaclab/test/backends/test_mac_franka_lift.py \
+  source/isaaclab/test/backends/test_mac_franka_teddy_bear_lift.py \
+  source/isaaclab/test/backends/test_mac_franka_stack_instance_randomize.py \
   source/isaaclab/test/backends/test_mac_franka_bin_stack.py \
   source/isaaclab/test/backends/test_mac_franka_stack.py \
+  source/isaaclab/test/backends/test_mac_franka_stack_rgb.py \
+  source/isaaclab/test/backends/test_mac_franka_cabinet.py \
   source/isaaclab/test/backends/test_mac_franka_open_drawer.py \
   source/isaaclab/test/backends/test_mac_h1.py -q
 ```

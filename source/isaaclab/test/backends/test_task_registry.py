@@ -24,6 +24,8 @@ SAFE_TASK_IDS = (
     "Isaac-Reach-Franka-IK-Abs-v0",
     "Isaac-Reach-Franka-IK-Rel-v0",
     "Isaac-Reach-Franka-OSC-v0",
+    "Isaac-Deploy-Reach-UR10e-v0",
+    "Isaac-Deploy-Reach-UR10e-Play-v0",
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
@@ -50,7 +52,7 @@ UNSUPPORTED_MAC_TASK_IDS = (
     "Isaac-PickPlace-GR1T2-Abs-v0",
     "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
     "Isaac-Dexsuite-Kuka-Allegro-Reorient-v0",
-    "Isaac-Deploy-Reach-UR10e-v0",
+    "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
     "Isaac-Navigation-Flat-Anymal-C-v0",
     "Isaac-Tracking-LocoManip-Digit-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
@@ -84,6 +86,13 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
 
     for task_id in SAFE_TASK_IDS:
         assert gym.spec(task_id).id == task_id
+
+    ur10e_spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
+    ur10e_play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+    assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
+    assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
+    assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     bin_stack_spec = gym.spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0")
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-mimic"
@@ -273,7 +282,42 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert cabinet_cfg.action_space == 8
     assert type(open_drawer_cfg).__name__ == "MacFrankaOpenDrawerEnvCfg"
     assert open_drawer_cfg.num_envs == 4
-    assert open_drawer_cfg.action_space == 8
+
+
+def test_parse_env_cfg_supports_ur10e_deploy_reach_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the reduced UR10e deploy-reach config on the mac path."""
+
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+    registry = importlib.import_module("isaaclab_tasks.registry")
+
+    cfg = parse_cfg.parse_env_cfg("Isaac-Deploy-Reach-UR10e-v0", device="cpu", num_envs=6)
+    play_cfg = parse_cfg.parse_env_cfg("Isaac-Deploy-Reach-UR10e-Play-v0", device="cpu", num_envs=7)
+    spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
+    play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+
+    assert type(cfg).__name__ == "MacUR10eDeployReachEnvCfg"
+    assert cfg.num_envs == 6
+    assert cfg.action_space == 6
+    assert cfg.observation_space == 19
+    assert cfg.semantic_contract == "reduced-analytic-pose"
+    assert cfg.upstream_alias_semantics_preserved is False
+    assert type(play_cfg).__name__ == "MacUR10eDeployReachEnvCfg"
+    assert play_cfg.num_envs == 7
+    assert play_cfg.action_space == 6
+    assert play_cfg.observation_space == 19
+    assert play_cfg.semantic_contract == "reduced-analytic-pose"
+    assert play_cfg.upstream_alias_semantics_preserved is False
+    assert spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
+    assert spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
+    assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
 
 def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):

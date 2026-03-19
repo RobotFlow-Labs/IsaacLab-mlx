@@ -36,6 +36,7 @@ def test_public_mlx_task_lists_are_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "ur10e-deploy-reach",
         "franka-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
@@ -52,6 +53,7 @@ def test_public_mlx_task_lists_are_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "ur10e-deploy-reach",
         "franka-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
@@ -63,6 +65,9 @@ def test_public_mlx_task_lists_are_stable():
     )
     assert get_mlx_task_spec("h1-flat").default_hidden_dim == 192
     assert get_mlx_task_spec("franka-reach").default_hidden_dim == 128
+    assert get_mlx_task_spec("ur10e-deploy-reach").default_hidden_dim == 128
+    assert get_mlx_task_spec("ur10e-deploy-reach").semantic_contract == "reduced-analytic-pose"
+    assert get_mlx_task_spec("ur10e-deploy-reach").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("franka-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-teddy-bear-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack-instance-randomize").default_hidden_dim == 128
@@ -80,6 +85,7 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     """Upstream Franka task ids should resolve to the canonical public MLX task specs."""
 
     assert get_mlx_task_spec("Isaac-Reach-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-reach")
+    assert get_mlx_task_spec("Isaac-Deploy-Reach-UR10e-Play-v0") == get_mlx_task_spec("ur10e-deploy-reach")
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-teddy-bear-lift")
     assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0") == get_mlx_task_spec(
@@ -278,8 +284,8 @@ def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
     assert depth_payload["episodes_completed"] == 1
 
 
-def test_evaluate_franka_reach_lift_stack_family_cabinet_and_open_drawer_manual_via_public_mlx_wrapper():
-    """The public wrapper should expose manual evaluation for the current trainable manipulation slices."""
+def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
+    """The public wrapper should expose manual evaluation for the trainable manipulation slices."""
 
     reach_payload = evaluate_mlx_task(
         "franka-reach",
@@ -289,6 +295,15 @@ def test_evaluate_franka_reach_lift_stack_family_cabinet_and_open_drawer_manual_
         max_steps=512,
         random_actions=False,
         seed=31,
+    )
+    ur10e_payload = evaluate_mlx_task(
+        "ur10e-deploy-reach",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=35,
     )
     lift_payload = evaluate_mlx_task(
         "franka-lift",
@@ -356,6 +371,8 @@ def test_evaluate_franka_reach_lift_stack_family_cabinet_and_open_drawer_manual_
 
     assert reach_payload["task"] == "franka-reach"
     assert reach_payload["episodes_completed"] == 1
+    assert ur10e_payload["task"] == "ur10e-deploy-reach"
+    assert ur10e_payload["episodes_completed"] == 1
     assert lift_payload["task"] == "franka-lift"
     assert lift_payload["episodes_completed"] == 1
     assert stack_instance_payload["task"] == "franka-stack-instance-randomize"
@@ -400,6 +417,39 @@ def test_train_and_evaluate_franka_reach_via_public_mlx_wrapper(tmp_path: Path):
     assert train_payload["task"] == "franka-reach"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-reach"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_ur10e_deploy_reach_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for UR10e deploy-reach."""
+
+    checkpoint_path = tmp_path / "ur10e-deploy-reach-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "ur10e-deploy-reach",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=42,
+    )
+    eval_payload = evaluate_mlx_task(
+        "ur10e-deploy-reach",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=42,
+    )
+
+    assert train_payload["task"] == "ur10e-deploy-reach"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "ur10e-deploy-reach"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)
@@ -712,6 +762,32 @@ def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper
     assert lift_eval_payload["task"] == "franka-lift"
     assert lift_eval_payload["mode"] == "checkpoint"
     assert lift_eval_payload["episodes_completed"] == 1
+
+    ur10e_checkpoint = tmp_path / "ur10e-deploy-reach-alias-policy.npz"
+    ur10e_train_payload = train_mlx_task(
+        "Isaac-Deploy-Reach-UR10e-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(ur10e_checkpoint),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=70,
+    )
+    ur10e_eval_payload = evaluate_mlx_task(
+        "Isaac-Deploy-Reach-UR10e-Play-v0",
+        checkpoint=str(ur10e_checkpoint),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=70,
+    )
+    assert ur10e_train_payload["task"] == "ur10e-deploy-reach"
+    assert Path(ur10e_train_payload["checkpoint_path"]).exists()
+    assert ur10e_eval_payload["task"] == "ur10e-deploy-reach"
+    assert ur10e_eval_payload["mode"] == "checkpoint"
+    assert ur10e_eval_payload["episodes_completed"] == 1
 
     stack_rgb_payload = evaluate_mlx_task(
         "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",

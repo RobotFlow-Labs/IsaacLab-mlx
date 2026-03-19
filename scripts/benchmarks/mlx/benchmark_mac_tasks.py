@@ -49,6 +49,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaOpenDrawerEnvCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
+    MacUR10eDeployReachEnv,
+    MacUR10eDeployReachEnvCfg,
     MacFrankaStackEnv,
     MacFrankaStackEnvCfg,
     MacFrankaStackInstanceRandomizeEnv,
@@ -336,6 +338,8 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
                 )
     elif hasattr(env.sim_backend, "target_pos_w"):
         payload["final_target_distance_mean"] = float(mx.mean(env.sim_backend.goal_distance()).item())
+        if hasattr(env.sim_backend, "orientation_error"):
+            payload["final_orientation_error_mean"] = float(mx.mean(env.sim_backend.orientation_error()).item())
     return payload
 
 
@@ -572,6 +576,33 @@ def benchmark_franka_reach(num_envs: int, steps: int, seed: int) -> dict[str, An
 
     return _make_benchmark_result(
         "franka-reach",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_ur10e_deploy_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10e deploy-reach MLX env step loop."""
+
+    env = MacUR10eDeployReachEnv(MacUR10eDeployReachEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10e-deploy-reach",
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
@@ -1023,6 +1054,8 @@ def run_benchmarks(
             benchmark = benchmark_h1_rough(num_envs, steps, seed)
         elif task == "franka-reach":
             benchmark = benchmark_franka_reach(num_envs, steps, seed)
+        elif task == "ur10e-deploy-reach":
+            benchmark = benchmark_ur10e_deploy_reach(num_envs, steps, seed)
         elif task == "franka-lift":
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
         elif task == "franka-teddy-bear-lift":

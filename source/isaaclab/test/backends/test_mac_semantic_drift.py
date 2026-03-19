@@ -16,7 +16,11 @@ from isaaclab.backends import build_semantic_drift_snapshot, compare_semantic_dr
 from isaaclab.backends.test_utils import require_mlx_runtime
 
 require_mlx_runtime()
-from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend, get_locomotion_hotpath_backend  # noqa: E402
+from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
+    get_franka_hotpath_backend,
+    get_locomotion_hotpath_backend,
+    get_ur10e_hotpath_backend,
+)
 
 
 def _load_module(module_name: str, relative_path: str):
@@ -34,6 +38,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     benchmark_module = _load_module("benchmark_mac_tasks", "scripts/benchmarks/mlx/benchmark_mac_tasks.py")
     expected_franka_hotpath = get_franka_hotpath_backend()
     expected_locomotion_hotpath = get_locomotion_hotpath_backend()
+    expected_ur10e_hotpath = get_ur10e_hotpath_backend()
 
     results = benchmark_module.run_benchmarks(
         benchmark_module.resolve_requested_tasks(None, "full"),
@@ -50,7 +55,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 20
+    assert snapshot["task_count"] == 21
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -59,6 +64,10 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["action_dim"] == 6
+    assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_target_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_orientation_error_mean"] >= 0.0
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["hotpath"] == expected_franka_hotpath

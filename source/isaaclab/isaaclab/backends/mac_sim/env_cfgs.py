@@ -405,6 +405,49 @@ class MacFrankaReachEnvCfg:
 
 
 @configclass
+class MacUR10eDeployReachEnvCfg:
+    """Reduced mac-native UR10e deploy-reach configuration."""
+
+    num_envs: int = 256
+    sim_dt: float = 1.0 / 120.0
+    decimation: int = 2
+    episode_length_s: float = 12.0
+    action_space: int = 6
+    observation_space: int = 19
+    state_space: int = 0
+
+    action_scale: float = 0.0625
+    action_rate_penalty_scale: float = -0.005
+    joint_vel_penalty_scale: float = -0.0005
+    reach_reward_scale: float = 1.5
+    orientation_reward_scale: float = 0.8
+    success_bonus: float = 2.5
+    success_position_threshold: float = 0.06
+    success_orientation_threshold: float = 0.18
+    position_reward_gain: float = 5.5
+    orientation_reward_gain: float = 8.0
+
+    joint_stiffness: float = 12.0
+    joint_damping: float = 3.0
+    joint_inertia: float = 1.15
+    joint_reset_noise: float = 0.125
+    default_joint_pos: tuple[float, ...] = (0.0, -1.35, 1.55, -1.75, -1.57, 0.0)
+    joint_lower_limits: tuple[float, ...] = (-2.0 * math.pi, -math.pi, -math.pi, -2.0 * math.pi, -2.0 * math.pi, -2.0 * math.pi)
+    joint_upper_limits: tuple[float, ...] = (2.0 * math.pi, 0.0, math.pi, 2.0 * math.pi, 2.0 * math.pi, 2.0 * math.pi)
+
+    target_x_range: tuple[float, float] = (0.6375, 1.1375)
+    target_y_range: tuple[float, float] = (-0.35, -0.10)
+    target_z_range: tuple[float, float] = (0.10, 0.30)
+    target_roll_range: tuple[float, float] = (math.pi - math.pi / 6.0, math.pi + math.pi / 6.0)
+    target_pitch_range: tuple[float, float] = (-math.pi / 6.0, math.pi / 6.0)
+    target_yaw_range: tuple[float, float] = (-math.pi / 2.0 - 2.0 * math.pi / 3.0, -math.pi / 2.0 + 2.0 * math.pi / 3.0)
+
+    semantic_contract: str = "reduced-analytic-pose"
+    upstream_alias_semantics_preserved: bool = False
+    seed: int = 42
+
+
+@configclass
 class MacFrankaLiftEnvCfg(MacFrankaReachEnvCfg):
     """Configuration for the first mac-native Franka cube-lift slice."""
 

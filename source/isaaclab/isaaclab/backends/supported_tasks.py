@@ -154,6 +154,24 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         notes="Analytic joint-space reach slice.",
     ),
     MacNativeTaskSpec(
+        key="ur10e-deploy-reach",
+        upstream_task_id="Isaac-Deploy-Reach-UR10e-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10e_deploy_reach_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-pose",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10e deploy-reach slice. The upstream task tracks a deployment-oriented "
+            "pose command with real robot frame conventions; the mac-native slice preserves the joint-space "
+            "reach workflow and pose-command observation shape with analytic pose tracking."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="franka-lift",
         upstream_task_id="Isaac-Lift-Cube-Franka-v0",
         family="manipulation",

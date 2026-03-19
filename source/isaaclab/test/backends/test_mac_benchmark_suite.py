@@ -20,7 +20,11 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 
 mx = require_mlx_runtime()
 
-from isaaclab.backends.mac_sim.hotpath import get_franka_hotpath_backend, get_locomotion_hotpath_backend  # noqa: E402
+from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
+    get_franka_hotpath_backend,
+    get_locomotion_hotpath_backend,
+    get_ur10e_hotpath_backend,
+)
 from isaaclab.backends.mac_sim import (  # noqa: E402
     MacFrankaBinStackEnv,
     MacFrankaBinStackEnvCfg,
@@ -32,6 +36,8 @@ from isaaclab.backends.mac_sim import (  # noqa: E402
     MacFrankaStackEnvCfg,
     MacFrankaStackRgbEnv,
     MacFrankaStackRgbEnvCfg,
+    MacUR10eDeployReachEnv,
+    MacUR10eDeployReachEnvCfg,
 )
 
 
@@ -59,6 +65,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "ur10e-deploy-reach",
         "franka-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
@@ -84,6 +91,7 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
     benchmark_module = _load_benchmark_module()
     expected_franka_hotpath = get_franka_hotpath_backend()
     expected_locomotion_hotpath = get_locomotion_hotpath_backend()
+    expected_ur10e_hotpath = get_ur10e_hotpath_backend()
 
     results = benchmark_module.run_benchmarks(
         benchmark_module.CURRENT_MAC_NATIVE_TASKS,
@@ -163,6 +171,18 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_joint_vel_abs_mean",
                 "final_ee_height_mean",
                 "final_target_distance_mean",
+            }
+        elif benchmark["task"] == "ur10e-deploy-reach":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_ur10e_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_target_distance_mean",
+                "final_orientation_error_mean",
             }
         elif benchmark["task"] == "franka-lift":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath

@@ -23,6 +23,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "ur10e-deploy-reach",
         "franka-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",

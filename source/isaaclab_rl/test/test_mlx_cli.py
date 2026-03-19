@@ -266,6 +266,79 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert bin_train_payload["task_spec"]["semantic_contract"] == "reduced-no-mimic"
     assert bin_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
+    ur10e_eval_output_path = tmp_path / "module-ur10e-alias-eval.json"
+    ur10e_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Deploy-Reach-UR10e-Play-v0",
+            "--num-envs",
+            "8",
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(ur10e_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert ur10e_eval_result.returncode == 0, ur10e_eval_result.stderr
+    ur10e_eval_payload = json.loads(ur10e_eval_output_path.read_text(encoding="utf-8"))
+    assert ur10e_eval_payload["task"] == "ur10e-deploy-reach"
+    assert ur10e_eval_payload["episodes_completed"] == 1
+    assert ur10e_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-pose"
+    assert ur10e_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+    ur10e_train_output_path = tmp_path / "module-ur10e-alias-train.json"
+    ur10e_checkpoint_path = tmp_path / "module-ur10e-alias-train-policy.npz"
+    ur10e_train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Deploy-Reach-UR10e-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(ur10e_checkpoint_path),
+            "--json-out",
+            str(ur10e_train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert ur10e_train_result.returncode == 0, ur10e_train_result.stderr
+    ur10e_train_payload = json.loads(ur10e_train_output_path.read_text(encoding="utf-8"))
+    assert ur10e_train_payload["task"] == "ur10e-deploy-reach"
+    assert Path(ur10e_train_payload["checkpoint_path"]).exists()
+    assert ur10e_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-pose"
+    assert ur10e_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     train_result = subprocess.run(
         [
             sys.executable,

@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import math
+
 import mlx.core as mx
 
 from .quadcopter import _quat_conjugate, _quat_from_angular_velocity, _quat_multiply, _quat_normalize, _quat_rotate
@@ -302,6 +304,50 @@ def _franka_end_effector_position_impl(joint_pos: mx.array) -> mx.array:
     return mx.stack((x, y, z), axis=-1).astype(mx.float32)
 
 
+def _quat_from_euler_xyz_impl(roll: mx.array, pitch: mx.array, yaw: mx.array) -> mx.array:
+    half_roll = 0.5 * roll
+    half_pitch = 0.5 * pitch
+    half_yaw = 0.5 * yaw
+    cr = mx.cos(half_roll)
+    sr = mx.sin(half_roll)
+    cp = mx.cos(half_pitch)
+    sp = mx.sin(half_pitch)
+    cy = mx.cos(half_yaw)
+    sy = mx.sin(half_yaw)
+    quat = mx.stack(
+        (
+            cr * cp * cy + sr * sp * sy,
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+        ),
+        axis=-1,
+    )
+    return _quat_normalize(quat)
+
+
+def _ur10e_end_effector_pose_impl(joint_pos: mx.array) -> tuple[mx.array, mx.array]:
+    q0 = joint_pos[:, 0]
+    q1 = joint_pos[:, 1]
+    q2 = joint_pos[:, 2]
+    q3 = joint_pos[:, 3]
+    q4 = joint_pos[:, 4]
+    q5 = joint_pos[:, 5]
+
+    elbow = q1 + q2
+    wrist = elbow + 0.5 * q3
+
+    x = 0.72 + 0.22 * mx.cos(q1) + 0.18 * mx.cos(elbow) + 0.08 * mx.cos(wrist) - 0.06 * mx.sin(q0)
+    y = -0.225 + 0.18 * mx.sin(q0) + 0.06 * mx.sin(q0 + 0.5 * q1) + 0.03 * mx.tanh(q5)
+    z = 0.20 + 0.18 * mx.sin(-q1) + 0.11 * mx.sin(-elbow) + 0.05 * mx.sin(-wrist) - 0.03 * mx.tanh(q4)
+
+    roll = math.pi + 0.20 * mx.tanh(q3)
+    pitch = -0.10 * mx.tanh(q1 + q2) + 0.08 * mx.tanh(q4)
+    yaw = -math.pi / 2.0 + q0 + 0.18 * mx.tanh(q5)
+    quat = _quat_from_euler_xyz_impl(roll, pitch, yaw)
+    return mx.stack((x, y, z), axis=-1).astype(mx.float32), quat.astype(mx.float32)
+
+
 def _franka_lift_object_step_impl(
     cube_pos_w: mx.array,
     ee_pos_w: mx.array,
@@ -532,9 +578,11 @@ def _franka_stack_rgb_step_impl(
 
 
 _franka_end_effector_position_compiled = mx.compile(_franka_end_effector_position_impl)
+_ur10e_end_effector_pose_compiled = mx.compile(_ur10e_end_effector_pose_impl)
 _franka_end_effector_position_metal = None
 _franka_end_effector_hotpath_initialized = False
 FRANKA_HOTPATH_BACKEND = HOTPATH_BACKEND
+UR10E_HOTPATH_BACKEND = HOTPATH_BACKEND
 _locomotion_root_step_metal = None
 _locomotion_root_step_hotpath_initialized = False
 LOCOMOTION_HOTPATH_BACKEND = HOTPATH_BACKEND
@@ -593,6 +641,10 @@ def get_franka_hotpath_backend() -> str:
     return FRANKA_HOTPATH_BACKEND
 
 
+def get_ur10e_hotpath_backend() -> str:
+    return UR10E_HOTPATH_BACKEND
+
+
 def franka_end_effector_position_hotpath(joint_pos: mx.array) -> mx.array:
     _ensure_franka_end_effector_hotpath()
     joint_pos = mx.array(joint_pos, dtype=mx.float32)
@@ -607,6 +659,13 @@ def franka_end_effector_position_hotpath(joint_pos: mx.array) -> mx.array:
         output_shapes=[(int(joint_pos.shape[0]), 3)],
         output_dtypes=[mx.float32],
     )[0]
+
+
+def ur10e_end_effector_pose_hotpath(joint_pos: mx.array) -> tuple[mx.array, mx.array]:
+    joint_pos = mx.array(joint_pos, dtype=mx.float32)
+    if int(joint_pos.shape[0]) == 0:
+        return mx.zeros((0, 3), dtype=mx.float32), mx.zeros((0, 4), dtype=mx.float32)
+    return _ur10e_end_effector_pose_compiled(joint_pos)
 
 
 franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
