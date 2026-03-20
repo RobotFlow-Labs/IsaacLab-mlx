@@ -562,6 +562,32 @@ class MacUR10eGearAssembly2F85RosInferenceEnvCfg(MacUR10eGearAssembly2F85EnvCfg)
 
 
 @configclass
+class MacFactoryPegInsertEnvCfg(MacUR10eGearAssembly2F140EnvCfg):
+    """Reduced mac-native factory peg-insert configuration built on the analytic insertion substrate."""
+
+    episode_length_s: float = 10.0
+    reach_reward_scale: float = 1.2
+    orientation_reward_scale: float = 0.95
+    success_bonus: float = 3.25
+    target_x_range: tuple[float, float] = (0.92, 1.08)
+    target_y_range: tuple[float, float] = (-0.22, -0.10)
+    target_z_range: tuple[float, float] = (0.02, 0.09)
+    insertion_depth_max: float = 0.060
+    insertion_success_depth: float = 0.050
+    insertion_rate: float = 0.17
+    insertion_reward_scale: float = 1.05
+    task_name: str = "factory-peg-insert"
+    semantic_contract: str = "reduced-analytic-peg-insert"
+    upstream_alias_semantics_preserved: bool = False
+    gripper_variant: str = "peg-insert"
+    contract_notes: str = (
+        "This mac-native slice preserves the factory peg-insert alignment and insertion workflow with "
+        "analytic pose tracking and scalar insertion progress instead of the full contact-rich factory "
+        "scene, compliance model, and task-specific controller stack."
+    )
+
+
+@configclass
 class MacOpenArmReachEnvCfg(MacFrankaReachEnvCfg):
     """Reduced mac-native OpenArm unimanual reach configuration."""
 

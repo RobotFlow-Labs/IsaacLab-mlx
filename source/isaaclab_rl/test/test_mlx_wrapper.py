@@ -42,6 +42,7 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-deploy-reach",
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
+        "factory-peg-insert",
         "ur10-long-suction-stack",
         "ur10-short-suction-stack",
         "franka-lift",
@@ -70,6 +71,7 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-deploy-reach",
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
+        "factory-peg-insert",
         "ur10-long-suction-stack",
         "ur10-short-suction-stack",
         "franka-lift",
@@ -105,6 +107,9 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").default_hidden_dim == 128
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").semantic_contract == "reduced-analytic-assembly"
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("factory-peg-insert").default_hidden_dim == 128
+    assert get_mlx_task_spec("factory-peg-insert").semantic_contract == "reduced-analytic-peg-insert"
+    assert get_mlx_task_spec("factory-peg-insert").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("ur10-long-suction-stack").default_hidden_dim == 128
     assert get_mlx_task_spec("ur10-long-suction-stack").semantic_contract == "reduced-analytic-suction-stack"
     assert get_mlx_task_spec("ur10-long-suction-stack").upstream_alias_semantics_preserved is False
@@ -154,6 +159,9 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0").semantic_contract == "reduced-no-ros-inference"
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").task == "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0"
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").semantic_contract == "reduced-no-ros-inference"
+    assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").task == "Isaac-Factory-PegInsert-Direct-v0"
+    assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").semantic_contract == "reduced-analytic-peg-insert"
+    assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Rel-Play-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-OpenArm-Play-v0") == get_mlx_task_spec("openarm-lift")
@@ -200,6 +208,12 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
             "ur10e-gear-assembly-2f85",
             "reduced-no-ros-inference",
             "ros inference",
+        ),
+        (
+            "Isaac-Factory-PegInsert-Direct-v0",
+            "factory-peg-insert",
+            "reduced-analytic-peg-insert",
+            "peg-insert",
         ),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "skill-generation"),
@@ -1179,6 +1193,41 @@ def test_train_and_evaluate_franka_bin_stack_via_public_mlx_wrapper(tmp_path: Pa
     assert eval_payload["task"] == "franka-bin-stack"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
+
+
+def test_public_mlx_wrapper_normalizes_factory_peg_insert_alias_to_canonical(tmp_path: Path):
+    """The public wrapper should expose the reduced factory peg-insert slice end to end."""
+
+    checkpoint_path = tmp_path / "factory_peg_insert_wrapper_policy.npz"
+
+    train_payload = train_mlx_task(
+        "Isaac-Factory-PegInsert-Direct-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=77,
+    )
+    eval_payload = evaluate_mlx_task(
+        "Isaac-Factory-PegInsert-Direct-v0",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=77,
+    )
+
+    assert train_payload["task"] == "factory-peg-insert"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert eval_payload["task"] == "factory-peg-insert"
+    assert eval_payload["episodes_completed"] == 1
+    assert eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
     assert isinstance(eval_payload["completed"][0]["return"], float)
 
 

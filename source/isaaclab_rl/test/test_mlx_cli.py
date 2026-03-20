@@ -339,6 +339,79 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert pick_place_train_payload["task_spec"]["semantic_contract"] == "reduced-pick-place-surrogate"
     assert pick_place_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
+    factory_train_output_path = tmp_path / "module-factory-peg-insert-alias-train.json"
+    factory_checkpoint_path = tmp_path / "module-factory-peg-insert-alias-train-policy.npz"
+    factory_train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Factory-PegInsert-Direct-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(factory_checkpoint_path),
+            "--json-out",
+            str(factory_train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert factory_train_result.returncode == 0, factory_train_result.stderr
+    factory_train_payload = json.loads(factory_train_output_path.read_text(encoding="utf-8"))
+    assert factory_train_payload["task"] == "factory-peg-insert"
+    assert Path(factory_train_payload["checkpoint_path"]).exists()
+    assert factory_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert factory_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+    factory_eval_output_path = tmp_path / "module-factory-peg-insert-alias-eval.json"
+    factory_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Factory-PegInsert-Direct-v0",
+            "--checkpoint",
+            str(factory_checkpoint_path),
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(factory_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert factory_eval_result.returncode == 0, factory_eval_result.stderr
+    factory_eval_payload = json.loads(factory_eval_output_path.read_text(encoding="utf-8"))
+    assert factory_eval_payload["task"] == "factory-peg-insert"
+    assert factory_eval_payload["episodes_completed"] == 1
+    assert factory_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert factory_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     ur10e_eval_output_path = tmp_path / "module-ur10e-alias-eval.json"
     ur10e_eval_result = subprocess.run(
         [

@@ -259,6 +259,23 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         ),
     ),
     MacNativeTaskSpec(
+        key="factory-peg-insert",
+        upstream_task_id="Isaac-Factory-PegInsert-Direct-v0",
+        family="manipulation",
+        benchmark_groups=("manipulation-expansion",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/factory_peg_insert_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-peg-insert",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic factory peg-insert slice preserving the alignment and insertion workflow "
+            "with scalar insertion progress instead of the upstream contact-rich factory scene and task-specific controller stack."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="ur10-long-suction-stack",
         upstream_task_id="Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
         family="manipulation",

@@ -168,6 +168,13 @@ from isaaclab.backends.mac_sim import (
     train_franka_teddy_bear_lift_policy,
     train_h1_policy,
 )
+from isaaclab.backends.mac_sim.env_cfgs import MacFactoryPegInsertEnvCfg
+from isaaclab.backends.mac_sim.manipulation import (
+    MacFactoryPegInsertEnv,
+    MacFactoryPegInsertTrainCfg,
+    play_factory_peg_insert_policy,
+    train_factory_peg_insert_policy,
+)
 
 TRAINABLE_MLX_TASKS = list_supported_trainable_mlx_tasks()
 PUBLIC_MLX_TASKS = list_supported_public_mlx_tasks()
@@ -228,6 +235,7 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Deploy-GearAssembly-UR10e-2F85-v0": "ur10e-gear-assembly-2f85",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0": "ur10e-gear-assembly-2f85",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0": "ur10e-gear-assembly-2f85",
+    "Isaac-Factory-PegInsert-Direct-v0": "factory-peg-insert",
     "Isaac-Deploy-Reach-UR10e-v0": "ur10e-deploy-reach",
     "Isaac-Deploy-Reach-UR10e-Play-v0": "ur10e-deploy-reach",
     "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0": "ur10e-deploy-reach",
@@ -308,6 +316,16 @@ MLX_ALIAS_TASK_SPECS: dict[str, MlxTaskSpec] = {
         notes=(
             "Reduced analytic UR10e 2F-85 gear-assembly slice without the upstream ROS inference "
             "transport or deployed-robot runtime stack."
+        ),
+    ),
+    "Isaac-Factory-PegInsert-Direct-v0": replace(
+        MLX_TASK_SPECS["factory-peg-insert"],
+        task="Isaac-Factory-PegInsert-Direct-v0",
+        semantic_contract="reduced-analytic-peg-insert",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic factory peg-insert slice with the same insertion-depth surrogate contract "
+            "as the canonical mac-native task, but without the upstream contact-rich factory scene."
         ),
     ),
     "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0": replace(
@@ -966,6 +984,25 @@ def train_mlx_task(
             result = train_franka_stack_visuomotor_cosmos_policy(cfg)
         else:
             result = train_franka_stack_rgb_policy(cfg)
+    elif task == "factory-peg-insert":
+        resolved_hidden_dim = (
+            hidden_dim
+            if hidden_dim is not None
+            else resolve_resume_hidden_dim(resume_from, spec.default_hidden_dim or 128)
+        )
+        cfg = MacFactoryPegInsertTrainCfg(
+            env=MacFactoryPegInsertEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/factory_peg_insert_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_factory_peg_insert_policy(cfg)
     elif task == "franka-bin-stack":
         resolved_hidden_dim = (
             hidden_dim
@@ -2345,6 +2382,57 @@ def evaluate_mlx_task(
                 "mode": "manual",
                 "episodes_requested": episodes,
                 "episodes_completed": len(completed[:episodes]),
+                "completed": completed[:episodes],
+                "max_steps": max_steps,
+            },
+            spec,
+        )
+
+    if task == "factory-peg-insert":
+        if checkpoint is not None:
+            returns = play_factory_peg_insert_policy(
+                checkpoint,
+                env_cfg=MacFactoryPegInsertEnvCfg(
+                    num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return _with_task_spec(
+                {
+                    "task": task,
+                    "mode": "checkpoint",
+                    "episodes_requested": episodes,
+                    "episodes_completed": len(returns),
+                    "completed": [{"return": float(value)} for value in returns],
+                    "checkpoint": checkpoint,
+                },
+                spec,
+            )
+        cfg = MacFactoryPegInsertEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacFactoryPegInsertEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(
+                    extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True
+                )
+            )
+        return _with_task_spec(
+            {
+                "task": task,
+                "mode": "manual",
+                "episodes_requested": episodes,
+                "episodes_completed": len(completed),
                 "completed": completed[:episodes],
                 "max_steps": max_steps,
             },

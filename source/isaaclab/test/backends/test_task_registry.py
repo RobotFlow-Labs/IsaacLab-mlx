@@ -36,6 +36,7 @@ SAFE_TASK_IDS = (
     "Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+    "Isaac-Factory-PegInsert-Direct-v0",
     "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
     "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
     "Isaac-Lift-Cube-Franka-v0",
@@ -81,7 +82,6 @@ SAFE_TASK_IDS = (
     "Isaac-Quadcopter-Direct-v0",
 )
 UNSUPPORTED_MAC_TASK_IDS = (
-    "Isaac-Factory-PegInsert-Direct-v0",
     "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
     "Isaac-Dexsuite-Kuka-Allegro-Reorient-v0",
     "Isaac-Navigation-Flat-Anymal-C-v0",
@@ -124,6 +124,7 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     ur10e_gear_2f140_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0")
     ur10e_gear_2f85_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
     ur10e_gear_2f85_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
+    factory_peg_insert_spec = gym.spec("Isaac-Factory-PegInsert-Direct-v0")
     openarm_lift_spec = gym.spec("Isaac-Lift-Cube-OpenArm-v0")
     agibot_toy2box_spec = gym.spec("Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0")
     agibot_mug_spec = gym.spec("Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0")
@@ -148,6 +149,8 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert ur10e_gear_2f85_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert factory_peg_insert_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert factory_peg_insert_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert agibot_toy2box_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-agibot-place-surrogate"
@@ -216,6 +219,28 @@ def test_parse_env_cfg_supports_anymal_task_cfg(monkeypatch):
     assert parsed_cfg.num_envs == 24
     assert parsed_cfg.action_space == 12
     assert parsed_cfg.observation_space == 48
+
+
+def test_parse_env_cfg_supports_factory_peg_insert_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the reduced factory peg-insert config without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Factory-PegInsert-Direct-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Factory-PegInsert-Direct-v0", device="cpu", num_envs=16)
+
+    assert type(cfg).__name__ == "MacFactoryPegInsertEnvCfg"
+    assert type(parsed_cfg).__name__ == "MacFactoryPegInsertEnvCfg"
+    assert parsed_cfg.num_envs == 16
+    assert parsed_cfg.semantic_contract == "reduced-analytic-peg-insert"
+    assert parsed_cfg.upstream_alias_semantics_preserved is False
+    assert parsed_cfg.gripper_variant == "peg-insert"
 
 
 def test_parse_env_cfg_supports_anymal_rough_task_cfg(monkeypatch):
@@ -738,9 +763,6 @@ def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
 
     importlib.import_module("isaaclab_tasks")
     parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
-
-    with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
-        parse_cfg.parse_env_cfg("Isaac-Factory-PegInsert-Direct-v0", device="cpu")
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
         parse_cfg.parse_env_cfg("Isaac-Repose-Cube-Shadow-Vision-Direct-v0", device="cpu")

@@ -26,6 +26,8 @@ from isaaclab.backends import (
     get_runtime_state,
 )
 from isaaclab.backends.mac_sim.hotpath import get_franka_stack_hotpath_backend
+from isaaclab.backends.mac_sim.env_cfgs import MacFactoryPegInsertEnvCfg
+from isaaclab.backends.mac_sim.manipulation import MacFactoryPegInsertEnv
 from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAgibotPlaceToy2BoxEnv,
@@ -455,6 +457,15 @@ def _ur10e_gear_output_signature(env: Any, trace: Any) -> dict[str, float]:
         payload["final_insert_depth_mean"] = float(mx.mean(env.sim_backend.shaft_depth).item())
         payload["final_assembled_ratio"] = float(mx.mean(env.sim_backend.assembled.astype(mx.float32)).item())
         payload["final_gear_type_mean"] = float(mx.mean(env.sim_backend.gear_type_id.astype(mx.float32)).item())
+    return payload
+
+
+def _factory_peg_insert_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture compact semantic signatures for the reduced factory peg-insert slice."""
+
+    payload = _ur10e_gear_output_signature(env, trace)
+    payload["final_peg_insert_depth_mean"] = payload.pop("final_insert_depth_mean")
+    payload["final_peg_variant_mean"] = payload.pop("final_gear_type_mean")
     return payload
 
 
@@ -1163,6 +1174,33 @@ def benchmark_franka_bin_stack(num_envs: int, steps: int, seed: int) -> dict[str
     )
 
 
+def benchmark_factory_peg_insert(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced factory peg-insert MLX env step loop."""
+
+    env = MacFactoryPegInsertEnv(MacFactoryPegInsertEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "factory-peg-insert",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _factory_peg_insert_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_franka_cabinet(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the Franka cabinet MLX env step loop."""
 
@@ -1500,6 +1538,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_stack_rgb(num_envs, steps, seed)
         elif task == "franka-bin-stack":
             benchmark = benchmark_franka_bin_stack(num_envs, steps, seed)
+        elif task == "factory-peg-insert":
+            benchmark = benchmark_factory_peg_insert(num_envs, steps, seed)
         elif task == "franka-cabinet":
             benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
         elif task == "franka-open-drawer":

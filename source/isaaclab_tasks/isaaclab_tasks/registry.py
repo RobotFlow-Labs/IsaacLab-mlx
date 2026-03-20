@@ -806,14 +806,6 @@ ISAACSIM_ONLY_TASK_SPECS = (
         ),
     },
     {
-        "id": "Isaac-Factory-PegInsert-Direct-v0",
-        "entry_point": "isaaclab_tasks.direct.factory.factory_env:FactoryEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.direct.factory.factory_env_cfg:FactoryTaskPegInsertCfg",
-            rl_games_cfg_entry_point="isaaclab_tasks.direct.factory.agents:rl_games_ppo_cfg.yaml",
-        ),
-    },
-    {
         "id": "Isaac-Factory-GearMesh-Direct-v0",
         "entry_point": "isaaclab_tasks.direct.factory.factory_env:FactoryEnv",
         "kwargs": _isaacsim_only_kwargs(
@@ -940,6 +932,22 @@ ISAACSIM_ONLY_TASK_SPECS = (
                 "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
                 "instead of the upstream exhaust-pipe scene, so the public task stays available without "
                 "pretending exact pipe geometry or insertion parity."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Factory-PegInsert-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim.manipulation:MacFactoryPegInsertEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFactoryPegInsertEnvCfg",
+            },
+            semantic_contract="reduced-analytic-peg-insert",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native factory peg-insert slice preserves the alignment and insertion workflow "
+                "with an analytic insertion-depth surrogate instead of the upstream contact-rich factory "
+                "scene and task-specific controller stack."
             ),
         ),
     },
