@@ -80,8 +80,114 @@ def _contact_update_without_feet_impl(
     return current_contact, first_contact, history
 
 
-_contact_update_with_feet = mx.compile(_contact_update_with_feet_impl)
-_contact_update_without_feet = mx.compile(_contact_update_without_feet_impl)
+_contact_update_with_feet_compiled = mx.compile(_contact_update_with_feet_impl)
+_contact_update_without_feet_compiled = mx.compile(_contact_update_without_feet_impl)
+CONTACT_HOTPATH_BACKEND = HOTPATH_BACKEND
+_contact_update_with_feet_metal = None
+_contact_update_hotpath_initialized = False
+
+
+def _build_contact_update_with_feet_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float contact_margin = params[0];
+        float spring_stiffness = params[1];
+        float damping = params[2];
+        float force_threshold = params[3];
+        float step_dt = params[4];
+        uint body_count = (uint)params[5];
+        uint foot_count = (uint)params[6];
+        uint history_length = (uint)params[7];
+
+        uint body_base = env_id * body_count * 3;
+        uint contact_base = env_id * body_count;
+        uint history_base = env_id * history_length * body_count * 3;
+        uint foot_base = env_id * foot_count;
+
+        for (uint body_id = 0; body_id < body_count; ++body_id) {
+            uint body_offset = body_base + body_id * 3;
+            float clearance = body_pos_w[body_offset + 2] - terrain_heights[contact_base + body_id];
+            float penetration = contact_margin - clearance;
+            if (penetration < 0.0f) {
+                penetration = 0.0f;
+            }
+            float closing_speed = -body_vel_w[body_offset + 2];
+            if (closing_speed < 0.0f) {
+                closing_speed = 0.0f;
+            }
+            float normal_force = penetration > 0.0f ? spring_stiffness * penetration + damping * closing_speed : 0.0f;
+            float current_contact_value = normal_force > force_threshold ? 1.0f : 0.0f;
+            float first_contact_value = current_contact_value > 0.5f && previous_contact[contact_base + body_id] <= 0.5f ? 1.0f : 0.0f;
+            current_contact_out[contact_base + body_id] = current_contact_value;
+            first_contact_out[contact_base + body_id] = first_contact_value;
+
+            uint history_row_base = history_base + body_id * 3;
+            history_out[history_row_base + 0] = 0.0f;
+            history_out[history_row_base + 1] = 0.0f;
+            history_out[history_row_base + 2] = normal_force;
+
+            for (uint history_index = 1; history_index < history_length; ++history_index) {
+                uint prev_history_base = history_base + (history_index - 1) * body_count * 3 + body_id * 3;
+                uint next_history_base = history_base + history_index * body_count * 3 + body_id * 3;
+                history_out[next_history_base + 0] = previous_history[prev_history_base + 0];
+                history_out[next_history_base + 1] = previous_history[prev_history_base + 1];
+                history_out[next_history_base + 2] = previous_history[prev_history_base + 2];
+            }
+        }
+
+        for (uint foot_index = 0; foot_index < foot_count; ++foot_index) {
+            uint body_id = (uint)foot_body_ids[foot_index];
+            uint foot_offset = foot_base + foot_index;
+            float current_contact_value = current_contact_out[contact_base + body_id];
+            float first_contact_value = first_contact_out[contact_base + body_id];
+            last_air_time_out[foot_offset] = first_contact_value > 0.5f ? previous_air_time[foot_offset] : previous_last_air_time[foot_offset];
+            air_time_out[foot_offset] = current_contact_value > 0.5f ? 0.0f : previous_air_time[foot_offset] + step_dt;
+        }
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="contact_update_with_feet",
+            input_names=[
+                "body_pos_w",
+                "body_vel_w",
+                "terrain_heights",
+                "previous_contact",
+                "previous_history",
+                "previous_last_air_time",
+                "previous_air_time",
+                "foot_body_ids",
+                "params",
+            ],
+            output_names=[
+                "current_contact_out",
+                "first_contact_out",
+                "history_out",
+                "last_air_time_out",
+                "air_time_out",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_contact_update_hotpath() -> None:
+    global _contact_update_with_feet_metal
+    global _contact_update_hotpath_initialized
+    global CONTACT_HOTPATH_BACKEND
+    if _contact_update_hotpath_initialized:
+        return
+    _contact_update_hotpath_initialized = True
+    _contact_update_with_feet_metal = _build_contact_update_with_feet_metal_kernel()
+    if _contact_update_with_feet_metal is not None:
+        CONTACT_HOTPATH_BACKEND = "mlx-metal-contact"
+
+
+def get_contact_hotpath_backend() -> str:
+    _ensure_contact_update_hotpath()
+    return CONTACT_HOTPATH_BACKEND
 
 
 def contact_update_hotpath(
@@ -100,8 +206,9 @@ def contact_update_hotpath(
     force_threshold: float,
     step_dt: float,
 ) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array]:
+    _ensure_contact_update_hotpath()
     if int(foot_body_ids.shape[0]) == 0:
-        current_contact, first_contact, history = _contact_update_without_feet(
+        current_contact, first_contact, history = _contact_update_without_feet_compiled(
             body_pos_w,
             body_vel_w,
             terrain_heights,
@@ -113,20 +220,80 @@ def contact_update_hotpath(
             force_threshold,
         )
         return current_contact, first_contact, history, previous_last_air_time, previous_air_time
-    return _contact_update_with_feet(
-        body_pos_w,
-        body_vel_w,
-        terrain_heights,
-        previous_contact,
-        previous_history,
-        previous_last_air_time,
-        previous_air_time,
-        foot_body_ids,
-        contact_margin,
-        spring_stiffness,
-        damping,
-        force_threshold,
-        step_dt,
+    if _contact_update_with_feet_metal is None:
+        return _contact_update_with_feet_compiled(
+            body_pos_w,
+            body_vel_w,
+            terrain_heights,
+            previous_contact,
+            previous_history,
+            previous_last_air_time,
+            previous_air_time,
+            foot_body_ids,
+            contact_margin,
+            spring_stiffness,
+            damping,
+            force_threshold,
+            step_dt,
+        )
+    body_pos_w = mx.array(body_pos_w, dtype=mx.float32)
+    body_vel_w = mx.array(body_vel_w, dtype=mx.float32)
+    terrain_heights = mx.array(terrain_heights, dtype=mx.float32)
+    previous_contact = mx.array(previous_contact, dtype=mx.float32)
+    previous_history = mx.array(previous_history, dtype=mx.float32)
+    previous_last_air_time = mx.array(previous_last_air_time, dtype=mx.float32)
+    previous_air_time = mx.array(previous_air_time, dtype=mx.float32)
+    foot_body_ids = mx.array(foot_body_ids, dtype=mx.int32)
+    if int(body_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros((0, body_pos_w.shape[1]), dtype=mx.bool_),
+            mx.zeros((0, body_pos_w.shape[1]), dtype=mx.bool_),
+            mx.zeros((0, previous_history.shape[1], body_pos_w.shape[1], 3), dtype=mx.float32),
+            mx.zeros((0, foot_body_ids.shape[0]), dtype=mx.float32),
+            mx.zeros((0, foot_body_ids.shape[0]), dtype=mx.float32),
+        )
+    params = mx.array(
+        [
+            contact_margin,
+            spring_stiffness,
+            damping,
+            force_threshold,
+            step_dt,
+            float(body_pos_w.shape[1]),
+            float(foot_body_ids.shape[0]),
+            float(previous_history.shape[1]),
+        ],
+        dtype=mx.float32,
+    )
+    outputs = _contact_update_with_feet_metal(
+        inputs=[
+            body_pos_w,
+            body_vel_w,
+            terrain_heights,
+            previous_contact,
+            previous_history,
+            previous_last_air_time,
+            previous_air_time,
+            foot_body_ids,
+            params,
+        ],
+        grid=(int(body_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            (int(body_pos_w.shape[0]), int(body_pos_w.shape[1])),
+            (int(body_pos_w.shape[0]), int(body_pos_w.shape[1])),
+            tuple(previous_history.shape),
+            (int(body_pos_w.shape[0]), int(foot_body_ids.shape[0])),
+            (int(body_pos_w.shape[0]), int(foot_body_ids.shape[0])),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return (
+        outputs[0].astype(mx.bool_),
+        outputs[1].astype(mx.bool_),
+        outputs[2],
+        outputs[3],
+        outputs[4],
     )
 
 
@@ -166,8 +333,156 @@ def _biped_support_metrics_impl(contact_mask: mx.array, action_targets: mx.array
     return support_ratio, left_support, right_support, left_actions, right_actions
 
 
-quadruped_support_metrics_hotpath = mx.compile(_quadruped_support_metrics_impl)
-biped_support_metrics_hotpath = mx.compile(_biped_support_metrics_impl)
+_quadruped_support_metrics_compiled = mx.compile(_quadruped_support_metrics_impl)
+_biped_support_metrics_compiled = mx.compile(_biped_support_metrics_impl)
+_quadruped_support_metrics_metal = None
+_biped_support_metrics_metal = None
+
+
+def _build_quadruped_support_metrics_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        uint contact_base = env_id * 4;
+        uint action_base = env_id * 12;
+
+        float contact_0 = contact_mask[contact_base + 0] > 0.5f ? 1.0f : 0.0f;
+        float contact_1 = contact_mask[contact_base + 1] > 0.5f ? 1.0f : 0.0f;
+        float contact_2 = contact_mask[contact_base + 2] > 0.5f ? 1.0f : 0.0f;
+        float contact_3 = contact_mask[contact_base + 3] > 0.5f ? 1.0f : 0.0f;
+        float support_ratio = (contact_0 + contact_1 + contact_2 + contact_3) / 4.0f;
+        float left_support = (contact_0 + contact_2) / 2.0f;
+        float right_support = (contact_1 + contact_3) / 2.0f;
+        float front_support = (contact_0 + contact_1) / 2.0f;
+        float rear_support = (contact_2 + contact_3) / 2.0f;
+
+        float left_actions = (action_targets[action_base + 0] + action_targets[action_base + 1] + action_targets[action_base + 2]
+            + action_targets[action_base + 6] + action_targets[action_base + 7] + action_targets[action_base + 8]) / 6.0f;
+        float right_actions = (action_targets[action_base + 3] + action_targets[action_base + 4] + action_targets[action_base + 5]
+            + action_targets[action_base + 9] + action_targets[action_base + 10] + action_targets[action_base + 11]) / 6.0f;
+        float front_actions = (action_targets[action_base + 0] + action_targets[action_base + 1] + action_targets[action_base + 2]
+            + action_targets[action_base + 3] + action_targets[action_base + 4] + action_targets[action_base + 5]) / 6.0f;
+        float rear_actions = (action_targets[action_base + 6] + action_targets[action_base + 7] + action_targets[action_base + 8]
+            + action_targets[action_base + 9] + action_targets[action_base + 10] + action_targets[action_base + 11]) / 6.0f;
+
+        support_ratio_out[env_id] = support_ratio;
+        left_support_out[env_id] = left_support;
+        right_support_out[env_id] = right_support;
+        front_support_out[env_id] = front_support;
+        rear_support_out[env_id] = rear_support;
+        left_actions_out[env_id] = left_actions;
+        right_actions_out[env_id] = right_actions;
+        front_actions_out[env_id] = front_actions;
+        rear_actions_out[env_id] = rear_actions;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="quadruped_support_metrics",
+            input_names=["contact_mask", "action_targets"],
+            output_names=[
+                "support_ratio_out",
+                "left_support_out",
+                "right_support_out",
+                "front_support_out",
+                "rear_support_out",
+                "left_actions_out",
+                "right_actions_out",
+                "front_actions_out",
+                "rear_actions_out",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _build_biped_support_metrics_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        uint contact_base = env_id * 2;
+        uint action_base = env_id * 19;
+
+        float contact_0 = contact_mask[contact_base + 0] > 0.5f ? 1.0f : 0.0f;
+        float contact_1 = contact_mask[contact_base + 1] > 0.5f ? 1.0f : 0.0f;
+        float support_ratio = (contact_0 + contact_1) / 2.0f;
+        float left_support = contact_0;
+        float right_support = contact_1;
+
+        float left_actions = 0.0f;
+        float right_actions = 0.0f;
+        for (uint i = 0; i < 5; ++i) {
+            left_actions += action_targets[action_base + i];
+            right_actions += action_targets[action_base + 5 + i];
+        }
+        left_actions /= 5.0f;
+        right_actions /= 5.0f;
+
+        support_ratio_out[env_id] = support_ratio;
+        left_support_out[env_id] = left_support;
+        right_support_out[env_id] = right_support;
+        left_actions_out[env_id] = left_actions;
+        right_actions_out[env_id] = right_actions;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="biped_support_metrics",
+            input_names=["contact_mask", "action_targets"],
+            output_names=[
+                "support_ratio_out",
+                "left_support_out",
+                "right_support_out",
+                "left_actions_out",
+                "right_actions_out",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def quadruped_support_metrics_hotpath(contact_mask: mx.array, action_targets: mx.array) -> tuple[mx.array, ...]:
+    global _quadruped_support_metrics_metal
+    if _quadruped_support_metrics_metal is None:
+        _quadruped_support_metrics_metal = _build_quadruped_support_metrics_metal_kernel()
+    contact_mask = mx.array(contact_mask, dtype=mx.float32)
+    action_targets = mx.array(action_targets, dtype=mx.float32)
+    if _quadruped_support_metrics_metal is None:
+        return _quadruped_support_metrics_compiled(contact_mask.astype(mx.bool_), action_targets)
+    if int(contact_mask.shape[0]) == 0:
+        empty = mx.zeros((0,), dtype=mx.float32)
+        return empty, empty, empty, empty, empty, empty, empty, empty, empty
+    outputs = _quadruped_support_metrics_metal(
+        inputs=[contact_mask, action_targets],
+        grid=(int(contact_mask.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(contact_mask.shape[0]),)] * 9,
+        output_dtypes=[mx.float32] * 9,
+    )
+    return tuple(outputs)
+
+
+def biped_support_metrics_hotpath(contact_mask: mx.array, action_targets: mx.array) -> tuple[mx.array, ...]:
+    global _biped_support_metrics_metal
+    if _biped_support_metrics_metal is None:
+        _biped_support_metrics_metal = _build_biped_support_metrics_metal_kernel()
+    contact_mask = mx.array(contact_mask, dtype=mx.float32)
+    action_targets = mx.array(action_targets, dtype=mx.float32)
+    if _biped_support_metrics_metal is None:
+        return _biped_support_metrics_compiled(contact_mask.astype(mx.bool_), action_targets)
+    if int(contact_mask.shape[0]) == 0:
+        empty = mx.zeros((0,), dtype=mx.float32)
+        return empty, empty, empty, empty, empty
+    outputs = _biped_support_metrics_metal(
+        inputs=[contact_mask, action_targets],
+        grid=(int(contact_mask.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(contact_mask.shape[0]),)] * 5,
+        output_dtypes=[mx.float32] * 5,
+    )
+    return tuple(outputs)
 
 
 def _anymal_leg_extension_impl(joint_pos: mx.array) -> mx.array:
@@ -440,6 +755,282 @@ def _franka_stack_object_step_impl(
     )
 
 
+_franka_stack_object_step_compiled = mx.compile(_franka_stack_object_step_impl)
+_franka_stack_object_step_metal = None
+_franka_stack_object_hotpath_initialized = False
+FRANKA_STACK_HOTPATH_BACKEND = HOTPATH_BACKEND
+_franka_stack_rgb_step_metal = None
+_franka_stack_rgb_hotpath_initialized = False
+FRANKA_STACK_RGB_HOTPATH_BACKEND = HOTPATH_BACKEND
+
+
+def _build_franka_stack_object_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float physics_dt = params[0];
+        float gripper_lower_limit = params[1];
+        float gripper_upper_limit = params[2];
+        float gripper_closed_threshold = params[3];
+        float stack_release_open_threshold = params[4];
+        float grasp_distance_threshold = params[5];
+        float grasp_offset_z = params[6];
+        float table_height = params[7];
+        float stack_offset_z = params[8];
+        float stack_xy_threshold = params[9];
+        float stack_z_threshold = params[10];
+
+        float3 cube = float3(cube_pos_w[env_id * 3 + 0], cube_pos_w[env_id * 3 + 1], cube_pos_w[env_id * 3 + 2]);
+        float3 support = float3(
+            support_cube_pos_w[env_id * 3 + 0],
+            support_cube_pos_w[env_id * 3 + 1],
+            support_cube_pos_w[env_id * 3 + 2]
+        );
+        float3 ee = float3(ee_pos_w[env_id * 3 + 0], ee_pos_w[env_id * 3 + 1], ee_pos_w[env_id * 3 + 2]);
+        float gripper_joint = gripper_joint_pos[env_id];
+        float gripper_action_value = gripper_action[env_id];
+        float grasped_prev = grasped[env_id];
+        float stacked_prev = stacked[env_id];
+
+        float gripper_target = gripper_action_value < 0.0f ? gripper_lower_limit : gripper_upper_limit;
+        float gripper_velocity = (gripper_target - gripper_joint) / physics_dt;
+        float3 cube_to_ee = cube - ee;
+        float dist_to_cube = metal::sqrt(cube_to_ee.x * cube_to_ee.x + cube_to_ee.y * cube_to_ee.y + cube_to_ee.z * cube_to_ee.z);
+        float gripper_closed = gripper_target <= gripper_closed_threshold ? 1.0f : 0.0f;
+        float gripper_open = gripper_target >= stack_release_open_threshold ? 1.0f : 0.0f;
+        float can_grasp = dist_to_cube <= grasp_distance_threshold ? 1.0f : 0.0f;
+        float next_grasped = ((grasped_prev > 0.5f || can_grasp > 0.5f) && gripper_closed > 0.5f && stacked_prev <= 0.5f)
+            ? 1.0f
+            : 0.0f;
+
+        float3 attached_cube = ee + float3(0.0f, 0.0f, -grasp_offset_z);
+        float3 stack_target = support + float3(0.0f, 0.0f, stack_offset_z);
+        float3 release_cube = grasped_prev > 0.5f ? attached_cube : cube;
+        float2 release_xy = float2(release_cube.x, release_cube.y);
+        float2 stack_xy = float2(stack_target.x, stack_target.y);
+        float2 stack_xy_delta = release_xy - stack_xy;
+        float stack_xy_error = metal::sqrt(stack_xy_delta.x * stack_xy_delta.x + stack_xy_delta.y * stack_xy_delta.y);
+        float stack_z_error = metal::fabs(release_cube.z - stack_target.z);
+        float newly_stacked = (grasped_prev > 0.5f && gripper_open > 0.5f && stack_xy_error <= stack_xy_threshold && stack_z_error <= stack_z_threshold)
+            ? 1.0f
+            : 0.0f;
+        float next_stacked = stacked_prev > 0.5f || newly_stacked > 0.5f ? 1.0f : 0.0f;
+        next_grasped = next_grasped * (1.0f - next_stacked);
+
+        float3 resting_cube = float3(
+            release_cube.x,
+            release_cube.y,
+            metal::max(table_height, release_cube.z - physics_dt * 0.35f)
+        );
+        float3 next_cube = resting_cube;
+        if (next_stacked > 0.5f) {
+            next_cube = stack_target;
+        } else if (next_grasped > 0.5f) {
+            next_cube = attached_cube;
+        }
+
+        gripper_target_out[env_id] = gripper_target;
+        gripper_velocity_out[env_id] = gripper_velocity;
+        next_grasped_out[env_id] = next_grasped;
+        next_stacked_out[env_id] = next_stacked;
+        next_cube_pos_w[env_id * 3 + 0] = next_cube.x;
+        next_cube_pos_w[env_id * 3 + 1] = next_cube.y;
+        next_cube_pos_w[env_id * 3 + 2] = next_cube.z;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="franka_stack_object_step",
+            input_names=[
+                "cube_pos_w",
+                "support_cube_pos_w",
+                "ee_pos_w",
+                "gripper_joint_pos",
+                "gripper_action",
+                "grasped",
+                "stacked",
+                "params",
+            ],
+            output_names=[
+                "gripper_target_out",
+                "gripper_velocity_out",
+                "next_grasped_out",
+                "next_stacked_out",
+                "next_cube_pos_w",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_franka_stack_object_hotpath() -> None:
+    global _franka_stack_object_step_metal
+    global _franka_stack_object_hotpath_initialized
+    global FRANKA_STACK_HOTPATH_BACKEND
+    if _franka_stack_object_hotpath_initialized:
+        return
+    _franka_stack_object_hotpath_initialized = True
+    _franka_stack_object_step_metal = _build_franka_stack_object_metal_kernel()
+    if _franka_stack_object_step_metal is not None:
+        FRANKA_STACK_HOTPATH_BACKEND = "mlx-metal-franka-stack"
+
+
+def get_franka_stack_hotpath_backend() -> str:
+    _ensure_franka_stack_object_hotpath()
+    return FRANKA_STACK_HOTPATH_BACKEND
+
+
+def _build_franka_stack_rgb_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float physics_dt = params[0];
+        float gripper_lower_limit = params[1];
+        float gripper_upper_limit = params[2];
+        float gripper_closed_threshold = params[3];
+        float stack_release_open_threshold = params[4];
+        float grasp_distance_threshold = params[5];
+        float grasp_offset_z = params[6];
+        float table_height = params[7];
+        float stack_offset_z = params[8];
+        float stack_xy_threshold = params[9];
+        float stack_z_threshold = params[10];
+
+        float3 middle_cube = float3(
+            middle_cube_pos_w[env_id * 3 + 0],
+            middle_cube_pos_w[env_id * 3 + 1],
+            middle_cube_pos_w[env_id * 3 + 2]
+        );
+        float3 top_cube = float3(
+            top_cube_pos_w[env_id * 3 + 0],
+            top_cube_pos_w[env_id * 3 + 1],
+            top_cube_pos_w[env_id * 3 + 2]
+        );
+        float3 support_cube = float3(
+            support_cube_pos_w[env_id * 3 + 0],
+            support_cube_pos_w[env_id * 3 + 1],
+            support_cube_pos_w[env_id * 3 + 2]
+        );
+        float3 ee = float3(ee_pos_w[env_id * 3 + 0], ee_pos_w[env_id * 3 + 1], ee_pos_w[env_id * 3 + 2]);
+        float gripper_joint = gripper_joint_pos[env_id];
+        float gripper_action_value = gripper_action[env_id];
+        float middle_grasped_prev = middle_grasped[env_id];
+        float top_grasped_prev = top_grasped[env_id];
+        float middle_stacked_prev = middle_stacked[env_id];
+        float top_stacked_prev = top_stacked[env_id];
+
+        bool use_top_cube = middle_stacked_prev > 0.5f;
+        float3 active_cube = use_top_cube ? top_cube : middle_cube;
+        float3 active_target = use_top_cube ? (middle_cube + float3(0.0f, 0.0f, stack_offset_z)) : (support_cube + float3(0.0f, 0.0f, stack_offset_z));
+        float active_grasped_prev = use_top_cube ? top_grasped_prev : middle_grasped_prev;
+
+        float gripper_target = gripper_action_value < 0.0f ? gripper_lower_limit : gripper_upper_limit;
+        float gripper_velocity = (gripper_target - gripper_joint) / physics_dt;
+        float3 cube_to_ee = active_cube - ee;
+        float dist_to_cube = metal::sqrt(cube_to_ee.x * cube_to_ee.x + cube_to_ee.y * cube_to_ee.y + cube_to_ee.z * cube_to_ee.z);
+        float gripper_closed = gripper_target <= gripper_closed_threshold ? 1.0f : 0.0f;
+        float gripper_open = gripper_target >= stack_release_open_threshold ? 1.0f : 0.0f;
+        float can_grasp = dist_to_cube <= grasp_distance_threshold ? 1.0f : 0.0f;
+        float next_active_grasped = ((active_grasped_prev > 0.5f || can_grasp > 0.5f) && gripper_closed > 0.5f && top_stacked_prev <= 0.5f)
+            ? 1.0f
+            : 0.0f;
+
+        float3 attached_cube = ee + float3(0.0f, 0.0f, -grasp_offset_z);
+        float3 release_cube = active_grasped_prev > 0.5f ? attached_cube : active_cube;
+        float2 release_xy = float2(release_cube.x, release_cube.y);
+        float2 active_target_xy = float2(active_target.x, active_target.y);
+        float2 stack_xy_delta = release_xy - active_target_xy;
+        float stack_xy_error = metal::sqrt(stack_xy_delta.x * stack_xy_delta.x + stack_xy_delta.y * stack_xy_delta.y);
+        float stack_z_error = metal::fabs(release_cube.z - active_target.z);
+        float newly_stacked = (active_grasped_prev > 0.5f && gripper_open > 0.5f && stack_xy_error <= stack_xy_threshold && stack_z_error <= stack_z_threshold)
+            ? 1.0f
+            : 0.0f;
+
+        float next_middle_stacked = middle_stacked_prev > 0.5f || (!use_top_cube && newly_stacked > 0.5f) ? 1.0f : 0.0f;
+        float next_top_stacked = top_stacked_prev > 0.5f || (use_top_cube && newly_stacked > 0.5f) ? 1.0f : 0.0f;
+
+        float3 resting_cube = float3(
+            release_cube.x,
+            release_cube.y,
+            metal::max(table_height, release_cube.z - physics_dt * 0.35f)
+        );
+        float3 next_active_cube = resting_cube;
+        if (newly_stacked > 0.5f) {
+            next_active_cube = active_target;
+        } else if (next_active_grasped > 0.5f) {
+            next_active_cube = attached_cube;
+        }
+
+        float3 next_middle_cube = use_top_cube ? middle_cube : next_active_cube;
+        float3 next_top_cube = use_top_cube ? next_active_cube : top_cube;
+
+        float next_middle_grasped = use_top_cube ? middle_grasped_prev : (next_active_grasped * (1.0f - next_middle_stacked));
+        float next_top_grasped = use_top_cube ? (next_active_grasped * (1.0f - next_top_stacked)) : top_grasped_prev;
+
+        gripper_target_out[env_id] = gripper_target;
+        gripper_velocity_out[env_id] = gripper_velocity;
+        next_middle_grasped_out[env_id] = next_middle_grasped;
+        next_top_grasped_out[env_id] = next_top_grasped;
+        next_middle_stacked_out[env_id] = next_middle_stacked;
+        next_top_stacked_out[env_id] = next_top_stacked;
+        next_middle_cube_pos_w[env_id * 3 + 0] = next_middle_cube.x;
+        next_middle_cube_pos_w[env_id * 3 + 1] = next_middle_cube.y;
+        next_middle_cube_pos_w[env_id * 3 + 2] = next_middle_cube.z;
+        next_top_cube_pos_w[env_id * 3 + 0] = next_top_cube.x;
+        next_top_cube_pos_w[env_id * 3 + 1] = next_top_cube.y;
+        next_top_cube_pos_w[env_id * 3 + 2] = next_top_cube.z;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="franka_stack_rgb_step",
+            input_names=[
+                "middle_cube_pos_w",
+                "top_cube_pos_w",
+                "support_cube_pos_w",
+                "ee_pos_w",
+                "gripper_joint_pos",
+                "gripper_action",
+                "middle_grasped",
+                "top_grasped",
+                "middle_stacked",
+                "top_stacked",
+                "params",
+            ],
+            output_names=[
+                "gripper_target_out",
+                "gripper_velocity_out",
+                "next_middle_grasped_out",
+                "next_top_grasped_out",
+                "next_middle_stacked_out",
+                "next_top_stacked_out",
+                "next_middle_cube_pos_w",
+                "next_top_cube_pos_w",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_franka_stack_rgb_hotpath() -> None:
+    global _franka_stack_rgb_step_metal
+    global _franka_stack_rgb_hotpath_initialized
+    global FRANKA_STACK_RGB_HOTPATH_BACKEND
+    if _franka_stack_rgb_hotpath_initialized:
+        return
+    _franka_stack_rgb_hotpath_initialized = True
+    _franka_stack_rgb_step_metal = _build_franka_stack_rgb_metal_kernel()
+    if _franka_stack_rgb_step_metal is not None:
+        FRANKA_STACK_RGB_HOTPATH_BACKEND = "mlx-metal-franka-stack-rgb"
+
+
+def get_franka_stack_rgb_hotpath_backend() -> str:
+    _ensure_franka_stack_rgb_hotpath()
+    return FRANKA_STACK_RGB_HOTPATH_BACKEND
+
+
 def _franka_cabinet_step_impl(
     handle_anchor_pos_w: mx.array,
     ee_pos_w: mx.array,
@@ -576,7 +1167,7 @@ def _franka_stack_rgb_step_impl(
         next_top_cube_pos,
     )
 
-
+_franka_stack_rgb_step_compiled = mx.compile(_franka_stack_rgb_step_impl)
 _franka_end_effector_position_compiled = mx.compile(_franka_end_effector_position_impl)
 _ur10e_end_effector_pose_compiled = mx.compile(_ur10e_end_effector_pose_impl)
 _franka_end_effector_position_metal = None
@@ -669,9 +1260,230 @@ def ur10e_end_effector_pose_hotpath(joint_pos: mx.array) -> tuple[mx.array, mx.a
 
 
 franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
-franka_stack_object_step_hotpath = mx.compile(_franka_stack_object_step_impl)
 franka_cabinet_step_hotpath = mx.compile(_franka_cabinet_step_impl)
-franka_stack_rgb_step_hotpath = mx.compile(_franka_stack_rgb_step_impl)
+
+
+def franka_stack_rgb_step_hotpath(
+    middle_cube_pos_w: mx.array,
+    top_cube_pos_w: mx.array,
+    support_cube_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    middle_grasped: mx.array,
+    top_grasped: mx.array,
+    middle_stacked: mx.array,
+    top_stacked: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    stack_release_open_threshold: float,
+    grasp_distance_threshold: float,
+    grasp_offset_z: float,
+    table_height: float,
+    stack_offset_z: float,
+    stack_xy_threshold: float,
+    stack_z_threshold: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array, mx.array, mx.array, mx.array]:
+    _ensure_franka_stack_rgb_hotpath()
+    middle_cube_pos_w = mx.array(middle_cube_pos_w, dtype=mx.float32)
+    top_cube_pos_w = mx.array(top_cube_pos_w, dtype=mx.float32)
+    support_cube_pos_w = mx.array(support_cube_pos_w, dtype=mx.float32)
+    ee_pos_w = mx.array(ee_pos_w, dtype=mx.float32)
+    gripper_joint_pos = mx.array(gripper_joint_pos, dtype=mx.float32)
+    gripper_action = mx.array(gripper_action, dtype=mx.float32)
+    middle_grasped = mx.array(middle_grasped, dtype=mx.float32)
+    top_grasped = mx.array(top_grasped, dtype=mx.float32)
+    middle_stacked = mx.array(middle_stacked, dtype=mx.float32)
+    top_stacked = mx.array(top_stacked, dtype=mx.float32)
+    if _franka_stack_rgb_step_metal is None:
+        return _franka_stack_rgb_step_compiled(
+            middle_cube_pos_w,
+            top_cube_pos_w,
+            support_cube_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            middle_grasped.astype(mx.bool_),
+            top_grasped.astype(mx.bool_),
+            middle_stacked.astype(mx.bool_),
+            top_stacked.astype(mx.bool_),
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            stack_release_open_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+            stack_offset_z,
+            stack_xy_threshold,
+            stack_z_threshold,
+        )
+    if int(middle_cube_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0, 3), dtype=mx.float32),
+            mx.zeros((0, 3), dtype=mx.float32),
+        )
+    params = mx.array(
+        [
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            stack_release_open_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+            stack_offset_z,
+            stack_xy_threshold,
+            stack_z_threshold,
+        ],
+        dtype=mx.float32,
+    )
+    outputs = _franka_stack_rgb_step_metal(
+        inputs=[
+            middle_cube_pos_w,
+            top_cube_pos_w,
+            support_cube_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            middle_grasped,
+            top_grasped,
+            middle_stacked,
+            top_stacked,
+            params,
+        ],
+        grid=(int(middle_cube_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            (int(middle_cube_pos_w.shape[0]),),
+            (int(middle_cube_pos_w.shape[0]),),
+            (int(middle_cube_pos_w.shape[0]),),
+            (int(middle_cube_pos_w.shape[0]),),
+            (int(middle_cube_pos_w.shape[0]),),
+            (int(middle_cube_pos_w.shape[0]),),
+            tuple(middle_cube_pos_w.shape),
+            tuple(top_cube_pos_w.shape),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32, mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return (
+        outputs[0],
+        outputs[1],
+        outputs[2].astype(mx.bool_),
+        outputs[3].astype(mx.bool_),
+        outputs[4].astype(mx.bool_),
+        outputs[5].astype(mx.bool_),
+        outputs[6],
+        outputs[7],
+    )
+
+
+def franka_stack_object_step_hotpath(
+    cube_pos_w: mx.array,
+    support_cube_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    grasped: mx.array,
+    stacked: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    stack_release_open_threshold: float,
+    grasp_distance_threshold: float,
+    grasp_offset_z: float,
+    table_height: float,
+    stack_offset_z: float,
+    stack_xy_threshold: float,
+    stack_z_threshold: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array]:
+    _ensure_franka_stack_object_hotpath()
+    cube_pos_w = mx.array(cube_pos_w, dtype=mx.float32)
+    support_cube_pos_w = mx.array(support_cube_pos_w, dtype=mx.float32)
+    ee_pos_w = mx.array(ee_pos_w, dtype=mx.float32)
+    gripper_joint_pos = mx.array(gripper_joint_pos, dtype=mx.float32)
+    gripper_action = mx.array(gripper_action, dtype=mx.float32)
+    grasped = mx.array(grasped, dtype=mx.float32)
+    stacked = mx.array(stacked, dtype=mx.float32)
+    if _franka_stack_object_step_metal is None:
+        return _franka_stack_object_step_compiled(
+            cube_pos_w,
+            support_cube_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped.astype(mx.bool_),
+            stacked.astype(mx.bool_),
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            stack_release_open_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+            stack_offset_z,
+            stack_xy_threshold,
+            stack_z_threshold,
+        )
+    if int(cube_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0, 3), dtype=mx.float32),
+        )
+    params = mx.array(
+        [
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            stack_release_open_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+            stack_offset_z,
+            stack_xy_threshold,
+            stack_z_threshold,
+        ],
+        dtype=mx.float32,
+    )
+    outputs = _franka_stack_object_step_metal(
+        inputs=[
+            cube_pos_w,
+            support_cube_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped,
+            stacked,
+            params,
+        ],
+        grid=(int(cube_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            (int(cube_pos_w.shape[0]),),
+            (int(cube_pos_w.shape[0]),),
+            (int(cube_pos_w.shape[0]),),
+            (int(cube_pos_w.shape[0]),),
+            tuple(cube_pos_w.shape),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return outputs[0], outputs[1], outputs[2].astype(mx.bool_), outputs[3].astype(mx.bool_), outputs[4]
 
 
 def _locomotion_root_step_impl(

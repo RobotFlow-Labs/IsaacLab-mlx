@@ -266,6 +266,79 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert bin_train_payload["task_spec"]["semantic_contract"] == "reduced-no-mimic"
     assert bin_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
+    pick_place_eval_output_path = tmp_path / "module-pick-place-alias-eval.json"
+    pick_place_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-PickPlace-GR1T2-Abs-v0",
+            "--num-envs",
+            "8",
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(pick_place_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert pick_place_eval_result.returncode == 0, pick_place_eval_result.stderr
+    pick_place_eval_payload = json.loads(pick_place_eval_output_path.read_text(encoding="utf-8"))
+    assert pick_place_eval_payload["task"] == "franka-bin-stack"
+    assert pick_place_eval_payload["episodes_completed"] == 1
+    assert pick_place_eval_payload["task_spec"]["semantic_contract"] == "reduced-pick-place-surrogate"
+    assert pick_place_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+    pick_place_train_output_path = tmp_path / "module-pick-place-alias-train.json"
+    pick_place_checkpoint_path = tmp_path / "module-pick-place-alias-train-policy.npz"
+    pick_place_train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(pick_place_checkpoint_path),
+            "--json-out",
+            str(pick_place_train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert pick_place_train_result.returncode == 0, pick_place_train_result.stderr
+    pick_place_train_payload = json.loads(pick_place_train_output_path.read_text(encoding="utf-8"))
+    assert pick_place_train_payload["task"] == "franka-bin-stack"
+    assert Path(pick_place_train_payload["checkpoint_path"]).exists()
+    assert pick_place_train_payload["task_spec"]["semantic_contract"] == "reduced-pick-place-surrogate"
+    assert pick_place_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     ur10e_eval_output_path = tmp_path / "module-ur10e-alias-eval.json"
     ur10e_eval_result = subprocess.run(
         [

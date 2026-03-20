@@ -18,6 +18,8 @@ from isaaclab.backends.test_utils import require_mlx_runtime
 require_mlx_runtime()
 from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     get_franka_hotpath_backend,
+    get_franka_stack_hotpath_backend,
+    get_franka_stack_rgb_hotpath_backend,
     get_locomotion_hotpath_backend,
     get_ur10e_hotpath_backend,
 )
@@ -37,6 +39,8 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     """Semantic snapshots should exclude training tasks and retain rollout/sensor contracts."""
     benchmark_module = _load_module("benchmark_mac_tasks", "scripts/benchmarks/mlx/benchmark_mac_tasks.py")
     expected_franka_hotpath = get_franka_hotpath_backend()
+    expected_franka_stack_hotpath = get_franka_stack_hotpath_backend()
+    expected_franka_stack_rgb_hotpath = get_franka_stack_rgb_hotpath_backend()
     expected_locomotion_hotpath = get_locomotion_hotpath_backend()
     expected_ur10e_hotpath = get_ur10e_hotpath_backend()
 
@@ -115,7 +119,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["output_signature"]["final_lift_gap_mean"] >= 0.0
     assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["hotpath"] == expected_franka_stack_hotpath
     assert snapshot["tasks"]["franka-stack-instance-randomize"]["contract"]["output_signature"][
         "final_support_variant_mean"
     ] >= 0.0
@@ -123,19 +127,19 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
         "final_movable_variant_mean"
     ] >= 0.0
     assert snapshot["tasks"]["franka-stack"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-stack"]["contract"]["hotpath"] == expected_franka_stack_hotpath
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
     assert snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stack_distance_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-stack"]["contract"]["output_signature"]["final_stacked_ratio"] <= 1.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["hotpath"] == expected_franka_stack_rgb_hotpath
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_middle_stack_distance_mean"] >= 0.0
     assert snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_top_stack_distance_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_middle_stacked_ratio"] <= 1.0
     assert 0.0 <= snapshot["tasks"]["franka-stack-rgb"]["contract"]["output_signature"]["final_top_stacked_ratio"] <= 1.0
     assert snapshot["tasks"]["franka-bin-stack"]["contract"]["action_dim"] == 8
-    assert snapshot["tasks"]["franka-bin-stack"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["franka-bin-stack"]["contract"]["hotpath"] == expected_franka_stack_rgb_hotpath
     assert snapshot["tasks"]["franka-bin-stack"]["contract"]["output_signature"]["final_bin_anchor_height_mean"] > 0.0
     assert snapshot["tasks"]["franka-bin-stack"]["contract"]["output_signature"]["final_support_bin_offset_mean"] >= 0.0
     assert snapshot["tasks"]["franka-cabinet"]["contract"]["action_dim"] == 8

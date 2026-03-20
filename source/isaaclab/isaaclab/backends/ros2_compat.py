@@ -51,6 +51,11 @@ class Ros2MessageEnvelope:
     payload: dict[str, Any]
     frame_id: str | None = None
     stamp_ns: int | None = None
+    batch_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.batch_index is not None and (not isinstance(self.batch_index, int) or self.batch_index < 0):
+            raise ValueError("batch_index must be >= 0 when provided")
 
     def normalized_payload(self) -> dict[str, Any]:
         return _normalize_message_value(self.payload)
@@ -62,7 +67,48 @@ class Ros2MessageEnvelope:
             "payload": self.normalized_payload(),
             "frame_id": self.frame_id,
             "stamp_ns": self.stamp_ns,
+            "batch_index": self.batch_index,
         }
+
+
+def _batch_index_from_envelope(envelope: Ros2MessageEnvelope) -> int:
+    if envelope.batch_index is None:
+        payload = envelope.normalized_payload()
+        if "batch_index" not in payload:
+            raise ValueError(f"ROS envelope '{envelope.topic}' is missing batch_index")
+        try:
+            batch_index = int(payload["batch_index"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"ROS envelope '{envelope.topic}' has an invalid batch_index") from exc
+        if batch_index < 0:
+            raise ValueError(f"ROS envelope '{envelope.topic}' has a negative batch_index")
+        return batch_index
+    return envelope.batch_index
+
+
+def _topic_root_for_batch(topic: str) -> str:
+    if "/" not in topic:
+        return topic
+    return topic.rsplit("/", 1)[0]
+
+
+def _sorted_batch_envelopes(
+    envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+    *,
+    topic_root: str,
+) -> list[tuple[int, Ros2MessageEnvelope]]:
+    indexed_envelopes: list[tuple[int, Ros2MessageEnvelope]] = []
+    seen_indices: set[int] = set()
+    for envelope in envelopes:
+        if _topic_root_for_batch(envelope.topic) != topic_root:
+            raise ValueError(f"ROS envelope '{envelope.topic}' does not belong to batch topic root '{topic_root}'")
+        batch_index = _batch_index_from_envelope(envelope)
+        if batch_index in seen_indices:
+            raise ValueError(f"Duplicate batch_index {batch_index} for batch topic root '{topic_root}'")
+        seen_indices.add(batch_index)
+        indexed_envelopes.append((batch_index, envelope))
+    indexed_envelopes.sort(key=lambda item: item[0])
+    return indexed_envelopes
 
 
 def planner_world_state_to_ros_envelope(
@@ -144,6 +190,7 @@ def planner_world_state_batch_to_ros_envelopes(
                 payload=payload,
                 frame_id=envelope.frame_id,
                 stamp_ns=envelope.stamp_ns,
+                batch_index=index,
             )
         )
     return envelopes
@@ -154,10 +201,10 @@ def planner_world_state_batch_from_ros_envelopes(
 ) -> tuple[PlannerWorldState, ...]:
     """Reconstruct a planner world-state batch from ROS-friendly envelopes."""
 
-    indexed_envelopes = sorted(
-        ((int(envelope.normalized_payload()["batch_index"]), envelope) for envelope in envelopes),
-        key=lambda item: item[0],
-    )
+    if not envelopes:
+        return ()
+    topic_root = _topic_root_for_batch(envelopes[0].topic)
+    indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=topic_root)
     return tuple(planner_world_state_from_ros_envelope(envelope) for _, envelope in indexed_envelopes)
 
 
@@ -241,6 +288,7 @@ def joint_motion_plan_batch_to_ros_envelopes(
                 payload=payload,
                 frame_id=envelope.frame_id,
                 stamp_ns=envelope.stamp_ns,
+                batch_index=index,
             )
         )
     return envelopes
@@ -251,10 +299,10 @@ def joint_motion_plan_batch_from_ros_envelopes(
 ) -> tuple[JointMotionPlan, ...]:
     """Reconstruct a deterministic joint motion plan batch from ROS-friendly envelopes."""
 
-    indexed_envelopes = sorted(
-        ((int(envelope.normalized_payload()["batch_index"]), envelope) for envelope in envelopes),
-        key=lambda item: item[0],
-    )
+    if not envelopes:
+        return ()
+    topic_root = _topic_root_for_batch(envelopes[0].topic)
+    indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=topic_root)
     return tuple(joint_motion_plan_from_ros_envelope(envelope) for _, envelope in indexed_envelopes)
 
 
@@ -285,6 +333,36 @@ class Ros2ProcessBridge:
             ]
         )
         return command
+
+    def build_topic_pub_batch_commands(
+        self,
+        envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+        *,
+        once: bool = True,
+    ) -> list[list[str]]:
+        """Build CLI publish commands for a batch of envelopes in batch-index order."""
+
+        if not envelopes:
+            return []
+        topic_root = _topic_root_for_batch(envelopes[0].topic)
+        indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=topic_root)
+        return [self.build_topic_pub_command(envelope, once=once) for _, envelope in indexed_envelopes]
+
+    def publish_batch_via_cli(
+        self,
+        envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+        *,
+        once: bool = True,
+        check: bool = True,
+    ) -> list[subprocess.CompletedProcess[str]]:
+        """Publish a typed ROS batch sequentially in batch-index order."""
+
+        if not envelopes:
+            return []
+        indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=_topic_root_for_batch(envelopes[0].topic))
+        return [
+            self.publish_via_cli(envelope, once=once, check=check) for _, envelope in indexed_envelopes
+        ]
 
     def build_topic_echo_command(self, topic: str, *, once: bool = True) -> list[str]:
         command = [self.ros2_executable, "topic", "echo", topic]
@@ -334,6 +412,7 @@ class Ros2JsonlBridge:
                     payload=payload["payload"],
                     frame_id=payload.get("frame_id"),
                     stamp_ns=payload.get("stamp_ns"),
+                    batch_index=payload.get("batch_index"),
                 )
             )
         return messages
@@ -345,16 +424,20 @@ class Ros2JsonlBridge:
         topic_counts: dict[str, int] = {}
         msg_type_counts: dict[str, int] = {}
         batch_topics: dict[str, int] = {}
+        batch_topic_indices: dict[str, list[int]] = {}
         for envelope in messages:
             topic_counts[envelope.topic] = topic_counts.get(envelope.topic, 0) + 1
             msg_type_counts[envelope.msg_type] = msg_type_counts.get(envelope.msg_type, 0) + 1
-            normalized = envelope.normalized_payload()
-            if "batch_index" in normalized:
-                topic_root = envelope.topic.rsplit("/", 1)[0]
+            if envelope.batch_index is not None or "batch_index" in envelope.normalized_payload():
+                topic_root = _topic_root_for_batch(envelope.topic)
                 batch_topics[topic_root] = batch_topics.get(topic_root, 0) + 1
+                batch_topic_indices.setdefault(topic_root, []).append(
+                    envelope.batch_index if envelope.batch_index is not None else _batch_index_from_envelope(envelope)
+                )
         return {
             "message_count": len(messages),
             "topic_counts": dict(sorted(topic_counts.items())),
             "msg_type_counts": dict(sorted(msg_type_counts.items())),
             "batch_topics": dict(sorted(batch_topics.items())),
+            "batch_topic_indices": {topic: sorted(indices) for topic, indices in sorted(batch_topic_indices.items())},
         }

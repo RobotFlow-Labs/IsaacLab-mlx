@@ -61,6 +61,8 @@ from .hotpath import (
     franka_stack_object_step_hotpath,
     franka_stack_rgb_step_hotpath,
     get_franka_hotpath_backend,
+    get_franka_stack_hotpath_backend,
+    get_franka_stack_rgb_hotpath_backend,
     get_ur10e_hotpath_backend,
     ur10e_end_effector_pose_hotpath,
 )
@@ -1619,7 +1621,7 @@ class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
             "object_tracking": True,
             "grasp_logic": True,
             "stack_logic": True,
-            "hotpath": get_franka_hotpath_backend(),
+            "hotpath": get_franka_stack_hotpath_backend(),
         }
         return payload
 
@@ -1939,7 +1941,7 @@ class MacFrankaStackRgbSimBackend(MacFrankaReachSimBackend):
             "grasp_logic": True,
             "multi_object_logic": True,
             "stack_logic": True,
-            "hotpath": get_franka_hotpath_backend(),
+            "hotpath": get_franka_stack_rgb_hotpath_backend(),
         }
         return payload
 

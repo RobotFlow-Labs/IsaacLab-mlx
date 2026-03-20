@@ -104,10 +104,9 @@ def main() -> int:
             ),
         ),
     )
-    messages.extend(
-        planner_world_state_batch_to_ros_envelopes(planner_world_batch)
-        + joint_motion_plan_batch_to_ros_envelopes(planner_plan)
-    )
+    planner_world_batch_envelopes = planner_world_state_batch_to_ros_envelopes(planner_world_batch)
+    planner_plan_batch_envelopes = joint_motion_plan_batch_to_ros_envelopes(planner_plan)
+    messages.extend(planner_world_batch_envelopes + planner_plan_batch_envelopes)
     output_path = Ros2JsonlBridge.write_messages(args.output, messages)
     restored = Ros2JsonlBridge.read_messages(output_path)
     bridge = Ros2ProcessBridge()
@@ -118,6 +117,12 @@ def main() -> int:
         tuple(reversed([envelope for envelope in restored if envelope.topic.startswith("/planner/joint_trajectory/")]))
     )
     message_summary = Ros2JsonlBridge.summarize_messages(restored)
+    planner_batch_commands = bridge.build_topic_pub_batch_commands(
+        tuple(reversed(planner_world_batch_envelopes))
+    )
+    trajectory_batch_commands = bridge.build_topic_pub_batch_commands(
+        tuple(reversed(planner_plan_batch_envelopes))
+    )
 
     summary = {
         "cli_available": bridge.cli_available(),
@@ -138,6 +143,8 @@ def main() -> int:
         "trajectory_waypoint_counts": [len(item.waypoints) for item in restored_plan_batch],
         "planner_batch_size": len(restored_world_batch),
         "trajectory_batch_size": len(restored_plan_batch),
+        "planner_batch_pub_commands": planner_batch_commands,
+        "trajectory_batch_pub_commands": trajectory_batch_commands,
         "message_summary": message_summary,
     }
     if args.summary_out is not None:

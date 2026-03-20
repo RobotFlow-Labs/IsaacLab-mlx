@@ -25,7 +25,11 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     franka_end_effector_position_hotpath,
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
+    franka_stack_rgb_step_hotpath,
+    get_contact_hotpath_backend,
     get_franka_hotpath_backend,
+    get_franka_stack_hotpath_backend,
+    get_franka_stack_rgb_hotpath_backend,
     get_locomotion_hotpath_backend,
     h1_body_positions_hotpath,
     locomotion_root_step_hotpath,
@@ -160,7 +164,10 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
 
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
+    assert get_contact_hotpath_backend() in {"mlx-compiled", "mlx-metal-contact"}
     assert get_franka_hotpath_backend() in {"mlx-compiled", "mlx-metal-ee"}
+    assert get_franka_stack_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack"}
+    assert get_franka_stack_rgb_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack-rgb"}
     assert get_locomotion_hotpath_backend() in {"mlx-compiled", "mlx-metal-root-step"}
 
 

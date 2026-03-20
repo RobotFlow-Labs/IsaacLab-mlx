@@ -152,6 +152,12 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     )
     assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
     assert get_mlx_task_spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0") == get_mlx_task_spec("franka-bin-stack")
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-Abs-v0").task == "Isaac-PickPlace-GR1T2-Abs-v0"
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-Abs-v0").semantic_contract == "reduced-pick-place-surrogate"
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-Abs-v0").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0").task == "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0"
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0").semantic_contract == "reduced-pick-place-surrogate"
+    assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("Isaac-Open-Drawer-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-open-drawer")
     assert get_mlx_task_spec("Isaac-Open-Drawer-OpenArm-Play-v0") == get_mlx_task_spec("openarm-open-drawer")
 
@@ -186,6 +192,36 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
             "reduced-no-cosmos",
             "cosmos",
         ),
+        (
+            "Isaac-PickPlace-GR1T2-Abs-v0",
+            "franka-bin-stack",
+            "reduced-pick-place-surrogate",
+            "pick-place",
+        ),
+        (
+            "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
+            "franka-bin-stack",
+            "reduced-pick-place-surrogate",
+            "pick-place",
+        ),
+        (
+            "Isaac-PickPlace-G1-InspireFTP-Abs-v0",
+            "franka-bin-stack",
+            "reduced-pick-place-surrogate",
+            "pick-place",
+        ),
+        (
+            "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
+            "franka-bin-stack",
+            "reduced-pick-place-surrogate",
+            "pick-place",
+        ),
+        (
+            "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
+            "franka-bin-stack",
+            "reduced-pick-place-surrogate",
+            "pick-place",
+        ),
     ),
 )
 def test_public_mlx_wrapper_exposes_reduced_alias_specs(
@@ -206,6 +242,39 @@ def test_public_mlx_wrapper_exposes_reduced_alias_specs(
     assert alias_spec.semantic_contract == semantic_contract
     assert alias_spec.upstream_alias_semantics_preserved is False
     assert note_fragment in alias_spec.notes.lower()
+
+
+def test_public_mlx_wrapper_normalizes_pick_place_aliases_to_bin_stack(tmp_path: Path):
+    """Pick-place aliases should normalize through the public MLX wrapper to the reduced bin-stack slice."""
+
+    checkpoint_path = tmp_path / "pick-place-policy.npz"
+
+    train_payload = train_mlx_task(
+        "Isaac-PickPlace-GR1T2-Abs-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=61,
+    )
+    eval_payload = evaluate_mlx_task(
+        "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
+        episodes=1,
+        checkpoint=str(checkpoint_path),
+        episode_length_s=0.5,
+        max_steps=256,
+        seed=63,
+    )
+
+    assert train_payload["task"] == "franka-bin-stack"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert train_payload["task_spec"]["semantic_contract"] == "reduced-pick-place-surrogate"
+    assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert eval_payload["task"] == "franka-bin-stack"
+    assert eval_payload["episodes_completed"] == 1
 
 
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):

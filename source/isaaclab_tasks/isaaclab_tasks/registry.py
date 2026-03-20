@@ -770,58 +770,112 @@ ISAACSIM_ONLY_TASK_SPECS = (
     },
     {
         "id": "Isaac-PickPlace-GR1T2-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.pickplace_gr1t2_env_cfg:PickPlaceGR1T2EnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
-        ),
-    },
-    {
-        "id": "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.nutpour_gr1t2_pink_ik_env_cfg:NutPourGR1T2PinkIKEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_image_nut_pouring.json",
-        ),
-    },
-    {
-        "id": "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.exhaustpipe_gr1t2_pink_ik_env_cfg:ExhaustPipeGR1T2PinkIKEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_image_exhaust_pipe.json",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackPickPlaceEnvCfg",
+            },
+            semantic_contract="reduced-pick-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+                "instead of the upstream GR1T2 pick/place scene, but it keeps the reduced three-object "
+                "manipulation workflow and checkpoint contract honest."
+            ),
         ),
     },
     {
         "id": "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.pickplace_gr1t2_waist_enabled_env_cfg:PickPlaceGR1T2WaistEnabledEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackPickPlaceEnvCfg",
+            },
+            semantic_contract="reduced-pick-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+                "instead of the upstream waist-enabled pick/place scene, but it keeps the reduced "
+                "three-object manipulation workflow and checkpoint contract honest."
+            ),
         ),
     },
     {
         "id": "Isaac-PickPlace-G1-InspireFTP-Abs-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.pickplace_unitree_g1_inspire_hand_env_cfg:PickPlaceG1InspireFTPEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackPickPlaceEnvCfg",
+            },
+            semantic_contract="reduced-pick-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+                "instead of the upstream G1 Inspire FTP pick/place scene, but it keeps the reduced "
+                "three-object manipulation workflow and checkpoint contract honest."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackPickPlaceEnvCfg",
+            },
+            semantic_contract="reduced-pick-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+                "instead of the upstream nut-pour scene, so the public task stays available without "
+                "pretending exact cup geometry or fluid-transfer parity."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaBinStackPickPlaceEnvCfg",
+            },
+            semantic_contract="reduced-pick-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+                "instead of the upstream exhaust-pipe scene, so the public task stays available without "
+                "pretending exact pipe geometry or insertion parity."
+            ),
         ),
     },
     {
         "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_visuomotor_env_cfg:FrankaCubeStackVisuomotorEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_image_200.json",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackVisuomotorEnvCfg",
+            },
+            semantic_contract="reduced-visuomotor-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native visuomotor stack resolves to the reduced three-cube RGB stack substrate "
+                "with analytic object dynamics instead of the upstream robomimic image stack."
+            ),
         ),
     },
     {
         "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
-        "entry_point": "isaaclab.envs:ManagerBasedRLEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_visuomotor_cosmos_env_cfg:FrankaCubeStackVisuomotorCosmosEnvCfg",
-            robomimic_bc_cfg_entry_point="isaaclab_tasks.manager_based.manipulation.stack.config.franka.agents:robomimic/bc_rnn_image_cosmos.json",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackVisuomotorCosmosEnvCfg",
+            },
+            semantic_contract="reduced-no-cosmos",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native visuomotor-cosmos stack resolves to the reduced three-cube RGB stack substrate "
+                "without the upstream Cosmos multimodal image contract."
+            ),
         ),
     },
     {

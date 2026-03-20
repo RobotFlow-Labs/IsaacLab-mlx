@@ -53,6 +53,11 @@ SAFE_TASK_IDS = (
     "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
+    "Isaac-PickPlace-GR1T2-Abs-v0",
+    "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
+    "Isaac-PickPlace-G1-InspireFTP-Abs-v0",
+    "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
+    "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
     "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Open-Drawer-Franka-v0",
     "Isaac-Open-Drawer-Franka-IK-Abs-v0",
@@ -67,7 +72,6 @@ SAFE_TASK_IDS = (
 )
 UNSUPPORTED_MAC_TASK_IDS = (
     "Isaac-Factory-PegInsert-Direct-v0",
-    "Isaac-PickPlace-GR1T2-Abs-v0",
     "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
     "Isaac-Dexsuite-Kuka-Allegro-Reorient-v0",
     "Isaac-Navigation-Flat-Anymal-C-v0",
@@ -296,6 +300,8 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
         "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", "env_cfg_entry_point"
     )
     bin_stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", device="cpu", num_envs=5)
+    pick_place_base_cfg = parse_cfg.parse_env_cfg("Isaac-PickPlace-GR1T2-Abs-v0", device="cpu", num_envs=4)
+    pick_place_cfg = parse_cfg.parse_env_cfg("Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0", device="cpu", num_envs=5)
     cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
     open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-Franka-IK-Abs-v0", device="cpu", num_envs=4)
     openarm_open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-OpenArm-v0", device="cpu", num_envs=5)
@@ -357,10 +363,14 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_rgb_alt_cfg.num_envs == 3
     assert type(stack_visuomotor_cfg).__name__ == "MacFrankaStackVisuomotorEnvCfg"
     assert stack_visuomotor_cfg.num_envs == 4
+    assert stack_visuomotor_cfg.action_space == 8
+    assert stack_visuomotor_cfg.observation_space == 42
     assert stack_visuomotor_cfg.semantic_contract == "reduced-visuomotor-surrogate"
     assert stack_visuomotor_cfg.upstream_alias_semantics_preserved is False
     assert type(stack_visuomotor_cosmos_cfg).__name__ == "MacFrankaStackVisuomotorCosmosEnvCfg"
     assert stack_visuomotor_cosmos_cfg.num_envs == 5
+    assert stack_visuomotor_cosmos_cfg.action_space == 8
+    assert stack_visuomotor_cosmos_cfg.observation_space == 42
     assert stack_visuomotor_cosmos_cfg.semantic_contract == "reduced-no-cosmos"
     assert stack_visuomotor_cosmos_cfg.upstream_alias_semantics_preserved is False
     assert type(bin_stack_cfg_entry).__name__ == "MacFrankaBinStackEnvCfg"
@@ -372,6 +382,20 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert bin_stack_cfg.upstream_alias_semantics_preserved is False
     assert "mimic" in bin_stack_cfg.contract_notes.lower()
     assert bin_stack_cfg.bin_anchor_observation_mode == "mirrored-support-anchor-tail"
+    assert type(pick_place_base_cfg).__name__ == "MacFrankaBinStackPickPlaceEnvCfg"
+    assert pick_place_base_cfg.num_envs == 4
+    assert pick_place_base_cfg.action_space == 8
+    assert pick_place_base_cfg.observation_space == 45
+    assert pick_place_base_cfg.semantic_contract == "reduced-pick-place-surrogate"
+    assert pick_place_base_cfg.upstream_alias_semantics_preserved is False
+    assert "pick-place" in pick_place_base_cfg.contract_notes.lower()
+    assert type(pick_place_cfg).__name__ == "MacFrankaBinStackPickPlaceEnvCfg"
+    assert pick_place_cfg.num_envs == 5
+    assert pick_place_cfg.action_space == 8
+    assert pick_place_cfg.observation_space == 45
+    assert pick_place_cfg.semantic_contract == "reduced-pick-place-surrogate"
+    assert pick_place_cfg.upstream_alias_semantics_preserved is False
+    assert "pick-place" in pick_place_cfg.contract_notes.lower()
     assert type(cabinet_cfg).__name__ == "MacFrankaCabinetEnvCfg"
     assert cabinet_cfg.num_envs == 3
     assert cabinet_cfg.action_space == 8

@@ -25,6 +25,7 @@ from isaaclab.backends import (
     detect_cpu_fallback,
     get_runtime_state,
 )
+from isaaclab.backends.mac_sim.hotpath import get_franka_stack_hotpath_backend
 from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAnymalCFlatEnv,
@@ -376,6 +377,14 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         if hasattr(env.sim_backend, "orientation_error"):
             payload["final_orientation_error_mean"] = float(mx.mean(env.sim_backend.orientation_error()).item())
     return payload
+
+
+def _franka_stack_diagnostics(env: Any, trace: Any) -> dict[str, Any]:
+    """Capture diagnostics for stack tasks with the stack-specific hotpath label."""
+
+    diagnostics = mac_env_diagnostics(env, rollout_summary=trace.summary())
+    diagnostics["sim_backend"]["subsystems"]["hotpath"] = get_franka_stack_hotpath_backend()
+    return diagnostics
 
 
 def _openarm_bi_output_signature(env: Any, trace: Any) -> dict[str, float]:
@@ -994,7 +1003,7 @@ def benchmark_franka_stack(num_envs: int, steps: int, seed: int) -> dict[str, An
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _franka_output_signature(env, trace),
-            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+            "diagnostics": _franka_stack_diagnostics(env, trace),
         },
     )
 
@@ -1021,7 +1030,7 @@ def benchmark_franka_stack_instance_randomize(num_envs: int, steps: int, seed: i
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _franka_output_signature(env, trace),
-            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+            "diagnostics": _franka_stack_diagnostics(env, trace),
         },
     )
 

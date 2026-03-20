@@ -32,6 +32,7 @@ from isaaclab.backends.mac_sim import (
     MacCartpoleTrainCfg,
     MacFrankaBinStackEnv,
     MacFrankaBinStackEnvCfg,
+    MacFrankaBinStackPickPlaceEnvCfg,
     MacFrankaBinStackTrainCfg,
     MacFrankaStackBlueprintEnvCfg,
     MacFrankaCabinetEnv,
@@ -160,6 +161,13 @@ from isaaclab.backends.mac_sim import (
 
 TRAINABLE_MLX_TASKS = list_supported_trainable_mlx_tasks()
 PUBLIC_MLX_TASKS = list_supported_public_mlx_tasks()
+PICK_PLACE_ALIAS_TASKS = {
+    "Isaac-PickPlace-GR1T2-Abs-v0",
+    "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
+    "Isaac-PickPlace-G1-InspireFTP-Abs-v0",
+    "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
+    "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
+}
 
 
 @dataclass(frozen=True)
@@ -236,6 +244,11 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0": "franka-stack",
     "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0": "franka-stack",
     "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0": "franka-bin-stack",
+    "Isaac-PickPlace-GR1T2-Abs-v0": "franka-bin-stack",
+    "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0": "franka-bin-stack",
+    "Isaac-PickPlace-G1-InspireFTP-Abs-v0": "franka-bin-stack",
+    "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0": "franka-bin-stack",
+    "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0": "franka-bin-stack",
     "Isaac-Franka-Cabinet-Direct-v0": "franka-cabinet",
     "Isaac-Franka-Cabinet-Direct-Play-v0": "franka-cabinet",
     "Isaac-Open-Drawer-Franka-v0": "franka-open-drawer",
@@ -314,6 +327,56 @@ MLX_ALIAS_TASK_SPECS: dict[str, MlxTaskSpec] = {
         notes=(
             "Reduced analytic two-cube Franka stack slice without the upstream skill-generation or "
             "demonstration-conditioned behavior."
+        ),
+    ),
+    "Isaac-PickPlace-GR1T2-Abs-v0": replace(
+        MLX_TASK_SPECS["franka-bin-stack"],
+        task="Isaac-PickPlace-GR1T2-Abs-v0",
+        semantic_contract="reduced-pick-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
+            "upstream GR1T2 pick/place scene."
+        ),
+    ),
+    "Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0": replace(
+        MLX_TASK_SPECS["franka-bin-stack"],
+        task="Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0",
+        semantic_contract="reduced-pick-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
+            "upstream waist-enabled pick/place scene."
+        ),
+    ),
+    "Isaac-PickPlace-G1-InspireFTP-Abs-v0": replace(
+        MLX_TASK_SPECS["franka-bin-stack"],
+        task="Isaac-PickPlace-G1-InspireFTP-Abs-v0",
+        semantic_contract="reduced-pick-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
+            "upstream G1 Inspire FTP pick/place scene."
+        ),
+    ),
+    "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0": replace(
+        MLX_TASK_SPECS["franka-bin-stack"],
+        task="Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
+        semantic_contract="reduced-pick-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
+            "upstream nut-pour scene."
+        ),
+    ),
+    "Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0": replace(
+        MLX_TASK_SPECS["franka-bin-stack"],
+        task="Isaac-ExhaustPipe-GR1T2-Pink-IK-Abs-v0",
+        semantic_contract="reduced-pick-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
+            "upstream exhaust-pipe scene."
         ),
     ),
 }
@@ -819,8 +882,11 @@ def train_mlx_task(
             if hidden_dim is not None
             else resolve_resume_hidden_dim(resume_from, spec.default_hidden_dim or 128)
         )
+        bin_stack_env_cfg_cls = (
+            MacFrankaBinStackPickPlaceEnvCfg if requested_task in PICK_PLACE_ALIAS_TASKS else MacFrankaBinStackEnvCfg
+        )
         cfg = MacFrankaBinStackTrainCfg(
-            env=MacFrankaBinStackEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            env=bin_stack_env_cfg_cls(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
             hidden_dim=resolved_hidden_dim,
             updates=updates,
             rollout_steps=rollout_steps,
@@ -2087,9 +2153,12 @@ def evaluate_mlx_task(
 
     if task == "franka-bin-stack":
         if checkpoint is not None:
+            bin_stack_env_cfg_cls = (
+                MacFrankaBinStackPickPlaceEnvCfg if requested_task in PICK_PLACE_ALIAS_TASKS else MacFrankaBinStackEnvCfg
+            )
             returns = play_franka_bin_stack_policy(
                 checkpoint,
-                env_cfg=MacFrankaBinStackEnvCfg(
+                env_cfg=bin_stack_env_cfg_cls(
                     num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s
                 ),
                 episodes=episodes,
@@ -2103,7 +2172,10 @@ def evaluate_mlx_task(
                 "completed": [{"return": float(value)} for value in returns],
                 "checkpoint": checkpoint,
             }
-        cfg = MacFrankaBinStackEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        bin_stack_env_cfg_cls = (
+            MacFrankaBinStackPickPlaceEnvCfg if requested_task in PICK_PLACE_ALIAS_TASKS else MacFrankaBinStackEnvCfg
+        )
+        cfg = bin_stack_env_cfg_cls(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacFrankaBinStackEnv(cfg)
         mx.random.seed(seed)
         env.reset()

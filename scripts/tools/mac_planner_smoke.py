@@ -17,9 +17,12 @@ from isaaclab.backends import (
     PlannerWorldState,
     create_planner_backend,
     joint_motion_plan_batch_to_ros_envelopes,
+    joint_motion_plan_batch_from_ros_envelopes,
     joint_motion_plan_to_ros_envelope,
     planner_world_state_batch_to_ros_envelopes,
+    planner_world_state_batch_from_ros_envelopes,
     planner_world_state_to_ros_envelope,
+    Ros2ProcessBridge,
     resolve_runtime_selection,
 )
 
@@ -77,6 +80,26 @@ def main() -> int:
             ),
         )
     )
+    planner_world_batch = (
+        world_state,
+        PlannerWorldState(
+            obstacles=world_state.obstacles
+            + (
+                PlannerWorldObstacle(
+                    "tool_fixture",
+                    center=(0.3, 0.1, 0.18),
+                    size=(0.12, 0.08, 0.2),
+                ),
+            ),
+        ),
+    )
+    planner_world_batch_envelopes = planner_world_state_batch_to_ros_envelopes(planner_world_batch)
+    planner_world_batch_roundtrip = planner_world_state_batch_from_ros_envelopes(
+        tuple(reversed(planner_world_batch_envelopes))
+    )
+    trajectory_batch_envelopes = joint_motion_plan_batch_to_ros_envelopes(batch)
+    trajectory_batch_roundtrip = joint_motion_plan_batch_from_ros_envelopes(tuple(reversed(trajectory_batch_envelopes)))
+    ros_bridge = Ros2ProcessBridge()
 
     payload = {
         "planner": planner.state_dict(),
@@ -84,25 +107,14 @@ def main() -> int:
         "batch_plans": [item.state_dict() for item in batch],
         "planner_ros_envelope": planner_world_state_to_ros_envelope(world_state).state_dict(),
         "trajectory_ros_envelope": joint_motion_plan_to_ros_envelope(plan).state_dict(),
-        "planner_ros_batch_envelopes": [
-            item.state_dict()
-            for item in planner_world_state_batch_to_ros_envelopes(
-                (
-                    world_state,
-                    PlannerWorldState(
-                        obstacles=world_state.obstacles
-                        + (
-                            PlannerWorldObstacle(
-                                "tool_fixture",
-                                center=(0.3, 0.1, 0.18),
-                                size=(0.12, 0.08, 0.2),
-                            ),
-                        ),
-                    ),
-                )
-            )
-        ],
-        "trajectory_ros_batch_envelopes": [item.state_dict() for item in joint_motion_plan_batch_to_ros_envelopes(batch)],
+        "planner_ros_batch_envelopes": [item.state_dict() for item in planner_world_batch_envelopes],
+        "trajectory_ros_batch_envelopes": [item.state_dict() for item in trajectory_batch_envelopes],
+        "planner_ros_batch_roundtrip_ok": [item.state_dict() for item in planner_world_batch_roundtrip]
+        == [item.state_dict() for item in planner_world_batch],
+        "trajectory_ros_batch_roundtrip_ok": [item.state_dict() for item in trajectory_batch_roundtrip]
+        == [item.state_dict() for item in batch],
+        "planner_ros_batch_pub_commands": ros_bridge.build_topic_pub_batch_commands(planner_world_batch_envelopes),
+        "trajectory_ros_batch_pub_commands": ros_bridge.build_topic_pub_batch_commands(trajectory_batch_envelopes),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

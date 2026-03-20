@@ -19,6 +19,7 @@ _EXPORTS = {
     "MacCartpoleDepthCameraEnvCfg": (".env_cfgs", "MacCartpoleDepthCameraEnvCfg"),
     "MacCartpoleRGBCameraEnvCfg": (".env_cfgs", "MacCartpoleRGBCameraEnvCfg"),
     "MacFrankaBinStackEnvCfg": (".env_cfgs", "MacFrankaBinStackEnvCfg"),
+    "MacFrankaBinStackPickPlaceEnvCfg": (".env_cfgs", "MacFrankaBinStackPickPlaceEnvCfg"),
     "MacFrankaStackBlueprintEnvCfg": (".env_cfgs", "MacFrankaStackBlueprintEnvCfg"),
     "MacFrankaCabinetEnvCfg": (".env_cfgs", "MacFrankaCabinetEnvCfg"),
     "MacFrankaLiftEnvCfg": (".env_cfgs", "MacFrankaLiftEnvCfg"),

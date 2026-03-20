@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T02:04:47Z",
+  "generated_at": "2026-03-20T02:44:39Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -204,7 +204,7 @@
     "franka-bin-stack": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-stack-rgb",
         "observation_dim": 45,
         "output_signature": {
           "final_active_is_top_ratio": 0.0,
@@ -331,7 +331,7 @@
     "franka-stack": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-stack",
         "observation_dim": 33,
         "output_signature": {
           "final_cube_distance_mean": 0.4998617172241211,
@@ -360,7 +360,7 @@
     "franka-stack-instance-randomize": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-stack",
         "observation_dim": 35,
         "output_signature": {
           "final_cube_distance_mean": 0.4969131052494049,
@@ -391,7 +391,7 @@
     "franka-stack-rgb": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-stack-rgb",
         "observation_dim": 42,
         "output_signature": {
           "final_active_is_top_ratio": 0.0,

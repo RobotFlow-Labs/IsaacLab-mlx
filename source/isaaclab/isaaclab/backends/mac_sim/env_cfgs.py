@@ -875,6 +875,20 @@ class MacFrankaBinStackEnvCfg(MacFrankaStackRgbEnvCfg):
 
 
 @configclass
+class MacFrankaBinStackPickPlaceEnvCfg(MacFrankaBinStackEnvCfg):
+    """Configuration for the reduced pick-place surrogate mapped onto the bin-anchored stack substrate."""
+
+    task_name: str = "franka-pick-place-surrogate"
+    semantic_contract: str = "reduced-pick-place-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native pick-place surrogate resolves to the reduced bin-anchored stack substrate "
+        "instead of the upstream pick/place scene, so the public task stays available without "
+        "pretending exact object identity or pick/place fixture parity."
+    )
+
+
+@configclass
 class MacUR10LongSuctionStackEnvCfg(MacUR10ReachEnvCfg):
     """Reduced mac-native UR10 long-suction three-cube stack configuration."""
 
