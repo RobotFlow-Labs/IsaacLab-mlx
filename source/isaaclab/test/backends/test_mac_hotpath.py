@@ -36,6 +36,8 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     get_franka_stack_rgb_hotpath_backend,
     get_locomotion_hotpath_backend,
     h1_body_positions_hotpath,
+    h1_leg_extension_hotpath,
+    get_h1_leg_extension_hotpath_backend,
     locomotion_root_step_hotpath,
     prime_contact_state,
     quadruped_support_metrics_hotpath,
@@ -186,6 +188,31 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
     assert np.allclose(np.array(body_pos)[:, 0, :], np.array(root_pos_w))
 
 
+def test_h1_leg_extension_hotpath_matches_reference_math():
+    joint_pos = mx.array(
+        [
+            [0.05, -0.25, 0.70, -0.15, 0.05, 0.12, 0.10, -0.08, 0.18, 0.22, -0.30, 0.04, 0.12, -0.07, 0.20, -0.04, 0.15, 0.08, -0.02, 0.11],
+            [0.00, -0.30, 0.60, 0.08, -0.10, 0.18, -0.05, 0.12, -0.16, 0.06, 0.20, -0.02, 0.14, 0.03, -0.12, 0.10, -0.18, 0.05, 0.09, -0.06],
+        ],
+        dtype=mx.float32,
+    )
+
+    extension = h1_leg_extension_hotpath(joint_pos)
+    mx.eval(extension)
+
+    joint_np = np.array(joint_pos)[:, :10].reshape((2, 2, 5))
+    hip_pitch = joint_np[:, :, 2]
+    knee = joint_np[:, :, 3]
+    ankle = joint_np[:, :, 4]
+    expected = 0.40 + 0.20 * np.cos(hip_pitch + 0.20) + 0.26 * np.cos(hip_pitch + knee - 0.10) + 0.08 * np.cos(
+        hip_pitch + knee + ankle
+    )
+    expected = np.clip(expected, 0.58, 0.98).astype(np.float32)
+
+    assert extension.shape == (2, 2)
+    assert np.allclose(np.array(extension), expected)
+
+
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
     assert get_anymal_leg_extension_hotpath_backend() in {"mlx-compiled", "mlx-metal-anymal-leg-extension"}
@@ -196,6 +223,7 @@ def test_hotpath_backend_label_is_stable():
     assert get_franka_stack_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack"}
     assert get_franka_stack_rgb_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack-rgb"}
     assert get_locomotion_hotpath_backend() in {"mlx-compiled", "mlx-metal-root-step"}
+    assert get_h1_leg_extension_hotpath_backend() in {"mlx-compiled", "mlx-metal-h1-leg-extension"}
 
 
 def test_franka_end_effector_hotpath_matches_reference_math():

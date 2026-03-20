@@ -95,6 +95,7 @@ without pausing for replanning after every small success.
 - `DONE` Env/runtime diagnostics now prove the articulated `mac-sim` contract on a real locomotion backend instead of only reporting the high-level backend seam
 - `DONE` ROS/planner software smokes now exercise the real `mac-planners` backend and verify typed round-trip reconstruction of planner world-state and joint trajectories
 - `DONE` Planner/ROS batch helpers now restore batches by `batch_index` and report actual batch envelope counts instead of inferring from message order or `max(index) + 1`
+- `DONE` Planner/ROS batch publish now also emits replayable plain-data transcripts with ordered input envelopes, generated CLI commands, and publish results so process-level failures can be audited after the fact without importing ROS Python bindings
 - `DONE` Stereo/depth smoke now validates raw capture artifacts before processing and writes a machine-checkable JSON summary artifact
 - `DONE` `uv run scripts/bootstrap_uv_mlx.py` now bootstraps the public MLX/mac editable environment in one command
 - `DONE` Upstream-compatible Franka reach/stack/open-drawer controller variants now resolve to the canonical mac-native manipulation slices through the lazy task registry, public MLX wrapper, and installed CLI without inflating the canonical public task surface

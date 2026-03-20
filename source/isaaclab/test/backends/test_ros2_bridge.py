@@ -178,6 +178,39 @@ def test_ros2_process_bridge_builds_batch_publish_manifest_in_batch_index_order(
     assert manifest[0].command[4] == "/planner/world_state/0"
 
 
+def test_ros2_process_bridge_builds_batch_publish_transcript_in_batch_index_order():
+    """Batch publish transcripts should capture replayable envelope and command order."""
+    bridge = Ros2ProcessBridge()
+    envelopes = [
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/1",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 1},
+            batch_index=1,
+        ),
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/0",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 0},
+            batch_index=0,
+        ),
+    ]
+
+    transcript = bridge.build_batch_publish_transcript(tuple(envelopes))
+
+    assert transcript["schema_version"] == 1
+    assert transcript["kind"] == "ros2_batch_publish_transcript"
+    assert transcript["publish_state"] == "planned"
+    assert transcript["batch_indices"] == [0, 1]
+    assert transcript["topic_sequence"] == ["/planner/world_state/0", "/planner/world_state/1"]
+    assert transcript["msg_type_sequence"] == ["robotflow_msgs/msg/PlannerWorldState", "robotflow_msgs/msg/PlannerWorldState"]
+    assert transcript["record_count"] == 2
+    assert transcript["observed_record_count"] == 2
+    assert transcript["replayable"] is True
+    assert transcript["input_envelope_sequence"][0]["batch_index"] == 0
+    assert transcript["command_sequence"][0][4] == "/planner/world_state/0"
+
+
 def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(monkeypatch):
     """Batch publish failures should report the failing batch index and topic."""
     bridge = Ros2ProcessBridge()
@@ -219,6 +252,10 @@ def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(mon
     assert manifest[-1]["topic"] == "/planner/world_state/1"
     assert manifest[-1]["returncode"] == 1
     assert manifest[-1]["stderr"] == "boom"
+    transcript = exc_info.value.batch_publish_transcript
+    assert transcript["publish_state"] == "failed"
+    assert transcript["observed_record_count"] == 2
+    assert transcript["record_sequence"][-1]["stderr"] == "boom"
 
 
 def test_ros2_process_bridge_rejects_invalid_batch_envelopes():
@@ -568,3 +605,6 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
     assert [item["batch_index"] for item in summary["trajectory_batch_publish_manifest"]] == [0, 1]
     assert summary["planner_batch_publish_manifest"][0]["returncode"] is None
     assert summary["trajectory_batch_publish_manifest"][0]["command"][4] == "/planner/joint_trajectory/0"
+    assert summary["planner_batch_publish_transcript"]["publish_state"] == "planned"
+    assert summary["trajectory_batch_publish_transcript"]["publish_state"] == "planned"
+    assert summary["planner_batch_publish_transcript"]["batch_indices"] == [0, 1]

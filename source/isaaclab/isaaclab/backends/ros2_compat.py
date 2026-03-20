@@ -18,6 +18,7 @@ from .planner_compat import JointMotionPlan, PlannerWorldObstacle, PlannerWorldS
 
 
 ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION = 1
+ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION = 1
 
 
 def _normalize_message_value(value: Any) -> Any:
@@ -399,6 +400,73 @@ class Ros2ProcessBridge:
             for batch_index, envelope in indexed_envelopes
         ]
 
+    def build_batch_publish_transcript(
+        self,
+        envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+        *,
+        once: bool = True,
+        records: list[Ros2BatchPublishRecord] | tuple[Ros2BatchPublishRecord, ...] | None = None,
+    ) -> dict[str, Any]:
+        """Build a replayable batch publish transcript for audit and deterministic replay."""
+
+        if not envelopes:
+            return {
+                "schema_version": ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION,
+                "kind": "ros2_batch_publish_transcript",
+                "publish_state": "planned",
+                "topic_root": None,
+                "message_count": 0,
+                "batch_indices": [],
+                "topic_sequence": [],
+                "msg_type_sequence": [],
+                "command_sequence": [],
+                "input_envelope_sequence": [],
+                "record_sequence": [],
+                "record_count": 0,
+                "observed_record_count": 0,
+                "success": None,
+                "replayable": True,
+            }
+
+        indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=_topic_root_for_batch(envelopes[0].topic))
+        planned_records = [
+            Ros2BatchPublishRecord(
+                batch_index=batch_index,
+                topic=envelope.topic,
+                msg_type=envelope.msg_type,
+                command=tuple(self.build_topic_pub_command(envelope, once=once)),
+            )
+            for batch_index, envelope in indexed_envelopes
+        ]
+        transcript_records = planned_records if records is None else list(records)
+        if len(transcript_records) > len(planned_records):
+            raise ValueError("record count cannot exceed planned batch size")
+        publish_state = "planned" if records is None else "published"
+        if records is not None and len(transcript_records) < len(planned_records):
+            publish_state = "failed"
+        elif records is not None and any(record.returncode not in (None, 0) for record in transcript_records):
+            publish_state = "failed"
+        success = None
+        if records is not None:
+            success = publish_state == "published" and len(transcript_records) == len(planned_records)
+        return {
+            "schema_version": ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION,
+            "kind": "ros2_batch_publish_transcript",
+            "publish_state": publish_state,
+            "topic_root": _topic_root_for_batch(envelopes[0].topic),
+            "message_count": len(indexed_envelopes),
+            "batch_indices": [batch_index for batch_index, _ in indexed_envelopes],
+            "topic_sequence": [envelope.topic for _, envelope in indexed_envelopes],
+            "msg_type_sequence": [envelope.msg_type for _, envelope in indexed_envelopes],
+            "command_sequence": [list(record.command) for record in planned_records],
+            "input_envelope_sequence": [envelope.state_dict() for _, envelope in indexed_envelopes],
+            "record_sequence": [record.state_dict() for record in transcript_records],
+            "record_count": len(planned_records),
+            "observed_record_count": len(transcript_records),
+            "success": success,
+            "replayable": True,
+        }
+
     def publish_batch_via_cli(
         self,
         envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
@@ -434,6 +502,11 @@ class Ros2ProcessBridge:
                     f"returncode={exc.returncode}"
                 )
                 error.batch_publish_manifest = [item.state_dict() for item in results]
+                error.batch_publish_transcript = self.build_batch_publish_transcript(
+                    envelopes,
+                    once=once,
+                    records=results,
+                )
                 raise error from exc
             results.append(
                 replace(

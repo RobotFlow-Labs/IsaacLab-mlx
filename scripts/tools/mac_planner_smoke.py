@@ -100,6 +100,8 @@ def main() -> int:
     trajectory_batch_envelopes = joint_motion_plan_batch_to_ros_envelopes(batch)
     trajectory_batch_roundtrip = joint_motion_plan_batch_from_ros_envelopes(tuple(reversed(trajectory_batch_envelopes)))
     ros_bridge = Ros2ProcessBridge()
+    planner_batch_publish_transcript = ros_bridge.build_batch_publish_transcript(planner_world_batch_envelopes)
+    trajectory_batch_publish_transcript = ros_bridge.build_batch_publish_transcript(trajectory_batch_envelopes)
 
     payload = {
         "planner": planner.state_dict(),
@@ -115,6 +117,8 @@ def main() -> int:
         == [item.state_dict() for item in batch],
         "planner_ros_batch_pub_commands": ros_bridge.build_topic_pub_batch_commands(planner_world_batch_envelopes),
         "trajectory_ros_batch_pub_commands": ros_bridge.build_topic_pub_batch_commands(trajectory_batch_envelopes),
+        "planner_ros_batch_publish_transcript": planner_batch_publish_transcript,
+        "trajectory_ros_batch_publish_transcript": trajectory_batch_publish_transcript,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
