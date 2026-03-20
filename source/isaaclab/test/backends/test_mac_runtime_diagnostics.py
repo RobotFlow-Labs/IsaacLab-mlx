@@ -35,6 +35,19 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
     assert "training-mac-native" not in payload["sim"]["supported_tasks"]["public_benchmark_groups"]
     assert payload["sim"]["supported_tasks"]["benchmark_task_groups"]["training-mac-native"] == ["train-cartpole"]
     assert payload["sensor"]["capabilities"]["analytic_camera_tasks"] is True
+    assert payload["sensor"]["generic_sensor_api"] == {
+        "proprioception": True,
+        "raycast": True,
+        "cameras": False,
+        "depth": False,
+        "segmentation": False,
+        "rgb": False,
+    }
+    assert payload["sensor"]["tooling_surface"] == {
+        "analytic_camera_tasks": True,
+        "external_stereo_capture": True,
+        "synthetic_camera_tasks": True,
+    }
     assert payload["planner"]["backend"] == "mac-planners"
 
 

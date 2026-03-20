@@ -634,6 +634,19 @@ class MacSensorBackend(SensorBackend):
             "backend": self.name,
             "capabilities": self.capabilities.__dict__,
             "implementation": "analytic-plane-raycast+synthetic-camera-tasks+external-stereo-depth-tooling",
+            "generic_sensor_api": {
+                "proprioception": True,
+                "raycast": True,
+                "cameras": False,
+                "depth": False,
+                "segmentation": False,
+                "rgb": False,
+            },
+            "tooling_surface": {
+                "analytic_camera_tasks": True,
+                "external_stereo_capture": True,
+                "synthetic_camera_tasks": True,
+            },
             "camera_contract": "synthetic-task-slices+external-capture-only",
         }
 

@@ -216,8 +216,22 @@ def test_create_sensor_backend_follows_runtime():
     assert mac.capabilities.rgb is False
     assert mac.capabilities.analytic_camera_tasks is True
     assert mac.capabilities.external_stereo_capture is True
-    assert mac.state_dict()["implementation"] == "analytic-plane-raycast+synthetic-camera-tasks+external-stereo-depth-tooling"
-    assert mac.state_dict()["camera_contract"] == "synthetic-task-slices+external-capture-only"
+    mac_state = mac.state_dict()
+    assert mac_state["implementation"] == "analytic-plane-raycast+synthetic-camera-tasks+external-stereo-depth-tooling"
+    assert mac_state["camera_contract"] == "synthetic-task-slices+external-capture-only"
+    assert mac_state["generic_sensor_api"] == {
+        "proprioception": True,
+        "raycast": True,
+        "cameras": False,
+        "depth": False,
+        "segmentation": False,
+        "rgb": False,
+    }
+    assert mac_state["tooling_surface"] == {
+        "analytic_camera_tasks": True,
+        "external_stereo_capture": True,
+        "synthetic_camera_tasks": True,
+    }
 
 
 def test_create_planner_backend_follows_runtime():
