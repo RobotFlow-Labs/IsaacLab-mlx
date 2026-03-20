@@ -223,6 +223,42 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         ),
     ),
     MacNativeTaskSpec(
+        key="ur10e-gear-assembly-2f140",
+        upstream_task_id="Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10e_gear_assembly_2f140_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-assembly",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10e gear-assembly slice for the Robotiq 2F-140 gripper. "
+            "The mac-native slice preserves the shaft-alignment and insertion workflow with "
+            "scalar insertion progress instead of full factory contact dynamics and ROS deployment semantics."
+        ),
+    ),
+    MacNativeTaskSpec(
+        key="ur10e-gear-assembly-2f85",
+        upstream_task_id="Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10e_gear_assembly_2f85_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-assembly",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10e gear-assembly slice for the Robotiq 2F-85 gripper. "
+            "The mac-native slice preserves the shaft-alignment and insertion workflow with "
+            "scalar insertion progress instead of full factory contact dynamics and ROS deployment semantics."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="franka-lift",
         upstream_task_id="Isaac-Lift-Cube-Franka-v0",
         family="manipulation",

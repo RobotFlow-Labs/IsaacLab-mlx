@@ -185,6 +185,70 @@ MAC_SAFE_TASK_SPECS = (
         ),
     },
     {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F140Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F140EnvCfg",
+            },
+            semantic_contract="reduced-analytic-assembly",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-140 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow with analytic pose tracking and scalar insertion progress instead of the full "
+                "contact-rich factory assembly and ROS deployment stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F140Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F140EnvCfg",
+            },
+            semantic_contract="reduced-analytic-assembly",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-140 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow with analytic pose tracking and scalar insertion progress instead of the full "
+                "contact-rich factory assembly and ROS deployment stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F85Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F85EnvCfg",
+            },
+            semantic_contract="reduced-analytic-assembly",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-85 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow with analytic pose tracking and scalar insertion progress instead of the full "
+                "contact-rich factory assembly and ROS deployment stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F85Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F85EnvCfg",
+            },
+            semantic_contract="reduced-analytic-assembly",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-85 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow with analytic pose tracking and scalar insertion progress instead of the full "
+                "contact-rich factory assembly and ROS deployment stack."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {

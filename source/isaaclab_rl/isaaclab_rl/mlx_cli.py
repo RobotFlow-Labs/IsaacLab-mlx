@@ -31,6 +31,8 @@ TASK_PREFIXES = {
     "openarm-bi-reach": "mlx-openarm-bi-reach",
     "ur10-reach": "mlx-ur10-reach",
     "ur10e-deploy-reach": "mlx-ur10e-deploy-reach",
+    "ur10e-gear-assembly-2f140": "mlx-ur10e-gear-assembly-2f140",
+    "ur10e-gear-assembly-2f85": "mlx-ur10e-gear-assembly-2f85",
     "franka-lift": "mlx-franka-lift",
     "openarm-lift": "mlx-openarm-lift",
     "franka-teddy-bear-lift": "mlx-franka-teddy-bear-lift",

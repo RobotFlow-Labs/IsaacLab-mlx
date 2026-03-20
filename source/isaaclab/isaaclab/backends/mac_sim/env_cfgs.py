@@ -465,6 +465,58 @@ class MacUR10ReachEnvCfg(MacUR10eDeployReachEnvCfg):
 
 
 @configclass
+class MacUR10eGearAssembly2F140EnvCfg(MacUR10eDeployReachEnvCfg):
+    """Reduced mac-native UR10e gear-assembly configuration for the Robotiq 2F-140 gripper."""
+
+    episode_length_s: float = 10.0
+    reach_reward_scale: float = 1.25
+    orientation_reward_scale: float = 0.9
+    success_bonus: float = 3.0
+    target_x_range: tuple[float, float] = (0.90, 1.06)
+    target_y_range: tuple[float, float] = (-0.26, -0.14)
+    target_z_range: tuple[float, float] = (0.02, 0.10)
+    target_roll_range: tuple[float, float] = (0.0, 0.0)
+    target_pitch_range: tuple[float, float] = (math.pi / 2.0, math.pi / 2.0)
+    target_yaw_range: tuple[float, float] = (-math.pi / 2.0, -math.pi / 2.0)
+
+    alignment_position_threshold: float = 0.055
+    alignment_orientation_threshold: float = 0.2
+    insertion_depth_max: float = 0.065
+    insertion_success_depth: float = 0.052
+    insertion_rate: float = 0.18
+    insertion_decay_rate: float = 0.08
+    insertion_reward_scale: float = 1.1
+    insertion_reward_gain: float = 6.0
+    gear_type_offsets_x: tuple[float, float, float] = (0.076125, 0.030375, -0.045375)
+    semantic_contract: str = "reduced-analytic-assembly"
+    upstream_alias_semantics_preserved: bool = False
+    gripper_variant: str = "2f140"
+    contract_notes: str = (
+        "This mac-native slice preserves the UR10e gear-assembly pose-command workflow with "
+        "analytic shaft alignment and scalar insertion progress rather than the full contact-rich "
+        "factory gear dynamics, gripper compliance, and ROS deployment stack."
+    )
+
+
+@configclass
+class MacUR10eGearAssembly2F85EnvCfg(MacUR10eGearAssembly2F140EnvCfg):
+    """Reduced mac-native UR10e gear-assembly configuration for the Robotiq 2F-85 gripper."""
+
+    target_x_range: tuple[float, float] = (0.88, 1.04)
+    target_z_range: tuple[float, float] = (0.03, 0.11)
+    insertion_depth_max: float = 0.055
+    insertion_success_depth: float = 0.044
+    insertion_rate: float = 0.16
+    insertion_reward_scale: float = 1.0
+    gripper_variant: str = "2f85"
+    contract_notes: str = (
+        "This mac-native slice preserves the UR10e gear-assembly pose-command workflow with "
+        "analytic shaft alignment and scalar insertion progress for the 2F-85 gripper instead of "
+        "the full factory contact dynamics, gripper compliance, and ROS deployment stack."
+    )
+
+
+@configclass
 class MacOpenArmReachEnvCfg(MacFrankaReachEnvCfg):
     """Reduced mac-native OpenArm unimanual reach configuration."""
 

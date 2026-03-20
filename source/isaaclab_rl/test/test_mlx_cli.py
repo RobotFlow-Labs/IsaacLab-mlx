@@ -339,6 +339,83 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert ur10e_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-pose"
     assert ur10e_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
+    for alias_task, canonical_task, checkpoint_name in (
+        ("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0", "ur10e-gear-assembly-2f140", "module-gear-2f140-alias"),
+        ("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0", "ur10e-gear-assembly-2f85", "module-gear-2f85-alias"),
+    ):
+        eval_output_path = tmp_path / f"{checkpoint_name}-eval.json"
+        eval_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "evaluate",
+                "--task",
+                alias_task,
+                "--num-envs",
+                "8",
+                "--episodes",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--max-steps",
+                "256",
+                "--json-out",
+                str(eval_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert eval_result.returncode == 0, eval_result.stderr
+        eval_payload = json.loads(eval_output_path.read_text(encoding="utf-8"))
+        assert eval_payload["task"] == canonical_task
+        assert eval_payload["episodes_completed"] == 1
+        assert eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-assembly"
+        assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+        train_output_path = tmp_path / f"{checkpoint_name}-train.json"
+        checkpoint_path = tmp_path / f"{checkpoint_name}-train-policy.npz"
+        train_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "train",
+                "--task",
+                alias_task.replace("-Play", ""),
+                "--num-envs",
+                "8",
+                "--updates",
+                "1",
+                "--rollout-steps",
+                "8",
+                "--epochs-per-update",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--checkpoint",
+                str(checkpoint_path),
+                "--json-out",
+                str(train_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert train_result.returncode == 0, train_result.stderr
+        train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
+        assert train_payload["task"] == canonical_task
+        assert Path(train_payload["checkpoint_path"]).exists()
+        assert train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-assembly"
+        assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     train_result = subprocess.run(
         [
             sys.executable,

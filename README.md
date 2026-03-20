@@ -45,8 +45,10 @@ What works today:
 - trainable `MLX + mac-sim` Franka reach, cube-lift, teddy-bear lift, instance-randomized two-cube stack, two-cube stack, three-cube stack, bin-anchored three-cube stack, cabinet-drawer, and open-drawer slices with deterministic analytic kinematics, lightweight grasp/open/stack logic, and benchmark diagnostics that now report `hotpath: "mlx-metal-ee"` for the shared Franka end-effector path when the Metal kernel is available
 - trainable `MLX + mac-sim` OpenArm reach, bimanual reach, cube-lift, and open-drawer slices with explicit reduced-contract metadata, deterministic analytic surrogate kinematics, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
 - trainable `MLX + mac-sim` UR10 reach and UR10e deploy-reach slices with deterministic analytic pose tracking, reduced-contract metadata (`semantic_contract="reduced-analytic-pose"`), benchmark coverage, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
+- trainable `MLX + mac-sim` UR10e gear-assembly slices for the Robotiq 2F-140 and 2F-85 grippers with explicit reduced-contract metadata (`semantic_contract="reduced-analytic-assembly"`), insertion-aware policy observations, benchmark coverage, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
 - upstream-compatible Franka reach/lift/stack/open-drawer controller variants now resolve through the lazy task registry, public `isaaclab_rl.mlx` wrapper, and installed MLX CLI onto the existing reduced mac-native slices instead of failing on macOS import/runtime seams
 - upstream-compatible `Isaac-Deploy-Reach-UR10e-v0` and `Isaac-Deploy-Reach-UR10e-Play-v0` identifiers now resolve through the same lazy registry, public wrapper, and installed CLI onto the canonical `ur10e-deploy-reach` slice while keeping the reduced-contract metadata explicit
+- upstream-compatible `Isaac-Deploy-GearAssembly-UR10e-2F140-v0`, `Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0`, `Isaac-Deploy-GearAssembly-UR10e-2F85-v0`, and `Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0` identifiers now resolve through the same lazy registry, public wrapper, and installed CLI onto the canonical `ur10e-gear-assembly-2f140` and `ur10e-gear-assembly-2f85` slices while keeping the reduced-contract metadata explicit
 - richer Franka manipulation families such as stack visuomotor/cosmos, blueprint, and skillgen now stay discoverable on mac while failing explicitly through `sim-backend=isaacsim` gating instead of disappearing or crashing late; the upstream `Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0` alias resolves to the reduced public `franka-bin-stack` slice with explicit `semantic_contract="reduced-no-mimic"` metadata
 - a first mac-native analytic terrain raycast / height-scan sensor substrate for locomotion tasks
 - eval-only synthetic cartpole RGB/depth camera slices with deterministic analytic `100x100` observations, upstream-aligned reset ranges, and sensor benchmark coverage
@@ -107,7 +109,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 22 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer, plus synthetic cartpole RGB/depth camera variants for 24 public MLX/mac task IDs overall. Twenty of those public tasks are trainable end-to-end on the MLX/mac path. The task capability matrix below is the authoritative public support surface.
+The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 24 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, UR10e gear-assembly 2F-140, UR10e gear-assembly 2F-85, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer, plus synthetic cartpole RGB/depth camera variants for 26 public MLX/mac task IDs overall. Twenty-two of those public tasks are trainable end-to-end on the MLX/mac path. The task capability matrix below is the authoritative public support surface.
 
 ### Kernel backend
 
@@ -165,7 +167,7 @@ This is the current public support contract for runtime combinations, not just w
 
 | Platform / Runtime | Status | Notes |
 | --- | --- | --- |
-| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Shared generic batched articulation/root-state substrate plus the current mac-native task slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, OpenArm open-drawer, and synthetic cartpole RGB/depth camera tasks |
+| Apple Silicon + `mlx` + `metal` + `mac-sim` | Supported | Shared generic batched articulation/root-state substrate plus the current mac-native task slice: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, UR10e gear-assembly 2F-140, UR10e gear-assembly 2F-85, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, OpenArm open-drawer, and synthetic cartpole RGB/depth camera tasks |
 | Apple Silicon + `mlx` + `cpu` + `mac-sim` | Supported for correctness/debug | Useful for bring-up only, not benchmark claims |
 | Linux/NVIDIA + `torch-cuda` + `warp` + `isaacsim` | Supported reference path | Upstream-compatible CUDA / Isaac Sim runtime |
 | Apple Silicon + `isaacsim` runtime | Unsupported | This fork does not ship Isaac Sim / Omniverse parity on macOS |
@@ -352,6 +354,10 @@ reach_train_payload = train_mlx_task("franka-reach", num_envs=64, updates=5)
 reach_payload = evaluate_mlx_task("franka-reach", checkpoint=reach_train_payload["checkpoint_path"], episodes=2)
 ur10e_train_payload = train_mlx_task("ur10e-deploy-reach", num_envs=64, updates=5)
 ur10e_payload = evaluate_mlx_task("ur10e-deploy-reach", checkpoint=ur10e_train_payload["checkpoint_path"], episodes=2)
+gear_2f140_train_payload = train_mlx_task("ur10e-gear-assembly-2f140", num_envs=64, updates=5)
+gear_2f140_payload = evaluate_mlx_task("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0", checkpoint=gear_2f140_train_payload["checkpoint_path"], episodes=2)
+gear_2f85_train_payload = train_mlx_task("ur10e-gear-assembly-2f85", num_envs=64, updates=5)
+gear_2f85_payload = evaluate_mlx_task("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0", checkpoint=gear_2f85_train_payload["checkpoint_path"], episodes=2)
 lift_train_payload = train_mlx_task("franka-lift", num_envs=64, updates=5)
 lift_payload = evaluate_mlx_task("franka-lift", checkpoint=lift_train_payload["checkpoint_path"], episodes=2)
 stack_train_payload = train_mlx_task("franka-stack", num_envs=64, updates=5)
@@ -610,6 +616,7 @@ PYTHONPATH=.:source/isaaclab:source/isaaclab_rl .venv/bin/pytest \
   source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
   source/isaaclab/test/backends/test_mac_franka_reach.py \
   source/isaaclab/test/backends/test_mac_ur10e_deploy_reach.py \
+  source/isaaclab/test/backends/test_mac_ur10e_gear_assembly.py \
   source/isaaclab/test/backends/test_mac_franka_lift.py \
   source/isaaclab_rl/test/test_mlx_cli.py \
   source/isaaclab/test/backends/test_mac_h1.py \
@@ -661,7 +668,7 @@ The benchmark emits:
 
 - per-task `env_steps_per_s` for the current MLX/mac-sim env slices
 - stable named task groups derived from the typed manifest in [`source/isaaclab/isaaclab/backends/supported_tasks.py`](source/isaaclab/isaaclab/backends/supported_tasks.py)
-- a stable public `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer
+- a stable public `current-mac-native` task group for cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, UR10e gear-assembly 2F-140, UR10e gear-assembly 2F-85, Franka lift, OpenArm lift, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer
 - a stable `sensor-mac-native` benchmark projection that extends the public camera slices with benchmark-only height-scan variants for `anymal-c-flat` and `h1-flat`
 - a stable `full` benchmark projection that combines the public task surface with the benchmark-only sensor/training rows for one normalized dashboard/trend artifact
 - runtime metadata including compute, kernel, sensor, and planner backend selection
@@ -759,6 +766,8 @@ Current task capability matrix:
 | `Isaac-Reach-OpenArm-Bi-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic dual-arm OpenArm reach slice with explicit `semantic_contract="reduced-openarm-bimanual-surrogate"` metadata, dual-arm terminal metrics, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Reach-OpenArm-Bi-Play-v0` |
 | `Isaac-Reach-UR10-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic UR10 reach slice with explicit `semantic_contract="reduced-analytic-pose"` metadata, pose-tracking terminal metrics, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Reach-UR10-Play-v0` |
 | `Isaac-Deploy-Reach-UR10e-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic UR10e deploy-reach slice with explicit `semantic_contract="reduced-analytic-pose"` metadata, pose-command terminal metrics, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Deploy-Reach-UR10e-Play-v0` |
+| `Isaac-Deploy-GearAssembly-UR10e-2F140-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic UR10e gear-assembly slice for the Robotiq 2F-140 gripper with explicit `semantic_contract="reduced-analytic-assembly"` metadata, insertion-aware policy observations, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0` |
+| `Isaac-Deploy-GearAssembly-UR10e-2F85-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic UR10e gear-assembly slice for the Robotiq 2F-85 gripper with explicit `semantic_contract="reduced-analytic-assembly"` metadata, insertion-aware policy observations, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0` |
 | `Isaac-Lift-Cube-Franka-v0` | Yes | Yes | `current-mac-native` | Yes | Analytic lift slice with lightweight grasp logic and MLX PPO train/replay support; compatible upstream aliases include `Isaac-Lift-Cube-Franka-IK-Abs-v0` and `Isaac-Lift-Cube-Franka-IK-Rel-v0` |
 | `Isaac-Lift-Cube-OpenArm-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced analytic OpenArm lift slice with explicit `semantic_contract="reduced-openarm-surrogate"` metadata, lightweight grasp logic, and shared MLX PPO train/replay support; compatible upstream alias also includes `Isaac-Lift-Cube-OpenArm-Play-v0` |
 | `Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0` | Yes | Yes | `current-mac-native` | Yes | Reduced plush-object lift slice mapped onto the analytic lift substrate with shared MLX PPO train/replay support and benchmark diagnostics keyed to the teddy-bear object contract |
@@ -779,7 +788,7 @@ Implementation entrypoints:
 - quadcopter environment in [`source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py`](source/isaaclab/isaaclab/backends/mac_sim/quadcopter.py)
 - ANYmal-C flat and rough locomotion environments in [`source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py`](source/isaaclab/isaaclab/backends/mac_sim/anymal_c.py)
 - H1 flat locomotion environment and trainer in [`source/isaaclab/isaaclab/backends/mac_sim/h1.py`](source/isaaclab/isaaclab/backends/mac_sim/h1.py)
-- Franka reach/OpenArm reach/OpenArm bimanual reach/UR10 reach/UR10e deploy-reach/lift/OpenArm lift/teddy-bear-lift/stack-instance-randomize/stack/stack-RGB/bin-stack/cabinet/open-drawer/OpenArm open-drawer manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
+- Franka reach/OpenArm reach/OpenArm bimanual reach/UR10 reach/UR10e deploy-reach/UR10e gear-assembly/lift/OpenArm lift/teddy-bear-lift/stack-instance-randomize/stack/stack-RGB/bin-stack/cabinet/open-drawer/OpenArm open-drawer manipulation environments in [`source/isaaclab/isaaclab/backends/mac_sim/manipulation.py`](source/isaaclab/isaaclab/backends/mac_sim/manipulation.py)
 - analytic terrain raycast / height-scan substrate in [`source/isaaclab/isaaclab/backends/mac_sim/sensors.py`](source/isaaclab/isaaclab/backends/mac_sim/sensors.py)
 - backend-local macOS external camera discovery/capture helpers in [`source/isaaclab/isaaclab/backends/mac_sim/cameras.py`](source/isaaclab/isaaclab/backends/mac_sim/cameras.py)
 - backend-local MLX stereo/depth helpers in [`source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py`](source/isaaclab/isaaclab/backends/mac_sim/stereo_depth.py)
@@ -808,6 +817,7 @@ The cartpole path preserves the important upstream task semantics:
 - H1 rough preserves the same H1 policy layout while fixing the configured observation width to include the nine default height-scan channels used by the rough task
 - Franka reach preserves a deterministic joint-space control/reward loop with explicit target-distance semantics and now exposes checkpointed MLX PPO training/replay
 - UR10e deploy-reach preserves a deterministic pose-command reach workflow with analytic end-effector tracking, explicit target-distance and orientation-error terminal metrics, and reduced-contract metadata so the mac-native slice stays honest about the upstream deployment-oriented semantics it does not fully preserve
+- UR10e gear assembly preserves the upstream-sized 19D policy observation contract by encoding shaft insertion progress back into the observed shaft pose, then exposes explicit reduced-contract metadata so the 2F-140 and 2F-85 slices stay honest about the factory-contact and ROS deployment semantics they do not fully preserve
 - OpenArm reach preserves the single-arm reach workflow while exposing explicit reduced-contract metadata and a 7-DoF analytic surrogate instead of pretending exact OpenArm morphology parity
 - OpenArm bimanual reach preserves a dual-arm reach workflow with explicit left/right target-distance terminal metrics and reduced-contract metadata instead of pretending exact OpenArm body-stack parity
 - UR10 reach preserves a deterministic pose-tracking reach workflow with analytic end-effector tracking, explicit target-distance and orientation-error terminal metrics, and reduced-contract metadata rather than implying broader UR controller-stack parity

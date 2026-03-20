@@ -27,6 +27,8 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "openarm-bi-reach",
         "ur10-reach",
         "ur10e-deploy-reach",
+        "ur10e-gear-assembly-2f140",
+        "ur10e-gear-assembly-2f85",
         "franka-lift",
         "openarm-lift",
         "franka-teddy-bear-lift",

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T00:21:42Z",
+  "generated_at": "2026-03-20T00:48:18Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 26,
+  "task_count": 28,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -673,6 +673,58 @@
           "final_policy_std": 0.7770656943321228,
           "final_reward_mean": 0.009998437948524952,
           "final_target_distance_mean": 0.3093169629573822
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "ur10e-gear-assembly-2f140": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_assembled_ratio": 0.0,
+          "final_ee_height_mean": 0.41429030895233154,
+          "final_gear_type_mean": 1.125,
+          "final_insert_depth_mean": 0.0,
+          "final_joint_pos_abs_mean": 1.0599894523620605,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.9389723539352417,
+          "final_policy_mean": -0.06945309787988663,
+          "final_policy_std": 0.7835043668746948,
+          "final_reward_mean": 0.01597747392952442,
+          "final_target_distance_mean": 0.38411426544189453
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "ur10e-gear-assembly-2f85": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_assembled_ratio": 0.0,
+          "final_ee_height_mean": 0.41429030895233154,
+          "final_gear_type_mean": 1.125,
+          "final_insert_depth_mean": 0.0,
+          "final_joint_pos_abs_mean": 1.0599894523620605,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.9389723539352417,
+          "final_policy_mean": -0.06997941434383392,
+          "final_policy_std": 0.782200276851654,
+          "final_reward_mean": 0.015466186217963696,
+          "final_target_distance_mean": 0.3767542243003845
         }
       },
       "cpu_fallback": false,

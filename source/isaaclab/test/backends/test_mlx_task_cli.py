@@ -47,6 +47,8 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "openarm-bi-reach",
         "ur10-reach",
         "ur10e-deploy-reach",
+        "ur10e-gear-assembly-2f140",
+        "ur10e-gear-assembly-2f85",
         "franka-lift",
         "openarm-lift",
         "franka-teddy-bear-lift",
@@ -227,8 +229,10 @@ def test_shared_task_cli_evaluates_new_reduced_manipulation_manual_slices():
         ("openarm-reach", 30),
         ("openarm-bi-reach", 31),
         ("ur10-reach", 32),
-        ("openarm-lift", 33),
-        ("openarm-open-drawer", 34),
+        ("ur10e-gear-assembly-2f140", 33),
+        ("ur10e-gear-assembly-2f85", 34),
+        ("openarm-lift", 35),
+        ("openarm-open-drawer", 36),
     )
 
     for task, seed in cases:
@@ -298,8 +302,10 @@ def test_shared_task_cli_trains_new_reduced_manipulation_slices(tmp_path: Path):
         ("openarm-reach", 40),
         ("openarm-bi-reach", 41),
         ("ur10-reach", 42),
-        ("openarm-lift", 43),
-        ("openarm-open-drawer", 44),
+        ("ur10e-gear-assembly-2f140", 43),
+        ("ur10e-gear-assembly-2f85", 44),
+        ("openarm-lift", 45),
+        ("openarm-open-drawer", 46),
     )
 
     for task, seed in cases:

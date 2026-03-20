@@ -29,6 +29,10 @@ SAFE_TASK_IDS = (
     "Isaac-Reach-UR10-v0",
     "Isaac-Deploy-Reach-UR10e-v0",
     "Isaac-Deploy-Reach-UR10e-Play-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0",
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
@@ -97,6 +101,10 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     ur10_reach_spec = gym.spec("Isaac-Reach-UR10-v0")
     ur10e_spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
     ur10e_play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+    ur10e_gear_2f140_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-v0")
+    ur10e_gear_2f140_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0")
+    ur10e_gear_2f85_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
+    ur10e_gear_2f85_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
     openarm_lift_spec = gym.spec("Isaac-Lift-Cube-OpenArm-v0")
     openarm_open_drawer_spec = gym.spec("Isaac-Open-Drawer-OpenArm-v0")
     assert openarm_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
@@ -109,6 +117,14 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_gear_2f140_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert ur10e_gear_2f140_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_gear_2f140_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert ur10e_gear_2f140_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_gear_2f85_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert ur10e_gear_2f85_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
@@ -360,6 +376,60 @@ def test_parse_env_cfg_supports_ur10e_deploy_reach_task_cfg(monkeypatch):
     assert spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+
+
+def test_parse_env_cfg_supports_ur10e_gear_assembly_task_cfgs(monkeypatch):
+    """parse_env_cfg should resolve the reduced UR10e gear-assembly configs on the mac path."""
+
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+    registry = importlib.import_module("isaaclab_tasks.registry")
+
+    cfg_2f140 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-v0", device="cpu", num_envs=6)
+    play_cfg_2f140 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0", device="cpu", num_envs=7)
+    cfg_2f85 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-v0", device="cpu", num_envs=8)
+    play_cfg_2f85 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0", device="cpu", num_envs=9)
+    spec_2f140 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-v0")
+    play_spec_2f140 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0")
+    spec_2f85 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
+    play_spec_2f85 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
+
+    assert type(cfg_2f140).__name__ == "MacUR10eGearAssembly2F140EnvCfg"
+    assert cfg_2f140.num_envs == 6
+    assert cfg_2f140.action_space == 6
+    assert cfg_2f140.observation_space == 19
+    assert cfg_2f140.semantic_contract == "reduced-analytic-assembly"
+    assert cfg_2f140.upstream_alias_semantics_preserved is False
+    assert cfg_2f140.gripper_variant == "2f140"
+    assert type(play_cfg_2f140).__name__ == "MacUR10eGearAssembly2F140EnvCfg"
+    assert play_cfg_2f140.num_envs == 7
+    assert play_cfg_2f140.action_space == 6
+    assert play_cfg_2f140.observation_space == 19
+    assert type(cfg_2f85).__name__ == "MacUR10eGearAssembly2F85EnvCfg"
+    assert cfg_2f85.num_envs == 8
+    assert cfg_2f85.action_space == 6
+    assert cfg_2f85.observation_space == 19
+    assert cfg_2f85.semantic_contract == "reduced-analytic-assembly"
+    assert cfg_2f85.upstream_alias_semantics_preserved is False
+    assert cfg_2f85.gripper_variant == "2f85"
+    assert type(play_cfg_2f85).__name__ == "MacUR10eGearAssembly2F85EnvCfg"
+    assert play_cfg_2f85.num_envs == 9
+    assert play_cfg_2f85.action_space == 6
+    assert play_cfg_2f85.observation_space == 19
+    assert spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert play_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert play_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert play_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
+    assert play_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
 
 def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):

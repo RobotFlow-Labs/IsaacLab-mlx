@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Mac-native Franka manipulation slices for the MLX/mac-sim path."""
+"""Mac-native manipulation slices for the MLX/mac-sim path."""
 
 from __future__ import annotations
 
@@ -41,6 +41,8 @@ from .env_cfgs import (
     MacFrankaStackRgbEnvCfg,
     MacFrankaTeddyBearLiftEnvCfg,
     MacUR10ReachEnvCfg,
+    MacUR10eGearAssembly2F140EnvCfg,
+    MacUR10eGearAssembly2F85EnvCfg,
     MacUR10eDeployReachEnvCfg,
 )
 from .hotpath import (
@@ -133,6 +135,48 @@ class MacUR10ReachTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.2
     checkpoint_path: str = "logs/mlx/ur10_reach_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacUR10eGearAssembly2F140TrainCfg:
+    """Training configuration for the reduced UR10e 2F-140 gear-assembly slice."""
+
+    env: MacUR10eGearAssembly2F140EnvCfg = MacUR10eGearAssembly2F140EnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.2
+    checkpoint_path: str = "logs/mlx/ur10e_gear_assembly_2f140_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacUR10eGearAssembly2F85TrainCfg:
+    """Training configuration for the reduced UR10e 2F-85 gear-assembly slice."""
+
+    env: MacUR10eGearAssembly2F85EnvCfg = MacUR10eGearAssembly2F85EnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.2
+    checkpoint_path: str = "logs/mlx/ur10e_gear_assembly_2f85_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -714,6 +758,101 @@ class MacUR10ReachSimBackend(MacUR10eDeployReachSimBackend):
         payload["semantic_contract"] = self.cfg.semantic_contract
         payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
         return payload
+
+
+class MacUR10eGearAssemblySimBackend(MacUR10eDeployReachSimBackend):
+    """A reduced batched UR10e gear-assembly backend on MLX/mac-sim."""
+
+    task_key = "ur10e-gear-assembly"
+    upstream_task_id = "Isaac-Deploy-GearAssembly-UR10e-v0"
+
+    def __init__(
+        self,
+        cfg: MacUR10eGearAssembly2F140EnvCfg | MacUR10eGearAssembly2F85EnvCfg,
+        *,
+        reset_sampler: DeterministicResetSampler | None = None,
+    ):
+        self.base_shaft_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.shaft_depth = mx.zeros((cfg.num_envs,), dtype=mx.float32)
+        self.assembled = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.gear_type_id = mx.zeros((cfg.num_envs,), dtype=mx.int32)
+        super().__init__(cfg, reset_sampler=reset_sampler)
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        super().reset_envs(env_ids)
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        gear_type_id = self.reset_sampler.integers((rows,), 0, len(self.cfg.gear_type_offsets_x), dtype=mx.int32)
+        shaft_offsets = mx.array(
+            [self.cfg.gear_type_offsets_x[int(index)] for index in gear_type_id.tolist()],
+            dtype=mx.float32,
+        )
+        self.base_shaft_pos_w[ids] = self.target_pos_w[ids]
+        self.target_pos_w[ids, 0] = self.target_pos_w[ids, 0] + shaft_offsets
+        self.shaft_depth[ids] = 0.0
+        self.assembled[ids] = False
+        self.gear_type_id[ids] = gear_type_id
+
+    def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
+        super().step(render=render, update_fabric=update_fabric)
+        aligned = (self.goal_distance() <= self.cfg.alignment_position_threshold) & (
+            self.orientation_error() <= self.cfg.alignment_orientation_threshold
+        )
+        depth_delta = mx.where(
+            aligned,
+            self.cfg.insertion_rate * self.physics_dt,
+            -self.cfg.insertion_decay_rate * self.physics_dt,
+        )
+        self.shaft_depth = mx.clip(self.shaft_depth + depth_delta, 0.0, self.cfg.insertion_depth_max)
+        self.assembled = self.shaft_depth >= self.cfg.insertion_success_depth
+
+    def insertion_gap(self) -> mx.array:
+        return mx.maximum(self.cfg.insertion_success_depth - self.shaft_depth, 0.0)
+
+    def insertion_progress_ratio(self) -> mx.array:
+        return mx.clip(self.shaft_depth / self.cfg.insertion_depth_max, 0.0, 1.0)
+
+    def shaft_pos_w(self) -> mx.array:
+        """Return a 3D shaft pose observation that encodes insertion progress without widening the task contract."""
+
+        return mx.concatenate(
+            (self.target_pos_w[:, :1] - self.shaft_depth[:, None], self.target_pos_w[:, 1:]),
+            axis=1,
+        )
+
+    def shaft_quat_w(self) -> mx.array:
+        """Return the analytic shaft orientation used by the reduced gear-assembly slice."""
+
+        return self.target_quat_w
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = self.task_key
+        payload["upstream_task_id"] = self.upstream_task_id
+        payload["semantic_contract"] = self.cfg.semantic_contract
+        payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
+        payload["contract_notes"] = self.cfg.contract_notes
+        payload["subsystems"]["gear_assembly_logic"] = True
+        payload["subsystems"]["gear_type_randomization"] = True
+        payload["gear_type_offsets_x"] = list(self.cfg.gear_type_offsets_x)
+        payload["gripper_variant"] = self.cfg.gripper_variant
+        return payload
+
+
+class MacUR10eGearAssembly2F140SimBackend(MacUR10eGearAssemblySimBackend):
+    """Reduced UR10e gear-assembly backend for the Robotiq 2F-140 variant."""
+
+    task_key = "ur10e-gear-assembly-2f140"
+    upstream_task_id = "Isaac-Deploy-GearAssembly-UR10e-2F140-v0"
+
+
+class MacUR10eGearAssembly2F85SimBackend(MacUR10eGearAssemblySimBackend):
+    """Reduced UR10e gear-assembly backend for the Robotiq 2F-85 variant."""
+
+    task_key = "ur10e-gear-assembly-2f85"
+    upstream_task_id = "Isaac-Deploy-GearAssembly-UR10e-2F85-v0"
 
 
 class MacOpenArmReachSimBackend(MacFrankaReachSimBackend):
@@ -1730,6 +1869,117 @@ class MacUR10ReachEnv(MacUR10eDeployReachEnv):
         self.reset()
 
 
+class MacUR10eGearAssemblyEnv(MacUR10eDeployReachEnv):
+    """Vectorized reduced UR10e gear-assembly task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10eGearAssembly2F140EnvCfg | MacUR10eGearAssembly2F85EnvCfg | None = None):
+        self.cfg = cfg or MacUR10eGearAssembly2F140EnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacUR10eGearAssemblySimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+    def step(self, actions: Any) -> tuple[dict[str, mx.array], mx.array, mx.array, mx.array, dict[str, Any]]:
+        self._pre_physics_step(actions)
+        for _ in range(self.cfg.decimation):
+            self._apply_action()
+            self.sim_backend.step(render=False)
+
+        self.episode_length_buf = self.episode_length_buf + 1
+        self.reward_buf = self._get_rewards()
+        self.episode_return_buf = self.episode_return_buf + self.reward_buf
+        self.reset_terminated, self.reset_time_outs = self._get_dones()
+        self.reset_buf = self.reset_terminated | self.reset_time_outs
+        step_reward = mx.array(self.reward_buf)
+        step_terminated = mx.array(self.reset_terminated)
+        step_time_outs = mx.array(self.reset_time_outs)
+
+        reset_ids = [index for index, flag in enumerate(self.reset_buf.tolist()) if flag]
+        extras: dict[str, Any] = {}
+        if reset_ids:
+            ids = mx.array(reset_ids, dtype=mx.int32)
+            extras = {
+                "reset_env_ids": reset_ids,
+                "completed_lengths": [int(self.episode_length_buf[index].item()) for index in reset_ids],
+                "completed_returns": [float(self.episode_return_buf[index].item()) for index in reset_ids],
+                "terminated_env_ids": [index for index in reset_ids if bool(step_terminated[index].item())],
+                "truncated_env_ids": [index for index in reset_ids if bool(step_time_outs[index].item())],
+                "final_policy_observations": self._build_policy_observations()[ids],
+                "final_task_metrics": {
+                    "insert_depth": self.sim_backend.shaft_depth[ids],
+                    "assembled": self.sim_backend.assembled[ids].astype(mx.float32),
+                    "gear_type_id": self.sim_backend.gear_type_id[ids].astype(mx.float32),
+                },
+            }
+            self._reset_idx(reset_ids)
+
+        self.obs_buf = self._get_observations()
+        return self.obs_buf, step_reward, step_terminated, step_time_outs, extras
+
+    def _build_policy_observations(self) -> mx.array:
+        joint_pos, joint_vel = self.sim_backend.get_joint_state(None)
+        return mx.concatenate((joint_pos, joint_vel, self.sim_backend.shaft_pos_w(), self.sim_backend.shaft_quat_w()), axis=-1)
+
+    def _get_rewards(self) -> mx.array:
+        distance = self.sim_backend.goal_distance()
+        orientation_error = self.sim_backend.orientation_error()
+        reach_reward = self.cfg.reach_reward_scale * mx.exp(-self.cfg.position_reward_gain * distance)
+        orientation_reward = self.cfg.orientation_reward_scale * mx.exp(-self.cfg.orientation_reward_gain * orientation_error)
+        insert_reward = self.cfg.insertion_reward_scale * mx.exp(
+            -self.cfg.insertion_reward_gain * self.sim_backend.insertion_gap()
+        )
+        action_penalty = self.cfg.action_rate_penalty_scale * mx.sum(mx.square(self._actions - self._previous_actions), axis=1)
+        joint_vel_penalty = self.cfg.joint_vel_penalty_scale * mx.sum(mx.square(self.sim_backend.state.joint_vel), axis=1)
+        success_bonus = self.cfg.success_bonus * self.sim_backend.assembled.astype(mx.float32)
+        return (reach_reward + orientation_reward + insert_reward + action_penalty + joint_vel_penalty + success_bonus) * self.step_dt
+
+    def _get_dones(self) -> tuple[mx.array, mx.array]:
+        success = mx.array(self.sim_backend.assembled)
+        time_out = self.episode_length_buf >= self.max_episode_length
+        return success, time_out
+
+
+class MacUR10eGearAssembly2F140Env(MacUR10eGearAssemblyEnv):
+    """Vectorized reduced UR10e 2F-140 gear-assembly task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10eGearAssembly2F140EnvCfg | None = None):
+        self.cfg = cfg or MacUR10eGearAssembly2F140EnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacUR10eGearAssembly2F140SimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self.reset()
+
+
+class MacUR10eGearAssembly2F85Env(MacUR10eGearAssemblyEnv):
+    """Vectorized reduced UR10e 2F-85 gear-assembly task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10eGearAssembly2F85EnvCfg | None = None):
+        self.cfg = cfg or MacUR10eGearAssembly2F85EnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacUR10eGearAssembly2F85SimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self.reset()
+
+
 class MacOpenArmReachEnv(MacFrankaReachEnv):
     """Vectorized reduced OpenArm reach task for MLX/mac-sim."""
 
@@ -2332,11 +2582,19 @@ def _ppo_loss(
 
 
 def _train_reach_like_policy(
-    cfg: MacFrankaReachTrainCfg | MacUR10eDeployReachTrainCfg | MacUR10ReachTrainCfg | MacOpenArmReachTrainCfg | MacOpenArmBiReachTrainCfg,
+    cfg: MacFrankaReachTrainCfg
+    | MacUR10eDeployReachTrainCfg
+    | MacUR10ReachTrainCfg
+    | MacUR10eGearAssembly2F140TrainCfg
+    | MacUR10eGearAssembly2F85TrainCfg
+    | MacOpenArmReachTrainCfg
+    | MacOpenArmBiReachTrainCfg,
     *,
     env_factory: type[MacFrankaReachEnv]
     | type[MacUR10eDeployReachEnv]
     | type[MacUR10ReachEnv]
+    | type[MacUR10eGearAssembly2F140Env]
+    | type[MacUR10eGearAssembly2F85Env]
     | type[MacOpenArmReachEnv]
     | type[MacOpenArmBiReachEnv],
     task_id: str,
@@ -2452,6 +2710,10 @@ def _train_reach_like_policy(
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
+            extra={
+                "semantic_contract": getattr(cfg.env, "semantic_contract", "aligned"),
+                "upstream_alias_semantics_preserved": getattr(cfg.env, "upstream_alias_semantics_preserved", True),
+            },
         ),
     )
     return {
@@ -2503,9 +2765,17 @@ def _play_reach_like_policy(
     env_factory: type[MacFrankaReachEnv]
     | type[MacUR10eDeployReachEnv]
     | type[MacUR10ReachEnv]
+    | type[MacUR10eGearAssembly2F140Env]
+    | type[MacUR10eGearAssembly2F85Env]
     | type[MacOpenArmReachEnv]
     | type[MacOpenArmBiReachEnv],
-    env_cfg: MacFrankaReachEnvCfg | MacUR10eDeployReachEnvCfg | MacUR10ReachEnvCfg | MacOpenArmReachEnvCfg | MacOpenArmBiReachEnvCfg,
+    env_cfg: MacFrankaReachEnvCfg
+    | MacUR10eDeployReachEnvCfg
+    | MacUR10ReachEnvCfg
+    | MacUR10eGearAssembly2F140EnvCfg
+    | MacUR10eGearAssembly2F85EnvCfg
+    | MacOpenArmReachEnvCfg
+    | MacOpenArmBiReachEnvCfg,
     episodes: int = 3,
     hidden_dim: int | None = None,
     default_hidden_dim: int = 128,
@@ -2607,6 +2877,28 @@ def train_ur10_reach_policy(cfg: MacUR10ReachTrainCfg) -> dict[str, Any]:
     )
 
 
+def train_ur10e_gear_assembly_2f140_policy(cfg: MacUR10eGearAssembly2F140TrainCfg) -> dict[str, Any]:
+    """Train a reduced continuous-control UR10e 2F-140 gear-assembly policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacUR10eGearAssembly2F140Env,
+        task_id="Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
+        log_prefix="mlx-ur10e-gear-assembly-2f140",
+    )
+
+
+def train_ur10e_gear_assembly_2f85_policy(cfg: MacUR10eGearAssembly2F85TrainCfg) -> dict[str, Any]:
+    """Train a reduced continuous-control UR10e 2F-85 gear-assembly policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacUR10eGearAssembly2F85Env,
+        task_id="Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
+        log_prefix="mlx-ur10e-gear-assembly-2f85",
+    )
+
+
 def play_ur10e_deploy_reach_policy(
     checkpoint_path: str,
     *,
@@ -2639,6 +2931,44 @@ def play_ur10_reach_policy(
     return _play_reach_like_policy(
         checkpoint_path,
         env_factory=MacUR10ReachEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_ur10e_gear_assembly_2f140_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10eGearAssembly2F140EnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced UR10e 2F-140 gear-assembly policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10eGearAssembly2F140EnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10eGearAssembly2F140Env,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_ur10e_gear_assembly_2f85_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10eGearAssembly2F85EnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced UR10e 2F-85 gear-assembly policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10eGearAssembly2F85EnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10eGearAssembly2F85Env,
         env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,

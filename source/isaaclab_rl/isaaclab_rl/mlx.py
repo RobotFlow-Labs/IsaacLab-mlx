@@ -60,6 +60,12 @@ from isaaclab.backends.mac_sim import (
     MacUR10ReachEnv,
     MacUR10ReachEnvCfg,
     MacUR10ReachTrainCfg,
+    MacUR10eGearAssembly2F140Env,
+    MacUR10eGearAssembly2F140EnvCfg,
+    MacUR10eGearAssembly2F140TrainCfg,
+    MacUR10eGearAssembly2F85Env,
+    MacUR10eGearAssembly2F85EnvCfg,
+    MacUR10eGearAssembly2F85TrainCfg,
     MacUR10eDeployReachEnv,
     MacUR10eDeployReachEnvCfg,
     MacUR10eDeployReachTrainCfg,
@@ -94,6 +100,8 @@ from isaaclab.backends.mac_sim import (
     play_openarm_reach_policy,
     play_franka_reach_policy,
     play_ur10_reach_policy,
+    play_ur10e_gear_assembly_2f140_policy,
+    play_ur10e_gear_assembly_2f85_policy,
     play_ur10e_deploy_reach_policy,
     play_franka_stack_policy,
     play_franka_stack_instance_randomize_policy,
@@ -113,6 +121,8 @@ from isaaclab.backends.mac_sim import (
     train_openarm_reach_policy,
     train_franka_reach_policy,
     train_ur10_reach_policy,
+    train_ur10e_gear_assembly_2f140_policy,
+    train_ur10e_gear_assembly_2f85_policy,
     train_ur10e_deploy_reach_policy,
     train_franka_stack_policy,
     train_franka_stack_instance_randomize_policy,
@@ -167,6 +177,10 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Reach-OpenArm-Bi-Play-v0": "openarm-bi-reach",
     "Isaac-Reach-UR10-v0": "ur10-reach",
     "Isaac-Reach-UR10-Play-v0": "ur10-reach",
+    "Isaac-Deploy-GearAssembly-UR10e-2F140-v0": "ur10e-gear-assembly-2f140",
+    "Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0": "ur10e-gear-assembly-2f140",
+    "Isaac-Deploy-GearAssembly-UR10e-2F85-v0": "ur10e-gear-assembly-2f85",
+    "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0": "ur10e-gear-assembly-2f85",
     "Isaac-Deploy-Reach-UR10e-v0": "ur10e-deploy-reach",
     "Isaac-Deploy-Reach-UR10e-Play-v0": "ur10e-deploy-reach",
     "Isaac-Lift-Cube-Franka-v0": "franka-lift",
@@ -203,6 +217,14 @@ def _serialize_task_spec(spec: MlxTaskSpec) -> dict[str, Any]:
     """Return a JSON-safe task spec payload for CLI and artifact surfaces."""
 
     return asdict(spec)
+
+
+def _with_task_spec(payload: dict[str, Any], spec: MlxTaskSpec) -> dict[str, Any]:
+    """Attach the normalized public task spec to an eval/train payload."""
+
+    if "task_spec" not in payload:
+        payload["task_spec"] = _serialize_task_spec(spec)
+    return payload
 
 
 def _normalize_mlx_task(task: str) -> str:
@@ -400,6 +422,40 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_ur10_reach_policy(cfg)
+    elif task == "ur10e-gear-assembly-2f140":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacUR10eGearAssembly2F140TrainCfg(
+            env=MacUR10eGearAssembly2F140EnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/ur10e_gear_assembly_2f140_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_ur10e_gear_assembly_2f140_policy(cfg)
+    elif task == "ur10e-gear-assembly-2f85":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacUR10eGearAssembly2F85TrainCfg(
+            env=MacUR10eGearAssembly2F85EnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/ur10e_gear_assembly_2f85_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_ur10e_gear_assembly_2f85_policy(cfg)
     elif task == "ur10e-deploy-reach":
         resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
             resume_from, spec.default_hidden_dim or 128
@@ -623,6 +679,10 @@ def evaluate_mlx_task(
     """Evaluate or replay a supported MLX/mac-sim task."""
 
     task = _normalize_mlx_task(task)
+    try:
+        spec = get_mlx_task_spec(task)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported MLX evaluation task: {task}") from exc
     if task == "cartpole":
         if checkpoint is None:
             raise ValueError("Cartpole evaluation requires a checkpoint.")
@@ -1046,6 +1106,108 @@ def evaluate_mlx_task(
             "completed": completed[:episodes],
             "max_steps": max_steps,
         }
+
+    if task == "ur10e-gear-assembly-2f140":
+        if checkpoint is not None:
+            returns = play_ur10e_gear_assembly_2f140_policy(
+                checkpoint,
+                env_cfg=MacUR10eGearAssembly2F140EnvCfg(
+                    num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return _with_task_spec(
+                {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+                },
+                spec,
+            )
+        cfg = MacUR10eGearAssembly2F140EnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacUR10eGearAssembly2F140Env(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return _with_task_spec(
+            {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+            },
+            spec,
+        )
+
+    if task == "ur10e-gear-assembly-2f85":
+        if checkpoint is not None:
+            returns = play_ur10e_gear_assembly_2f85_policy(
+                checkpoint,
+                env_cfg=MacUR10eGearAssembly2F85EnvCfg(
+                    num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return _with_task_spec(
+                {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+                },
+                spec,
+            )
+        cfg = MacUR10eGearAssembly2F85EnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacUR10eGearAssembly2F85Env(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return _with_task_spec(
+            {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+            },
+            spec,
+        )
 
     if task == "ur10e-deploy-reach":
         if checkpoint is not None:

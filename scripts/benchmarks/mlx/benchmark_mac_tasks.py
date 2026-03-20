@@ -59,6 +59,10 @@ from isaaclab.backends.mac_sim import (
     MacFrankaReachEnvCfg,
     MacUR10ReachEnv,
     MacUR10ReachEnvCfg,
+    MacUR10eGearAssembly2F140Env,
+    MacUR10eGearAssembly2F140EnvCfg,
+    MacUR10eGearAssembly2F85Env,
+    MacUR10eGearAssembly2F85EnvCfg,
     MacUR10eDeployReachEnv,
     MacUR10eDeployReachEnvCfg,
     MacFrankaStackEnv,
@@ -370,6 +374,38 @@ def _openarm_bi_output_signature(env: Any, trace: Any) -> dict[str, float]:
         "final_left_target_distance_mean": float(mx.mean(env.sim_backend.left_goal_distance()).item()),
         "final_right_target_distance_mean": float(mx.mean(env.sim_backend.right_goal_distance()).item()),
     }
+
+
+def _ur10e_gear_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture compact semantic signatures for reduced UR10e gear-assembly slices."""
+
+    payload = _franka_output_signature(env, trace)
+    terminal_metrics: list[dict[str, mx.array]] = []
+    for extras in trace.extras:
+        final_task_metrics = extras.get("final_task_metrics")
+        terminated_env_ids = extras.get("terminated_env_ids", [])
+        if final_task_metrics is None or not terminated_env_ids:
+            continue
+        terminal_metrics.append(
+            {
+                "insert_depth": mx.array(final_task_metrics["insert_depth"])[: len(terminated_env_ids)],
+                "assembled": mx.array(final_task_metrics["assembled"])[: len(terminated_env_ids)],
+                "gear_type_id": mx.array(final_task_metrics["gear_type_id"])[: len(terminated_env_ids)],
+            }
+        )
+
+    if terminal_metrics:
+        insert_depth = mx.concatenate([item["insert_depth"] for item in terminal_metrics], axis=0)
+        assembled = mx.concatenate([item["assembled"] for item in terminal_metrics], axis=0)
+        gear_type_id = mx.concatenate([item["gear_type_id"] for item in terminal_metrics], axis=0)
+        payload["final_insert_depth_mean"] = float(mx.mean(insert_depth).item())
+        payload["final_assembled_ratio"] = float(mx.mean(assembled).item())
+        payload["final_gear_type_mean"] = float(mx.mean(gear_type_id).item())
+    else:
+        payload["final_insert_depth_mean"] = float(mx.mean(env.sim_backend.shaft_depth).item())
+        payload["final_assembled_ratio"] = float(mx.mean(env.sim_backend.assembled.astype(mx.float32)).item())
+        payload["final_gear_type_mean"] = float(mx.mean(env.sim_backend.gear_type_id.astype(mx.float32)).item())
+    return payload
 
 
 def _cartpole_camera_output_signature(env: Any, reward: mx.array, image: mx.array) -> dict[str, float]:
@@ -721,6 +757,60 @@ def benchmark_ur10e_deploy_reach(num_envs: int, steps: int, seed: int) -> dict[s
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_ur10e_gear_assembly_2f140(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10e 2F-140 gear-assembly MLX env step loop."""
+
+    env = MacUR10eGearAssembly2F140Env(MacUR10eGearAssembly2F140EnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10e-gear-assembly-2f140",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _ur10e_gear_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_ur10e_gear_assembly_2f85(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10e 2F-85 gear-assembly MLX env step loop."""
+
+    env = MacUR10eGearAssembly2F85Env(MacUR10eGearAssembly2F85EnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10e-gear-assembly-2f85",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _ur10e_gear_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -1224,6 +1314,10 @@ def run_benchmarks(
             benchmark = benchmark_openarm_bi_reach(num_envs, steps, seed)
         elif task == "ur10-reach":
             benchmark = benchmark_ur10_reach(num_envs, steps, seed)
+        elif task == "ur10e-gear-assembly-2f140":
+            benchmark = benchmark_ur10e_gear_assembly_2f140(num_envs, steps, seed)
+        elif task == "ur10e-gear-assembly-2f85":
+            benchmark = benchmark_ur10e_gear_assembly_2f85(num_envs, steps, seed)
         elif task == "ur10e-deploy-reach":
             benchmark = benchmark_ur10e_deploy_reach(num_envs, steps, seed)
         elif task == "franka-lift":

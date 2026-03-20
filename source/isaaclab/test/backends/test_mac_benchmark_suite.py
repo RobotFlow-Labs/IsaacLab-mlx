@@ -69,6 +69,8 @@ def test_current_mac_native_benchmark_group_is_stable():
         "openarm-bi-reach",
         "ur10-reach",
         "ur10e-deploy-reach",
+        "ur10e-gear-assembly-2f140",
+        "ur10e-gear-assembly-2f85",
         "franka-lift",
         "openarm-lift",
         "franka-teddy-bear-lift",
@@ -224,6 +226,23 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_ee_height_mean",
                 "final_target_distance_mean",
                 "final_orientation_error_mean",
+            }
+        elif benchmark["task"] in {"ur10e-gear-assembly-2f140", "ur10e-gear-assembly-2f85"}:
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_ur10e_hotpath
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["gear_assembly_logic"] is True
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["gear_type_randomization"] is True
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_target_distance_mean",
+                "final_orientation_error_mean",
+                "final_insert_depth_mean",
+                "final_assembled_ratio",
+                "final_gear_type_mean",
             }
         elif benchmark["task"] == "franka-lift":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath

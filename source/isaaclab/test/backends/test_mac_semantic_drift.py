@@ -55,7 +55,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 26
+    assert snapshot["task_count"] == 28
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -79,6 +79,16 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["hotpath"] == expected_ur10e_hotpath
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_target_distance_mean"] >= 0.0
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_orientation_error_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f140"]["contract"]["action_dim"] == 6
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f140"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f140"]["contract"]["output_signature"]["final_insert_depth_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["ur10e-gear-assembly-2f140"]["contract"]["output_signature"]["final_assembled_ratio"] <= 1.0
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f140"]["contract"]["output_signature"]["final_gear_type_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["action_dim"] == 6
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_insert_depth_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_assembled_ratio"] <= 1.0
+    assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_gear_type_mean"] >= 0.0
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["openarm-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["openarm-lift"]["contract"]["hotpath"] == expected_franka_hotpath
