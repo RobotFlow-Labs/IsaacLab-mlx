@@ -736,6 +736,77 @@ class MacOpenArmLiftEnvCfg(MacFrankaLiftEnvCfg):
 
 
 @configclass
+class MacAgibotPlaceEnvCfg(MacOpenArmLiftEnvCfg):
+    """Reduced mac-native Agibot place configuration built on the OpenArm-style surrogate."""
+
+    observation_space: int = 34
+    episode_length_s: float = 10.0
+
+    place_target_x_range: tuple[float, float] = (0.18, 0.34)
+    place_target_y_range: tuple[float, float] = (-0.12, 0.12)
+    place_target_z_range: tuple[float, float] = (0.09, 0.20)
+    place_xy_threshold: float = 0.045
+    place_z_threshold: float = 0.035
+    place_release_open_threshold: float = 0.018
+
+    lift_reward_scale: float = 1.4
+    place_align_reward_scale: float = 3.0
+    place_distance_reward_gain: float = 8.5
+    place_success_bonus: float = 6.0
+
+    task_name: str = "agibot-place"
+    semantic_contract: str = "reduced-agibot-place-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    manipulated_object_label: str = "place-object"
+    target_label: str = "placement-target"
+    contract_notes: str = (
+        "This mac-native slice preserves the Agibot place workflow with reduced analytic grasp and "
+        "placement logic instead of the exact RmpFlow-controlled Agibot scene."
+    )
+
+
+@configclass
+class MacAgibotPlaceToy2BoxEnvCfg(MacAgibotPlaceEnvCfg):
+    """Reduced mac-native Agibot toy-to-box place configuration."""
+
+    task_name: str = "agibot-place-toy2box"
+    cube_x_range: tuple[float, float] = (0.14, 0.28)
+    cube_y_range: tuple[float, float] = (0.02, 0.16)
+    place_target_x_range: tuple[float, float] = (0.24, 0.36)
+    place_target_y_range: tuple[float, float] = (-0.02, 0.10)
+    place_target_z_range: tuple[float, float] = (0.11, 0.17)
+    manipulated_object_label: str = "toy"
+    target_label: str = "box"
+    contract_notes: str = (
+        "This mac-native slice preserves the Agibot toy-to-box place workflow with reduced analytic "
+        "grasp and placement logic rather than the exact Agibot arm, box geometry, and RmpFlow controller."
+    )
+
+
+@configclass
+class MacAgibotPlaceUprightMugEnvCfg(MacAgibotPlaceEnvCfg):
+    """Reduced mac-native Agibot upright-mug place configuration."""
+
+    task_name: str = "agibot-place-upright-mug"
+    cube_x_range: tuple[float, float] = (0.16, 0.30)
+    cube_y_range: tuple[float, float] = (-0.16, -0.02)
+    place_target_x_range: tuple[float, float] = (0.20, 0.32)
+    place_target_y_range: tuple[float, float] = (-0.12, 0.00)
+    place_target_z_range: tuple[float, float] = (0.10, 0.18)
+    grasp_distance_threshold: float = 0.07
+    grasp_offset_z: float = 0.055
+    lift_success_height: float = 0.18
+    place_xy_threshold: float = 0.04
+    place_z_threshold: float = 0.03
+    manipulated_object_label: str = "upright-mug"
+    target_label: str = "mug-pad"
+    contract_notes: str = (
+        "This mac-native slice preserves the Agibot upright-mug place workflow with reduced analytic "
+        "grasp and placement logic rather than the exact Agibot arm, mug pose-stability stack, and RmpFlow controller."
+    )
+
+
+@configclass
 class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
     """Configuration for a reduced mac-native Franka cube-stacking slice."""
 

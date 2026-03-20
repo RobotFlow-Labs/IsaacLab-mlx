@@ -578,6 +578,7 @@ def test_mlx_cli_module_handles_lift_alias_and_reduced_manipulation_aliases(tmp_
             "reduced-no-ros-inference",
             "ur10e-gear-2f85-ros",
         ),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Play-v0", "franka-stack", "reduced-analytic-stack", "franka-stack-ik-rel-play"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "franka-blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "franka-skillgen"),
         (
@@ -591,6 +592,18 @@ def test_mlx_cli_module_handles_lift_alias_and_reduced_manipulation_aliases(tmp_
             "franka-stack-rgb",
             "reduced-no-cosmos",
             "franka-cosmos",
+        ),
+        (
+            "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+            "agibot-place-toy2box",
+            "reduced-agibot-place-surrogate",
+            "agibot-toy2box",
+        ),
+        (
+            "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+            "agibot-place-upright-mug",
+            "reduced-agibot-place-surrogate",
+            "agibot-mug",
         ),
     ):
         alias_eval_output_path = tmp_path / f"{file_stem}-eval.json"
@@ -793,6 +806,8 @@ def test_mlx_cli_module_normalizes_reduced_openarm_and_ur10_aliases(tmp_path: Pa
         ("Isaac-Reach-UR10-v0", "ur10-reach"),
         ("Isaac-Lift-Cube-OpenArm-v0", "openarm-lift"),
         ("Isaac-Open-Drawer-OpenArm-v0", "openarm-open-drawer"),
+        ("Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0", "agibot-place-toy2box"),
+        ("Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0", "agibot-place-upright-mug"),
     ]
 
     for alias, canonical in eval_cases:

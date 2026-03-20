@@ -18,6 +18,12 @@ from isaaclab.backends import (
     mac_native_task_spec_map,
 )
 from isaaclab.backends.mac_sim import (
+    MacAgibotPlaceToy2BoxEnv,
+    MacAgibotPlaceToy2BoxEnvCfg,
+    MacAgibotPlaceToy2BoxTrainCfg,
+    MacAgibotPlaceUprightMugEnv,
+    MacAgibotPlaceUprightMugEnvCfg,
+    MacAgibotPlaceUprightMugTrainCfg,
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
     MacAnymalCRoughEnv,
@@ -103,6 +109,8 @@ from isaaclab.backends.mac_sim import (
     MacQuadcopterEnv,
     MacQuadcopterEnvCfg,
     play_anymal_c_policy,
+    play_agibot_place_toy2box_policy,
+    play_agibot_place_upright_mug_policy,
     play_cartpole_policy,
     play_franka_bin_stack_policy,
     play_franka_cabinet_policy,
@@ -131,6 +139,8 @@ from isaaclab.backends.mac_sim import (
     play_h1_policy,
     resolve_resume_hidden_dim,
     train_anymal_c_policy,
+    train_agibot_place_toy2box_policy,
+    train_agibot_place_upright_mug_policy,
     train_cartpole_policy,
     train_franka_bin_stack_policy,
     train_franka_cabinet_policy,
@@ -227,11 +237,14 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Lift-Cube-Franka-IK-Rel-v0": "franka-lift",
     "Isaac-Lift-Cube-OpenArm-v0": "openarm-lift",
     "Isaac-Lift-Cube-OpenArm-Play-v0": "openarm-lift",
+    "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0": "agibot-place-toy2box",
+    "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0": "agibot-place-upright-mug",
     "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0": "franka-teddy-bear-lift",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0": "franka-stack-instance-randomize",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0": "franka-stack-instance-randomize",
     "Isaac-Stack-Cube-Franka-v0": "franka-stack",
     "Isaac-Stack-Cube-Franka-Play-v0": "franka-stack",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0": "franka-stack",
     "Isaac-Stack-Cube-Franka-IK-Rel-v0": "franka-stack",
     "Isaac-Stack-Cube-Franka-IK-Abs-v0": "franka-stack",
     "Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-v0": "franka-stack",
@@ -329,6 +342,16 @@ MLX_ALIAS_TASK_SPECS: dict[str, MlxTaskSpec] = {
             "demonstration-conditioned behavior."
         ),
     ),
+    "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0": replace(
+        MLX_TASK_SPECS["franka-stack"],
+        task="Isaac-Stack-Cube-Franka-IK-Rel-Play-v0",
+        semantic_contract="reduced-analytic-stack",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic two-cube Franka stack play alias using the same mac-native stack substrate; "
+            "the upstream play wrapper is not modeled as a distinct simulator mode."
+        ),
+    ),
     "Isaac-PickPlace-GR1T2-Abs-v0": replace(
         MLX_TASK_SPECS["franka-bin-stack"],
         task="Isaac-PickPlace-GR1T2-Abs-v0",
@@ -357,6 +380,26 @@ MLX_ALIAS_TASK_SPECS: dict[str, MlxTaskSpec] = {
         notes=(
             "Reduced pick-place surrogate mapped onto the bin-anchored stack substrate instead of the "
             "upstream G1 Inspire FTP pick/place scene."
+        ),
+    ),
+    "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0": replace(
+        MLX_TASK_SPECS["agibot-place-toy2box"],
+        task="Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+        semantic_contract="reduced-agibot-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic Agibot toy-to-box place slice preserving the place workflow with "
+            "OpenArm-style surrogate kinematics instead of the exact Agibot arm and RmpFlow stack."
+        ),
+    ),
+    "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0": replace(
+        MLX_TASK_SPECS["agibot-place-upright-mug"],
+        task="Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+        semantic_contract="reduced-agibot-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic Agibot upright-mug place slice preserving the place workflow with "
+            "OpenArm-style surrogate kinematics instead of the exact Agibot arm, mug stability, and RmpFlow stack."
         ),
     ),
     "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0": replace(
@@ -772,6 +815,46 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_openarm_lift_policy(cfg)
+    elif task == "agibot-place-toy2box":
+        resolved_hidden_dim = (
+            hidden_dim
+            if hidden_dim is not None
+            else resolve_resume_hidden_dim(resume_from, spec.default_hidden_dim or 128)
+        )
+        cfg = MacAgibotPlaceToy2BoxTrainCfg(
+            env=MacAgibotPlaceToy2BoxEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/agibot_place_toy2box_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_agibot_place_toy2box_policy(cfg)
+    elif task == "agibot-place-upright-mug":
+        resolved_hidden_dim = (
+            hidden_dim
+            if hidden_dim is not None
+            else resolve_resume_hidden_dim(resume_from, spec.default_hidden_dim or 128)
+        )
+        cfg = MacAgibotPlaceUprightMugTrainCfg(
+            env=MacAgibotPlaceUprightMugEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint
+            or spec.default_checkpoint
+            or "logs/mlx/agibot_place_upright_mug_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_agibot_place_upright_mug_policy(cfg)
     elif task == "franka-teddy-bear-lift":
         resolved_hidden_dim = (
             hidden_dim
@@ -1888,6 +1971,116 @@ def evaluate_mlx_task(
             "completed": completed[:episodes],
             "max_steps": max_steps,
         }
+
+    if task == "agibot-place-toy2box":
+        if checkpoint is not None:
+            returns = play_agibot_place_toy2box_policy(
+                checkpoint,
+                env_cfg=MacAgibotPlaceToy2BoxEnvCfg(
+                    num_envs=max(1, num_envs),
+                    seed=seed,
+                    episode_length_s=episode_length_s,
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return _with_task_spec(
+                {
+                    "task": task,
+                    "mode": "checkpoint",
+                    "episodes_requested": episodes,
+                    "episodes_completed": len(returns),
+                    "completed": [{"return": float(value)} for value in returns],
+                    "checkpoint": checkpoint,
+                },
+                spec,
+            )
+        cfg = MacAgibotPlaceToy2BoxEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacAgibotPlaceToy2BoxEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(
+                    extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True
+                )
+            )
+            if len(completed) >= episodes:
+                break
+        return _with_task_spec(
+            {
+                "task": task,
+                "mode": "manual",
+                "episodes_requested": episodes,
+                "episodes_completed": len(completed[:episodes]),
+                "completed": completed[:episodes],
+                "max_steps": max_steps,
+            },
+            spec,
+        )
+
+    if task == "agibot-place-upright-mug":
+        if checkpoint is not None:
+            returns = play_agibot_place_upright_mug_policy(
+                checkpoint,
+                env_cfg=MacAgibotPlaceUprightMugEnvCfg(
+                    num_envs=max(1, num_envs),
+                    seed=seed,
+                    episode_length_s=episode_length_s,
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return _with_task_spec(
+                {
+                    "task": task,
+                    "mode": "checkpoint",
+                    "episodes_requested": episodes,
+                    "episodes_completed": len(returns),
+                    "completed": [{"return": float(value)} for value in returns],
+                    "checkpoint": checkpoint,
+                },
+                spec,
+            )
+        cfg = MacAgibotPlaceUprightMugEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacAgibotPlaceUprightMugEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(
+                    extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True
+                )
+            )
+            if len(completed) >= episodes:
+                break
+        return _with_task_spec(
+            {
+                "task": task,
+                "mode": "manual",
+                "episodes_requested": episodes,
+                "episodes_completed": len(completed[:episodes]),
+                "completed": completed[:episodes],
+                "max_steps": max_steps,
+            },
+            spec,
+        )
 
     if task == "franka-teddy-bear-lift":
         if checkpoint is not None:

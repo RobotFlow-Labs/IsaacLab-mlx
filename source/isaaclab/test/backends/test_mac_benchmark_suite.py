@@ -79,6 +79,8 @@ def test_current_mac_native_benchmark_group_is_stable():
         "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
+        "agibot-place-toy2box",
+        "agibot-place-upright-mug",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -299,6 +301,24 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_cube_distance_mean",
                 "final_cube_height_mean",
                 "final_grasp_ratio",
+            }
+        elif benchmark["task"] in {"agibot-place-toy2box", "agibot-place-upright-mug"}:
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["diagnostics"]["sim_backend"]["semantic_contract"] == "reduced-agibot-place-surrogate"
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_cube_distance_mean",
+                "final_cube_height_mean",
+                "final_grasp_ratio",
+                "final_place_target_height_mean",
+                "final_place_distance_mean",
+                "final_goal_gap_mean",
+                "final_placed_ratio",
             }
         elif benchmark["task"] == "franka-teddy-bear-lift":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath

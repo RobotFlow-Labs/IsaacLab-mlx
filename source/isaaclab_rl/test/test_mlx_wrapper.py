@@ -46,6 +46,8 @@ def test_public_mlx_task_lists_are_stable():
         "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
+        "agibot-place-toy2box",
+        "agibot-place-upright-mug",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -72,6 +74,8 @@ def test_public_mlx_task_lists_are_stable():
         "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
+        "agibot-place-toy2box",
+        "agibot-place-upright-mug",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -111,6 +115,12 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("openarm-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("openarm-lift").semantic_contract == "reduced-openarm-surrogate"
     assert get_mlx_task_spec("openarm-lift").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("agibot-place-toy2box").default_hidden_dim == 128
+    assert get_mlx_task_spec("agibot-place-toy2box").semantic_contract == "reduced-agibot-place-surrogate"
+    assert get_mlx_task_spec("agibot-place-toy2box").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("agibot-place-upright-mug").default_hidden_dim == 128
+    assert get_mlx_task_spec("agibot-place-upright-mug").semantic_contract == "reduced-agibot-place-surrogate"
+    assert get_mlx_task_spec("agibot-place-upright-mug").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("franka-teddy-bear-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack-instance-randomize").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack").default_hidden_dim == 128
@@ -209,6 +219,18 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
             "franka-bin-stack",
             "reduced-pick-place-surrogate",
             "pick-place",
+        ),
+        (
+            "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+            "agibot-place-toy2box",
+            "reduced-agibot-place-surrogate",
+            "agibot",
+        ),
+        (
+            "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+            "agibot-place-upright-mug",
+            "reduced-agibot-place-surrogate",
+            "agibot",
         ),
         (
             "Isaac-NutPour-GR1T2-Pink-IK-Abs-v0",
@@ -940,6 +962,49 @@ def test_train_and_evaluate_openarm_lift_via_public_mlx_wrapper(tmp_path: Path):
     assert isinstance(eval_payload["completed"][0]["return"], float)
 
 
+@pytest.mark.parametrize(
+    ("task", "seed"),
+    (
+        ("agibot-place-toy2box", 145),
+        ("agibot-place-upright-mug", 147),
+    ),
+)
+def test_train_and_evaluate_agibot_place_via_public_mlx_wrapper(tmp_path: Path, task: str, seed: int):
+    """The public wrapper should expose train/replay surfaces for reduced Agibot place slices."""
+
+    checkpoint_path = tmp_path / f"{task}-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        task,
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=seed,
+    )
+    eval_payload = evaluate_mlx_task(
+        task,
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=seed,
+    )
+
+    assert train_payload["task"] == task
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert train_payload["task_spec"]["semantic_contract"] == "reduced-agibot-place-surrogate"
+    assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert eval_payload["task"] == task
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert eval_payload["task_spec"]["semantic_contract"] == "reduced-agibot-place-surrogate"
+    assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+
 def test_train_and_evaluate_franka_teddy_bear_lift_via_public_mlx_wrapper(tmp_path: Path):
     """The public wrapper should expose a train/replay surface for the teddy-bear lift slice."""
 
@@ -1374,6 +1439,7 @@ def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper
         ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference"),
         ("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0", "ur10e-gear-assembly-2f140", "reduced-no-ros-inference"),
         ("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0", "ur10e-gear-assembly-2f85", "reduced-no-ros-inference"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Play-v0", "franka-stack", "reduced-analytic-stack"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", "franka-stack-rgb", "reduced-visuomotor-surrogate"),

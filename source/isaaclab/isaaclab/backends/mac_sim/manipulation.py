@@ -27,6 +27,9 @@ from isaaclab.backends.runtime import (
 from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import (
+    MacAgibotPlaceEnvCfg,
+    MacAgibotPlaceToy2BoxEnvCfg,
+    MacAgibotPlaceUprightMugEnvCfg,
     MacFrankaBinStackEnvCfg,
     MacFrankaStackBlueprintEnvCfg,
     MacFrankaCabinetEnvCfg,
@@ -293,6 +296,48 @@ class MacOpenArmLiftTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.22
     checkpoint_path: str = "logs/mlx/openarm_lift_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacAgibotPlaceToy2BoxTrainCfg:
+    """Training configuration for the reduced Agibot toy-to-box place slice."""
+
+    env: MacAgibotPlaceToy2BoxEnvCfg = MacAgibotPlaceToy2BoxEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.22
+    checkpoint_path: str = "logs/mlx/agibot_place_toy2box_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacAgibotPlaceUprightMugTrainCfg:
+    """Training configuration for the reduced Agibot upright-mug place slice."""
+
+    env: MacAgibotPlaceUprightMugEnvCfg = MacAgibotPlaceUprightMugEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.22
+    checkpoint_path: str = "logs/mlx/agibot_place_upright_mug_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -1514,6 +1559,83 @@ class MacOpenArmLiftSimBackend(MacFrankaLiftSimBackend):
         return payload
 
 
+class MacAgibotPlaceSimBackend(MacOpenArmLiftSimBackend):
+    """A reduced batched Agibot place backend on MLX/mac-sim."""
+
+    def __init__(self, cfg: MacAgibotPlaceEnvCfg, *, reset_sampler: DeterministicResetSampler | None = None):
+        self.place_target_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.placed = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        super().__init__(cfg, reset_sampler=reset_sampler)
+        self.cfg = cfg
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        super().reset_envs(env_ids)
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        self.place_target_pos_w[ids, 0] = self.reset_sampler.uniform(
+            (rows,), self.cfg.place_target_x_range[0], self.cfg.place_target_x_range[1]
+        )
+        self.place_target_pos_w[ids, 1] = self.reset_sampler.uniform(
+            (rows,), self.cfg.place_target_y_range[0], self.cfg.place_target_y_range[1]
+        )
+        self.place_target_pos_w[ids, 2] = self.reset_sampler.uniform(
+            (rows,), self.cfg.place_target_z_range[0], self.cfg.place_target_z_range[1]
+        )
+        self.placed[ids] = False
+
+    def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
+        super().step(render=render, update_fabric=update_fabric)
+        self.placed = self.place_success()
+
+    def place_error(self) -> mx.array:
+        return self.place_target_pos_w - self.cube_pos_w
+
+    def place_success(self) -> mx.array:
+        place_error = self.place_error()
+        xy_close = mx.linalg.norm(place_error[:, :2], axis=1) <= self.cfg.place_xy_threshold
+        z_close = mx.abs(place_error[:, 2]) <= self.cfg.place_z_threshold
+        released = self.state.joint_pos[:, 7] >= self.cfg.place_release_open_threshold
+        return xy_close & z_close & ~self.grasped & released
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = getattr(self.cfg, "task_name", "agibot-place")
+        payload["upstream_task_id"] = getattr(self.cfg, "upstream_task_id", None)
+        payload["semantic_contract"] = self.cfg.semantic_contract
+        payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
+        payload["contract_notes"] = self.cfg.contract_notes
+        payload["subsystems"] = {
+            **payload["subsystems"],
+            "robot_family": "agibot-surrogate",
+            "placement_logic": True,
+        }
+        payload["manipulated_object_label"] = self.cfg.manipulated_object_label
+        payload["target_label"] = self.cfg.target_label
+        return payload
+
+
+class MacAgibotPlaceToy2BoxSimBackend(MacAgibotPlaceSimBackend):
+    """Reduced batched Agibot toy-to-box place backend on MLX/mac-sim."""
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "agibot-place-toy2box"
+        payload["upstream_task_id"] = "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0"
+        return payload
+
+
+class MacAgibotPlaceUprightMugSimBackend(MacAgibotPlaceSimBackend):
+    """Reduced batched Agibot upright-mug place backend on MLX/mac-sim."""
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = "agibot-place-upright-mug"
+        payload["upstream_task_id"] = "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0"
+        return payload
+
+
 class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
     """A lightweight batched Franka cube-stack backend on MLX/mac-sim."""
 
@@ -2686,6 +2808,96 @@ class MacOpenArmLiftEnv(MacFrankaLiftEnv):
         self.reset()
 
 
+class MacAgibotPlaceEnv(MacOpenArmLiftEnv):
+    """Vectorized reduced Agibot place task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacAgibotPlaceEnvCfg | None = None):
+        self.cfg = cfg or MacAgibotPlaceEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacAgibotPlaceSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+    def _build_policy_observations(self) -> mx.array:
+        joint_pos, joint_vel = self.sim_backend.get_joint_state(None)
+        cube_error = self.sim_backend.cube_pos_w - self.sim_backend.ee_pos_w
+        place_error = self.sim_backend.place_error()
+        goal_gap = mx.linalg.norm(place_error, axis=1, keepdims=True)
+        grasped = self.sim_backend.grasped.astype(mx.float32).reshape((-1, 1))
+        placed = self.sim_backend.placed.astype(mx.float32).reshape((-1, 1))
+        return mx.concatenate(
+            (
+                joint_pos,
+                joint_vel,
+                self.sim_backend.ee_pos_w,
+                self.sim_backend.cube_pos_w,
+                self.sim_backend.place_target_pos_w,
+                cube_error,
+                place_error,
+                goal_gap,
+                grasped,
+                placed,
+            ),
+            axis=-1,
+        )
+
+    def _get_rewards(self) -> mx.array:
+        cube_error = mx.linalg.norm(self.sim_backend.cube_pos_w - self.sim_backend.ee_pos_w, axis=1)
+        place_error = mx.linalg.norm(self.sim_backend.place_error(), axis=1)
+        reach_reward = self.cfg.reach_reward_scale * mx.exp(-self.cfg.distance_reward_gain * cube_error)
+        grasp_reward = self.cfg.grasp_reward_scale * self.sim_backend.grasped.astype(mx.float32)
+        lift_reward = self.cfg.lift_reward_scale * mx.maximum(self.sim_backend.cube_pos_w[:, 2] - self.cfg.table_height, 0.0)
+        place_align_reward = self.cfg.place_align_reward_scale * mx.exp(
+            -self.cfg.place_distance_reward_gain * place_error
+        )
+        success_bonus = self.cfg.place_success_bonus * self.sim_backend.place_success().astype(mx.float32)
+        action_penalty = self.cfg.action_rate_penalty_scale * mx.sum(mx.square(self._actions - self._previous_actions), axis=1)
+        return (reach_reward + grasp_reward + lift_reward + place_align_reward + success_bonus + action_penalty) * self.step_dt
+
+    def _get_dones(self) -> tuple[mx.array, mx.array]:
+        success = self.sim_backend.place_success()
+        time_out = self.episode_length_buf >= self.max_episode_length
+        return success, time_out
+
+
+class MacAgibotPlaceToy2BoxEnv(MacAgibotPlaceEnv):
+    """Vectorized reduced Agibot toy-to-box place task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacAgibotPlaceToy2BoxEnvCfg | None = None):
+        self.cfg = cfg or MacAgibotPlaceToy2BoxEnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacAgibotPlaceToy2BoxSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self.reset()
+
+
+class MacAgibotPlaceUprightMugEnv(MacAgibotPlaceEnv):
+    """Vectorized reduced Agibot upright-mug place task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacAgibotPlaceUprightMugEnvCfg | None = None):
+        self.cfg = cfg or MacAgibotPlaceUprightMugEnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacAgibotPlaceUprightMugSimBackend(
+            self.cfg,
+            reset_sampler=self.reset_sampler.fork("sim-backend"),
+        )
+        self.reset()
+
+
 class MacFrankaStackEnv(MacFrankaReachEnv):
     """Vectorized Franka cube-stack task for MLX/mac-sim."""
 
@@ -3552,9 +3764,15 @@ def play_ur10e_gear_assembly_2f85_ros_inference_policy(
 
 
 def _train_franka_lift_like_policy(
-    cfg: MacFrankaLiftTrainCfg | MacFrankaTeddyBearLiftTrainCfg,
+    cfg: MacFrankaLiftTrainCfg
+    | MacFrankaTeddyBearLiftTrainCfg
+    | MacAgibotPlaceToy2BoxTrainCfg
+    | MacAgibotPlaceUprightMugTrainCfg,
     *,
-    env_factory: type[MacFrankaLiftEnv] | type[MacFrankaTeddyBearLiftEnv],
+    env_factory: type[MacFrankaLiftEnv]
+    | type[MacFrankaTeddyBearLiftEnv]
+    | type[MacAgibotPlaceToy2BoxEnv]
+    | type[MacAgibotPlaceUprightMugEnv],
     task_id: str,
     log_prefix: str,
 ) -> dict[str, Any]:
@@ -3720,11 +3938,39 @@ def train_openarm_lift_policy(cfg: MacOpenArmLiftTrainCfg) -> dict[str, Any]:
     )
 
 
+def train_agibot_place_toy2box_policy(cfg: MacAgibotPlaceToy2BoxTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Agibot toy-to-box place policy on the mac-native MLX slice."""
+
+    return _train_franka_lift_like_policy(
+        cfg,
+        env_factory=MacAgibotPlaceToy2BoxEnv,
+        task_id="Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+        log_prefix="mlx-agibot-place-toy2box",
+    )
+
+
+def train_agibot_place_upright_mug_policy(cfg: MacAgibotPlaceUprightMugTrainCfg) -> dict[str, Any]:
+    """Train a lightweight continuous-control Agibot upright-mug place policy on the mac-native MLX slice."""
+
+    return _train_franka_lift_like_policy(
+        cfg,
+        env_factory=MacAgibotPlaceUprightMugEnv,
+        task_id="Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+        log_prefix="mlx-agibot-place-upright-mug",
+    )
+
+
 def _play_franka_lift_like_policy(
     checkpoint_path: str,
     *,
-    env_factory: type[MacFrankaLiftEnv] | type[MacFrankaTeddyBearLiftEnv],
-    env_cfg: MacFrankaLiftEnvCfg | MacFrankaTeddyBearLiftEnvCfg,
+    env_factory: type[MacFrankaLiftEnv]
+    | type[MacFrankaTeddyBearLiftEnv]
+    | type[MacAgibotPlaceToy2BoxEnv]
+    | type[MacAgibotPlaceUprightMugEnv],
+    env_cfg: MacFrankaLiftEnvCfg
+    | MacFrankaTeddyBearLiftEnvCfg
+    | MacAgibotPlaceToy2BoxEnvCfg
+    | MacAgibotPlaceUprightMugEnvCfg,
     episodes: int = 3,
     hidden_dim: int | None = None,
 ) -> list[float]:
@@ -3796,6 +4042,44 @@ def play_openarm_lift_policy(
     return _play_franka_lift_like_policy(
         checkpoint_path,
         env_factory=MacOpenArmLiftEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_agibot_place_toy2box_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacAgibotPlaceToy2BoxEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Agibot toy-to-box place policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacAgibotPlaceToy2BoxEnvCfg(num_envs=1)
+    return _play_franka_lift_like_policy(
+        checkpoint_path,
+        env_factory=MacAgibotPlaceToy2BoxEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_agibot_place_upright_mug_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacAgibotPlaceUprightMugEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained Agibot upright-mug place policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacAgibotPlaceUprightMugEnvCfg(num_envs=1)
+    return _play_franka_lift_like_policy(
+        checkpoint_path,
+        env_factory=MacAgibotPlaceUprightMugEnv,
         env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,

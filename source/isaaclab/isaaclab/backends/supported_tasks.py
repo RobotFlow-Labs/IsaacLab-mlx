@@ -324,6 +324,40 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         ),
     ),
     MacNativeTaskSpec(
+        key="agibot-place-toy2box",
+        upstream_task_id="Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/agibot_place_toy2box_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.22,
+        semantic_contract="reduced-agibot-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic Agibot toy-to-box place slice preserving the place workflow with "
+            "OpenArm-style surrogate kinematics instead of the exact Agibot arm and RmpFlow stack."
+        ),
+    ),
+    MacNativeTaskSpec(
+        key="agibot-place-upright-mug",
+        upstream_task_id="Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/agibot_place_upright_mug_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.22,
+        semantic_contract="reduced-agibot-place-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic Agibot upright-mug place slice preserving the place workflow with "
+            "OpenArm-style surrogate kinematics instead of the exact Agibot arm, mug stability, and RmpFlow stack."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="franka-teddy-bear-lift",
         upstream_task_id="Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
         family="manipulation",

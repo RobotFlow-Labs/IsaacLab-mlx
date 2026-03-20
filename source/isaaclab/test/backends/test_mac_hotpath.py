@@ -19,6 +19,7 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     HOTPATH_BACKEND,
     _locomotion_root_step_impl,
     anymal_body_positions_hotpath,
+    anymal_leg_extension_hotpath,
     biped_support_metrics_hotpath,
     contact_update_hotpath,
     franka_cabinet_step_hotpath,
@@ -26,6 +27,7 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
     franka_stack_rgb_step_hotpath,
+    get_anymal_leg_extension_hotpath_backend,
     get_contact_hotpath_backend,
     get_franka_hotpath_backend,
     get_franka_stack_hotpath_backend,
@@ -147,6 +149,26 @@ def test_anymal_body_positions_hotpath_returns_expected_shape_and_base_slot():
     assert np.allclose(np.array(body_pos)[:, 0, :], np.array(root_pos_w))
 
 
+def test_anymal_leg_extension_hotpath_matches_reference_math():
+    joint_pos = mx.array(
+        [
+            [0.0, -0.4, 0.75, 0.1, -0.2, 0.65, -0.1, 0.25, -0.15, -0.3, 0.55, 0.05],
+            [0.1, -0.3, 0.55, -0.2, 0.0, 0.45, 0.2, -0.1, 0.15, 0.3, -0.25, 0.35],
+        ],
+        dtype=mx.float32,
+    )
+
+    extension = anymal_leg_extension_hotpath(joint_pos)
+    mx.eval(extension)
+
+    joint_np = np.array(joint_pos).reshape((2, 4, 3))
+    expected = 0.20 + 0.16 * np.cos(joint_np[:, :, 1]) + 0.18 * np.cos(joint_np[:, :, 1] + joint_np[:, :, 2])
+    expected = np.clip(expected, 0.22, 0.62).astype(np.float32)
+
+    assert extension.shape == (2, 4)
+    assert np.allclose(np.array(extension), expected)
+
+
 def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
     root_pos_w = mx.array([[0.0, 0.0, 0.92], [1.2, 0.1, 0.95]], dtype=mx.float32)
     joint_pos = mx.zeros((2, 19), dtype=mx.float32)
@@ -164,6 +186,7 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
 
 def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
+    assert get_anymal_leg_extension_hotpath_backend() in {"mlx-compiled", "mlx-metal-anymal-leg-extension"}
     assert get_contact_hotpath_backend() in {"mlx-compiled", "mlx-metal-contact"}
     assert get_franka_hotpath_backend() in {"mlx-compiled", "mlx-metal-ee"}
     assert get_franka_stack_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack"}

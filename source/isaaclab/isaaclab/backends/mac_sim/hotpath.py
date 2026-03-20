@@ -494,6 +494,71 @@ def _anymal_leg_extension_impl(joint_pos: mx.array) -> mx.array:
     return mx.clip(extension, 0.22, 0.62)
 
 
+_anymal_leg_extension_compiled = mx.compile(_anymal_leg_extension_impl)
+_anymal_leg_extension_metal = None
+_anymal_leg_extension_hotpath_initialized = False
+ANYMAL_LEG_EXTENSION_HOTPATH_BACKEND = HOTPATH_BACKEND
+
+
+def _build_anymal_leg_extension_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        uint base = env_id * 12;
+        for (uint leg_id = 0; leg_id < 4; ++leg_id) {
+            uint joint_base = base + leg_id * 3;
+            float hip_pitch = joint_pos[joint_base + 1];
+            float knee = joint_pos[joint_base + 2];
+            float extension = 0.20f + 0.16f * metal::cos(hip_pitch) + 0.18f * metal::cos(hip_pitch + knee);
+            extension_out[env_id * 4 + leg_id] = metal::clamp(extension, 0.22f, 0.62f);
+        }
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="anymal_leg_extension",
+            input_names=["joint_pos"],
+            output_names=["extension_out"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_anymal_leg_extension_hotpath() -> None:
+    global _anymal_leg_extension_metal
+    global _anymal_leg_extension_hotpath_initialized
+    global ANYMAL_LEG_EXTENSION_HOTPATH_BACKEND
+    if _anymal_leg_extension_hotpath_initialized:
+        return
+    _anymal_leg_extension_hotpath_initialized = True
+    _anymal_leg_extension_metal = _build_anymal_leg_extension_metal_kernel()
+    if _anymal_leg_extension_metal is not None:
+        ANYMAL_LEG_EXTENSION_HOTPATH_BACKEND = "mlx-metal-anymal-leg-extension"
+
+
+def get_anymal_leg_extension_hotpath_backend() -> str:
+    _ensure_anymal_leg_extension_hotpath()
+    return ANYMAL_LEG_EXTENSION_HOTPATH_BACKEND
+
+
+def anymal_leg_extension_hotpath(joint_pos: mx.array) -> mx.array:
+    _ensure_anymal_leg_extension_hotpath()
+    joint_pos = mx.array(joint_pos, dtype=mx.float32)
+    if _anymal_leg_extension_metal is None:
+        return _anymal_leg_extension_compiled(joint_pos)
+    if int(joint_pos.shape[0]) == 0:
+        return mx.zeros((0, 4), dtype=mx.float32)
+    outputs = _anymal_leg_extension_metal(
+        inputs=[joint_pos],
+        grid=(int(joint_pos.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(joint_pos.shape[0]), 4)],
+        output_dtypes=[mx.float32],
+    )
+    return outputs[0]
+
+
 def _anymal_body_positions_impl(
     root_pos_w: mx.array,
     joint_pos: mx.array,
@@ -508,7 +573,7 @@ def _anymal_body_positions_impl(
     hip_abduction = grouped[:, :, 0]
     hip_pitch = grouped[:, :, 1]
     knee = grouped[:, :, 2]
-    extension = _anymal_leg_extension_impl(joint_pos)
+    extension = anymal_leg_extension_hotpath(joint_pos)
     command_speed = mx.linalg.norm(commands[:, :2], axis=1, keepdims=True)
     phase = gait_phase.reshape((num_envs, 1)) + gait_phase_offsets.reshape((1, 4))
     swing = mx.maximum(mx.sin(phase), 0.0) * (0.25 + command_speed)
@@ -593,7 +658,6 @@ def _h1_body_positions_impl(
     return mx.concatenate([torso_pos, foot_pos, knee_pos], axis=1)
 
 
-anymal_leg_extension_hotpath = mx.compile(_anymal_leg_extension_impl)
 anymal_body_positions_hotpath = mx.compile(_anymal_body_positions_impl)
 h1_leg_extension_hotpath = mx.compile(_h1_leg_extension_impl)
 h1_body_positions_hotpath = mx.compile(_h1_body_positions_impl)

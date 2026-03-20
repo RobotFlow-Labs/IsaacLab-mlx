@@ -65,6 +65,8 @@ def test_ros2_message_envelope_preserves_batch_index_in_state_dict():
         batch_index=3,
     )
 
+    assert envelope.state_dict()["schema_version"] == 1
+    assert envelope.state_dict()["kind"] == "ros2_message_envelope"
     assert envelope.state_dict()["batch_index"] == 3
 
 
@@ -140,6 +142,39 @@ def test_ros2_process_bridge_publishes_batch_in_batch_index_order(monkeypatch):
 
     assert published_topics == ["/planner/joint_trajectory/0", "/planner/joint_trajectory/1"]
     assert results == ["/planner/joint_trajectory/0", "/planner/joint_trajectory/1"]
+
+
+def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(monkeypatch):
+    """Batch publish failures should report the failing batch index and topic."""
+    bridge = Ros2ProcessBridge()
+    envelopes = [
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/0",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 0},
+            batch_index=0,
+        ),
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/1",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 1},
+            batch_index=1,
+        ),
+    ]
+    published_topics: list[str] = []
+
+    def _publish_via_cli(envelope, *, once=True, check=True):
+        published_topics.append(envelope.topic)
+        if envelope.topic.endswith("/1"):
+            raise subprocess.CalledProcessError(returncode=1, cmd=["ros2", "topic", "pub"], output="", stderr="boom")
+        return envelope.topic
+
+    monkeypatch.setattr(bridge, "publish_via_cli", _publish_via_cli)
+
+    with pytest.raises(RuntimeError, match="batch_index=1.*'/planner/world_state/1'"):
+        bridge.publish_batch_via_cli(tuple(envelopes))
+
+    assert published_topics == ["/planner/world_state/0", "/planner/world_state/1"]
 
 
 def test_ros2_process_bridge_rejects_invalid_batch_envelopes():
@@ -240,6 +275,30 @@ def test_ros2_jsonl_bridge_round_trips_messages(tmp_path: Path):
     assert [message.topic for message in restored] == ["/clock", "/planner/world_state/0", "/status"]
     assert restored[1].batch_index == 0
     assert restored[2].payload["data"] == "mlx-mac-sim"
+
+
+def test_ros2_jsonl_bridge_rejects_unknown_schema_versions(tmp_path: Path):
+    """The JSONL bridge should fail explicitly on unsupported replay artifacts."""
+    output_path = tmp_path / "ros2-bridge.jsonl"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 999,
+                "kind": "ros2_message_envelope",
+                "topic": "/clock",
+                "msg_type": "rosgraph_msgs/msg/Clock",
+                "payload": {"clock": {"sec": 1, "nanosec": 2}},
+                "frame_id": None,
+                "stamp_ns": None,
+                "batch_index": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Unsupported ROS 2 envelope schema version"):
+        Ros2JsonlBridge.read_messages(output_path)
 
 
 def test_joint_motion_plan_to_ros_envelope_builds_joint_trajectory_payload():
@@ -424,6 +483,7 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
     assert summary["trajectory_roundtrip_ok"] is True
     assert summary["planner_batch_size"] == 2
     assert summary["trajectory_batch_size"] == 2
+    assert summary["message_summary"]["schema_version"] == 1
     assert summary["message_summary"]["batch_topics"] == {
         "/planner/joint_trajectory": 2,
         "/planner/world_state": 2,

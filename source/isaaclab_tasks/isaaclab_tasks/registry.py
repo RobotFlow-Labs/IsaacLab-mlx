@@ -395,6 +395,36 @@ MAC_SAFE_TASK_SPECS = (
         ),
     },
     {
+        "id": "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacAgibotPlaceToy2BoxEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacAgibotPlaceToy2BoxEnvCfg",
+            },
+            semantic_contract="reduced-agibot-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native Agibot toy-to-box slice preserves the place workflow with reduced "
+                "analytic grasp and placement logic instead of the exact Agibot arm and RmpFlow scene."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacAgibotPlaceUprightMugEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacAgibotPlaceUprightMugEnvCfg",
+            },
+            semantic_contract="reduced-agibot-place-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native Agibot upright-mug slice preserves the place workflow with reduced "
+                "analytic grasp and placement logic instead of the exact Agibot arm, mug pose stack, and RmpFlow scene."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Stack-Cube-Franka-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
         "kwargs": {
@@ -407,6 +437,22 @@ MAC_SAFE_TASK_SPECS = (
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
         },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
+            },
+            semantic_contract="reduced-analytic-stack",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native play alias resolves to the same analytic two-cube stack substrate as the "
+                "other reduced Franka stack aliases; the upstream play wrapper semantics are not modeled "
+                "as a separate simulator mode."
+            ),
+        ),
     },
     {
         "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",

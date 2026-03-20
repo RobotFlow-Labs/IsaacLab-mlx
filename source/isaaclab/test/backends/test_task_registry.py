@@ -42,10 +42,13 @@ SAFE_TASK_IDS = (
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
     "Isaac-Lift-Cube-OpenArm-v0",
+    "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
+    "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
     "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
@@ -115,6 +118,8 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     ur10e_gear_2f85_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
     ur10e_gear_2f85_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
     openarm_lift_spec = gym.spec("Isaac-Lift-Cube-OpenArm-v0")
+    agibot_toy2box_spec = gym.spec("Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0")
+    agibot_mug_spec = gym.spec("Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0")
     openarm_open_drawer_spec = gym.spec("Isaac-Open-Drawer-OpenArm-v0")
     assert openarm_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
@@ -138,16 +143,23 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert agibot_toy2box_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-agibot-place-surrogate"
+    assert agibot_toy2box_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert agibot_mug_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-agibot-place-surrogate"
+    assert agibot_mug_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     bin_stack_spec = gym.spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0")
+    stack_ik_rel_play_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Play-v0")
     blueprint_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0")
     skillgen_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0")
     visuomotor_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
     visuomotor_cosmos_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0")
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-mimic"
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert stack_ik_rel_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-stack"
+    assert stack_ik_rel_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert blueprint_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-blueprint"
     assert blueprint_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert skillgen_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-skillgen"
@@ -288,6 +300,9 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     )
     stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-v0", device="cpu", num_envs=4)
     stack_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=9)
+    stack_ik_rel_play_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0", device="cpu", num_envs=10
+    )
     stack_blueprint_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", device="cpu", num_envs=6)
     stack_skillgen_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", device="cpu", num_envs=7)
     stack_rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=2)
@@ -302,6 +317,12 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     bin_stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", device="cpu", num_envs=5)
     pick_place_base_cfg = parse_cfg.parse_env_cfg("Isaac-PickPlace-GR1T2-Abs-v0", device="cpu", num_envs=4)
     pick_place_cfg = parse_cfg.parse_env_cfg("Isaac-PickPlace-GR1T2-WaistEnabled-Abs-v0", device="cpu", num_envs=5)
+    agibot_toy2box_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0", device="cpu", num_envs=6
+    )
+    agibot_upright_mug_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0", device="cpu", num_envs=7
+    )
     cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
     open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-Franka-IK-Abs-v0", device="cpu", num_envs=4)
     openarm_open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-OpenArm-v0", device="cpu", num_envs=5)
@@ -347,6 +368,11 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_cfg.action_space == 8
     assert type(stack_ik_rel_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_ik_rel_cfg.num_envs == 9
+    assert type(stack_ik_rel_play_cfg).__name__ == "MacFrankaStackEnvCfg"
+    assert stack_ik_rel_play_cfg.num_envs == 10
+    assert stack_ik_rel_play_cfg.action_space == 8
+    assert stack_ik_rel_play_cfg.semantic_contract == "reduced-analytic-stack"
+    assert stack_ik_rel_play_cfg.upstream_alias_semantics_preserved is False
     assert type(stack_blueprint_cfg).__name__ == "MacFrankaStackBlueprintEnvCfg"
     assert stack_blueprint_cfg.num_envs == 6
     assert stack_blueprint_cfg.semantic_contract == "reduced-no-blueprint"
@@ -396,6 +422,20 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert pick_place_cfg.semantic_contract == "reduced-pick-place-surrogate"
     assert pick_place_cfg.upstream_alias_semantics_preserved is False
     assert "pick-place" in pick_place_cfg.contract_notes.lower()
+    assert type(agibot_toy2box_cfg).__name__ == "MacAgibotPlaceToy2BoxEnvCfg"
+    assert agibot_toy2box_cfg.num_envs == 6
+    assert agibot_toy2box_cfg.action_space == 8
+    assert agibot_toy2box_cfg.observation_space == 34
+    assert agibot_toy2box_cfg.semantic_contract == "reduced-agibot-place-surrogate"
+    assert agibot_toy2box_cfg.upstream_alias_semantics_preserved is False
+    assert "agibot" in agibot_toy2box_cfg.contract_notes.lower()
+    assert type(agibot_upright_mug_cfg).__name__ == "MacAgibotPlaceUprightMugEnvCfg"
+    assert agibot_upright_mug_cfg.num_envs == 7
+    assert agibot_upright_mug_cfg.action_space == 8
+    assert agibot_upright_mug_cfg.observation_space == 34
+    assert agibot_upright_mug_cfg.semantic_contract == "reduced-agibot-place-surrogate"
+    assert agibot_upright_mug_cfg.upstream_alias_semantics_preserved is False
+    assert "agibot" in agibot_upright_mug_cfg.contract_notes.lower()
     assert type(cabinet_cfg).__name__ == "MacFrankaCabinetEnvCfg"
     assert cabinet_cfg.num_envs == 3
     assert cabinet_cfg.action_space == 8

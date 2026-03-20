@@ -17,6 +17,9 @@ from typing import Any
 from .planner_compat import JointMotionPlan, PlannerWorldObstacle, PlannerWorldState
 
 
+ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION = 1
+
+
 def _normalize_message_value(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
@@ -62,6 +65,8 @@ class Ros2MessageEnvelope:
 
     def state_dict(self) -> dict[str, Any]:
         return {
+            "schema_version": ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION,
+            "kind": "ros2_message_envelope",
             "topic": self.topic,
             "msg_type": self.msg_type,
             "payload": self.normalized_payload(),
@@ -360,9 +365,15 @@ class Ros2ProcessBridge:
         if not envelopes:
             return []
         indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=_topic_root_for_batch(envelopes[0].topic))
-        return [
-            self.publish_via_cli(envelope, once=once, check=check) for _, envelope in indexed_envelopes
-        ]
+        results: list[subprocess.CompletedProcess[str]] = []
+        for batch_index, envelope in indexed_envelopes:
+            try:
+                results.append(self.publish_via_cli(envelope, once=once, check=check))
+            except subprocess.CalledProcessError as exc:
+                raise RuntimeError(
+                    f"ROS 2 batch publish failed at batch_index={batch_index} topic='{envelope.topic}'"
+                ) from exc
+        return results
 
     def build_topic_echo_command(self, topic: str, *, once: bool = True) -> list[str]:
         command = [self.ros2_executable, "topic", "echo", topic]
@@ -405,6 +416,12 @@ class Ros2JsonlBridge:
         messages: list[Ros2MessageEnvelope] = []
         for line in input_path.read_text(encoding="utf-8").splitlines():
             payload = json.loads(line)
+            if int(payload.get("schema_version", ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION)) != ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION:
+                raise ValueError(
+                    f"Unsupported ROS 2 envelope schema version: {payload.get('schema_version')}"
+                )
+            if payload.get("kind", "ros2_message_envelope") != "ros2_message_envelope":
+                raise ValueError(f"Unsupported ROS 2 envelope kind: {payload.get('kind')}")
             messages.append(
                 Ros2MessageEnvelope(
                     topic=payload["topic"],
@@ -436,6 +453,7 @@ class Ros2JsonlBridge:
                 )
         return {
             "message_count": len(messages),
+            "schema_version": ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION,
             "topic_counts": dict(sorted(topic_counts.items())),
             "msg_type_counts": dict(sorted(msg_type_counts.items())),
             "batch_topics": dict(sorted(batch_topics.items())),

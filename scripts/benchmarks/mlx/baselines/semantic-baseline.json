@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T02:44:39Z",
+  "generated_at": "2026-03-20T03:22:03Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,9 +20,69 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 30,
+  "task_count": 32,
   "task_group": "full",
   "tasks": {
+    "agibot-place-toy2box": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 34,
+        "output_signature": {
+          "final_cube_distance_mean": 0.4789530336856842,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.4817103147506714,
+          "final_goal_gap_mean": 0.16317084431648254,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.41616111993789673,
+          "final_joint_vel_abs_mean": 0.02556944452226162,
+          "final_place_distance_mean": 0.16317084431648254,
+          "final_place_target_height_mean": 0.14059022068977356,
+          "final_placed_ratio": 0.0,
+          "final_policy_mean": 0.046319447457790375,
+          "final_policy_std": 0.4115590453147888,
+          "final_reward_mean": 0.013380603864789009
+        },
+        "semantic_contract": "reduced-agibot-place-surrogate",
+        "upstream_alias_semantics_preserved": false
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "agibot-place-upright-mug": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 34,
+        "output_signature": {
+          "final_cube_distance_mean": 0.5662651658058167,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.4817103147506714,
+          "final_goal_gap_mean": 0.1311711072921753,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.41616111993789673,
+          "final_joint_vel_abs_mean": 0.02556944452226162,
+          "final_place_distance_mean": 0.1311711072921753,
+          "final_place_target_height_mean": 0.14078697562217712,
+          "final_placed_ratio": 0.0,
+          "final_policy_mean": 0.03244868293404579,
+          "final_policy_std": 0.4147409498691559,
+          "final_reward_mean": 0.017395716160535812
+        },
+        "semantic_contract": "reduced-agibot-place-surrogate",
+        "upstream_alias_semantics_preserved": false
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "anymal-c-flat": {
       "contract": {
         "action_dim": 12,

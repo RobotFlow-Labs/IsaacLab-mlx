@@ -53,6 +53,8 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
+        "agibot-place-toy2box",
+        "agibot-place-upright-mug",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",

@@ -28,6 +28,10 @@ from isaaclab.backends import (
 from isaaclab.backends.mac_sim.hotpath import get_franka_stack_hotpath_backend
 from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
+    MacAgibotPlaceToy2BoxEnv,
+    MacAgibotPlaceToy2BoxEnvCfg,
+    MacAgibotPlaceUprightMugEnv,
+    MacAgibotPlaceUprightMugEnvCfg,
     MacAnymalCFlatEnv,
     MacAnymalCFlatEnvCfg,
     MacAnymalCRoughEnv,
@@ -303,6 +307,22 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         )
         payload["final_cube_height_mean"] = float(mx.mean(env.sim_backend.cube_pos_w[:, 2]).item())
         payload["final_grasp_ratio"] = float(mx.mean(env.sim_backend.grasped.astype(mx.float32)).item())
+        if hasattr(env.sim_backend, "place_target_pos_w"):
+            if terminal_policy_observations:
+                terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
+                payload["final_place_target_height_mean"] = float(mx.mean(terminal_policy[:, 24]).item())
+                payload["final_place_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 28:31], axis=1)).item())
+                payload["final_goal_gap_mean"] = float(mx.mean(terminal_policy[:, 31]).item())
+                payload["final_placed_ratio"] = float(mx.mean(terminal_policy[:, 33]).item())
+            else:
+                payload["final_place_target_height_mean"] = float(mx.mean(env.sim_backend.place_target_pos_w[:, 2]).item())
+                payload["final_place_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(env.sim_backend.place_error(), axis=1)).item()
+                )
+                payload["final_goal_gap_mean"] = float(
+                    mx.mean(mx.linalg.norm(env.sim_backend.place_error(), axis=1)).item()
+                )
+                payload["final_placed_ratio"] = float(mx.mean(env.sim_backend.placed.astype(mx.float32)).item())
         if task_name == "franka-teddy-bear-lift":
             payload["final_lift_gap_mean"] = float(
                 mx.mean(mx.maximum(env.cfg.lift_success_height - env.sim_backend.cube_pos_w[:, 2], 0.0)).item()
@@ -954,6 +974,60 @@ def benchmark_openarm_lift(num_envs: int, steps: int, seed: int) -> dict[str, An
     )
 
 
+def benchmark_agibot_place_toy2box(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced Agibot toy-to-box place MLX env step loop."""
+
+    env = MacAgibotPlaceToy2BoxEnv(MacAgibotPlaceToy2BoxEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "agibot-place-toy2box",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_agibot_place_upright_mug(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced Agibot upright-mug place MLX env step loop."""
+
+    env = MacAgibotPlaceUprightMugEnv(MacAgibotPlaceUprightMugEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "agibot-place-upright-mug",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_franka_teddy_bear_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the Franka teddy-bear lift MLX env step loop."""
 
@@ -1412,6 +1486,10 @@ def run_benchmarks(
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
         elif task == "openarm-lift":
             benchmark = benchmark_openarm_lift(num_envs, steps, seed)
+        elif task == "agibot-place-toy2box":
+            benchmark = benchmark_agibot_place_toy2box(num_envs, steps, seed)
+        elif task == "agibot-place-upright-mug":
+            benchmark = benchmark_agibot_place_upright_mug(num_envs, steps, seed)
         elif task == "franka-teddy-bear-lift":
             benchmark = benchmark_franka_teddy_bear_lift(num_envs, steps, seed)
         elif task == "franka-stack":
