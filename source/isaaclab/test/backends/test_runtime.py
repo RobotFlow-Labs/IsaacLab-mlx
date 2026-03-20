@@ -183,6 +183,20 @@ def test_create_sim_backend_returns_macsim_adapter():
     state = backend.state_dict()
     assert state["implementation"] == "generic-articulation-layer+task-specialized-analytic-slices"
     assert state["generic_scene_runtime"] is True
+    assert state["scene_surface"] == {
+        "shared_scene_state": True,
+        "shared_articulation_io": True,
+        "task_local_contacts": True,
+        "task_local_assets": True,
+        "task_local_spawners": True,
+    }
+    assert state["surface_sources"] == {
+        "shared_scene_state": "MacSimSceneState",
+        "shared_articulation_io": "generic batched articulation buffers",
+        "task_local_contacts": "analytic contacts and reduced contact buffers",
+        "task_local_assets": "task-local analytic asset adapters",
+        "task_local_spawners": "task-local analytic spawner adapters",
+    }
     assert state["attached"] is False
     assert state["supported_tasks"]["current_mac_native_count"] >= 13
 

@@ -21,6 +21,20 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
 
     assert payload["runtime"]["compute_backend"] == "mlx"
     assert payload["sim"]["implementation"] == "generic-articulation-layer+task-specialized-analytic-slices"
+    assert payload["sim"]["scene_surface"] == {
+        "shared_scene_state": True,
+        "shared_articulation_io": True,
+        "task_local_contacts": True,
+        "task_local_assets": True,
+        "task_local_spawners": True,
+    }
+    assert payload["sim"]["surface_sources"] == {
+        "shared_scene_state": "MacSimSceneState",
+        "shared_articulation_io": "generic batched articulation buffers",
+        "task_local_contacts": "analytic contacts and reduced contact buffers",
+        "task_local_assets": "task-local analytic asset adapters",
+        "task_local_spawners": "task-local analytic spawner adapters",
+    }
     assert payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
     assert payload["sim"]["supported_tasks"]["public_benchmark_groups"]["sensor-mac-native"] == [
         "cartpole-rgb-camera",

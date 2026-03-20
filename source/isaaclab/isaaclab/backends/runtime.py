@@ -561,6 +561,20 @@ class MacSimBackend(SimBackend):
             "backend": self.name,
             "implementation": "generic-articulation-layer+task-specialized-analytic-slices",
             "generic_scene_runtime": True,
+            "scene_surface": {
+                "shared_scene_state": True,
+                "shared_articulation_io": True,
+                "task_local_contacts": True,
+                "task_local_assets": True,
+                "task_local_spawners": True,
+            },
+            "surface_sources": {
+                "shared_scene_state": "MacSimSceneState",
+                "shared_articulation_io": "generic batched articulation buffers",
+                "task_local_contacts": "analytic contacts and reduced contact buffers",
+                "task_local_assets": "task-local analytic asset adapters",
+                "task_local_spawners": "task-local analytic spawner adapters",
+            },
             "scene_profile": {
                 "articulation_profile": "shared batched articulation and root-state buffers",
                 "contact_profile": "analytic contacts and reduced contact buffers",
