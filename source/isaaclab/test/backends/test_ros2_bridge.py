@@ -241,6 +241,76 @@ def test_ros2_process_bridge_builds_batch_publish_session_manifest():
     assert manifest["replayable"] is True
 
 
+def test_ros2_process_bridge_builds_and_validates_batch_publish_session_bundle(tmp_path: Path):
+    """Session bundles should carry transcript integrity and validate deterministically before replay."""
+    bridge = Ros2ProcessBridge()
+    transcript = bridge.build_batch_publish_transcript(
+        (
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/0",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 0},
+                batch_index=0,
+            ),
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/1",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 1},
+                batch_index=1,
+            ),
+        )
+    )
+    transcript_path = tmp_path / "planner-transcript.json"
+    transcript_path.write_text(json.dumps(transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    bundle = bridge.build_batch_publish_session_bundle(
+        publish_transcript_paths=(transcript_path,),
+        replay_metadata={"source": "unit-test", "bundle": True},
+        batch_publish_transcripts=(transcript,),
+    )
+    validation = bridge.validate_batch_publish_session_bundle(bundle, base_dir=tmp_path)
+
+    assert bundle["schema_version"] == 1
+    assert bundle["kind"] == "ros2_batch_publish_session_bundle"
+    assert bundle["transcript_count"] == 1
+    assert bundle["transcript_integrity"][0]["publish_transcript_path"] == str(transcript_path)
+    assert len(bundle["transcript_integrity"][0]["sha256"]) == 64
+    assert validation["kind"] == "ros2_batch_publish_session_bundle_validation"
+    assert validation["transcript_count"] == 1
+    assert validation["replayable"] is True
+    assert validation["replay_groups"][0]["topic_root"] == "/planner/world_state"
+    assert validation["validated_transcript_integrity"][0]["validated"] is True
+
+
+def test_ros2_process_bridge_rejects_tampered_batch_publish_session_bundle(tmp_path: Path):
+    """Tampered transcript sidecars should fail integrity validation before replay."""
+    bridge = Ros2ProcessBridge()
+    transcript = bridge.build_batch_publish_transcript(
+        (
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/0",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 0},
+                batch_index=0,
+            ),
+        )
+    )
+    transcript_path = tmp_path / "planner-transcript.json"
+    transcript_path.write_text(json.dumps(transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    bundle = bridge.build_batch_publish_session_bundle(
+        publish_transcript_paths=(transcript_path,),
+        replay_metadata={"source": "unit-test", "bundle": True},
+        batch_publish_transcripts=(transcript,),
+    )
+    transcript_path.write_text(
+        json.dumps({**transcript, "topic_root": "/planner/world_state/tampered"}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Transcript digest mismatch"):
+        bridge.validate_batch_publish_session_bundle(bundle, base_dir=tmp_path)
+
+
 def test_ros2_process_bridge_replays_session_manifest_into_ordered_command_groups(tmp_path: Path):
     """Session manifests should replay into deterministic ordered command groups from transcript files."""
     bridge = Ros2ProcessBridge()
@@ -703,6 +773,11 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
         "/planner/joint_trajectory",
         "/planner/world_state",
     ]
+    assert summary["process_session_bundle"]["kind"] == "ros2_batch_publish_session_bundle"
+    assert summary["process_session_bundle"]["transcript_count"] == 2
+    assert summary["process_session_bundle_validation"]["kind"] == "ros2_batch_publish_session_bundle_validation"
+    assert summary["process_session_bundle_validation"]["transcript_count"] == 2
+    assert summary["process_session_bundle_validation"]["validated_transcript_integrity"][0]["validated"] is True
     assert [group["topic_root"] for group in summary["process_replay_command_groups"]] == [
         "/planner/joint_trajectory",
         "/planner/world_state",

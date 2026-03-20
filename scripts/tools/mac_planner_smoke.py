@@ -122,10 +122,16 @@ def main() -> int:
         },
         batch_publish_transcripts=(planner_batch_publish_transcript, trajectory_batch_publish_transcript),
     )
-    process_replay_command_groups = ros_bridge.build_batch_publish_replay_groups(
-        process_session_manifest,
+    process_session_bundle = ros_bridge.build_batch_publish_session_bundle(
+        publish_transcript_paths=(planner_batch_transcript_path, trajectory_batch_transcript_path),
+        replay_metadata=process_session_manifest["replay_metadata"],
+        batch_publish_transcripts=(planner_batch_publish_transcript, trajectory_batch_publish_transcript),
+    )
+    process_session_bundle_validation = ros_bridge.validate_batch_publish_session_bundle(
+        process_session_bundle,
         base_dir=args.output.parent,
     )
+    process_replay_command_groups = process_session_bundle_validation["replay_groups"]
 
     payload = {
         "planner": planner.state_dict(),
@@ -146,6 +152,8 @@ def main() -> int:
         "planner_ros_batch_transcript_path": str(planner_batch_transcript_path),
         "trajectory_ros_batch_transcript_path": str(trajectory_batch_transcript_path),
         "process_session_manifest": process_session_manifest,
+        "process_session_bundle": process_session_bundle,
+        "process_session_bundle_validation": process_session_bundle_validation,
         "process_replay_command_groups": process_replay_command_groups,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

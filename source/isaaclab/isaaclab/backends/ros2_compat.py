@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -21,6 +22,8 @@ ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_REPLAY_GROUP_SCHEMA_VERSION = 1
+ROS2_BATCH_PUBLISH_SESSION_BUNDLE_SCHEMA_VERSION = 1
+ROS2_BATCH_PUBLISH_TRANSCRIPT_INTEGRITY_SCHEMA_VERSION = 1
 
 
 def _normalize_message_value(value: Any) -> Any:
@@ -37,6 +40,15 @@ def _normalize_message_value(value: Any) -> Any:
     if hasattr(value, "item") and callable(value.item):
         return _normalize_message_value(value.item())
     return repr(value)
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    return (json.dumps(_normalize_message_value(value), sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def _digest_json_value(value: Any) -> tuple[str, int]:
+    payload = _canonical_json_bytes(value)
+    return hashlib.sha256(payload).hexdigest(), len(payload)
 
 
 def _seconds_to_ros_time(seconds: float) -> dict[str, int]:
@@ -148,6 +160,25 @@ def _validate_batch_publish_transcript_dict(transcript: Any) -> dict[str, Any]:
     normalized.setdefault("record_count", len(normalized["record_sequence"]))
     normalized.setdefault("observed_record_count", len(normalized["record_sequence"]))
     normalized.setdefault("replayable", True)
+    return normalized
+
+
+def _validate_batch_publish_session_bundle_dict(bundle: Any) -> dict[str, Any]:
+    normalized = _normalize_message_value(bundle)
+    if not isinstance(normalized, dict):
+        raise ValueError("batch publish session bundle must be a mapping")
+    if int(normalized.get("schema_version", ROS2_BATCH_PUBLISH_SESSION_BUNDLE_SCHEMA_VERSION)) != ROS2_BATCH_PUBLISH_SESSION_BUNDLE_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported ROS 2 batch publish session bundle schema version: {normalized.get('schema_version')}"
+        )
+    if normalized.get("kind", "ros2_batch_publish_session_bundle") != "ros2_batch_publish_session_bundle":
+        raise ValueError(f"Unsupported ROS 2 batch publish session bundle kind: {normalized.get('kind')}")
+    session_manifest = normalized.get("session_manifest")
+    if not isinstance(session_manifest, dict):
+        raise ValueError("batch publish session bundle is missing session_manifest")
+    normalized["session_manifest"] = session_manifest
+    normalized.setdefault("transcript_integrity", [])
+    normalized.setdefault("replayable", bool(session_manifest.get("replayable", True)))
     return normalized
 
 
@@ -527,6 +558,145 @@ class Ros2ProcessBridge:
             "publish_transcript_count": len(normalized_paths),
             "batch_publish_transcript_count": len(transcripts),
             "replayable": bool(transcripts or normalized_paths),
+        }
+
+    def build_batch_publish_session_bundle(
+        self,
+        *,
+        publish_transcript_paths: list[str | Path] | tuple[str | Path, ...],
+        replay_metadata: dict[str, Any] | None = None,
+        batch_publish_transcripts: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+        command_root: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any]:
+        """Build a replayable session bundle with deterministic transcript integrity checks."""
+
+        session_manifest = self.build_batch_publish_session_manifest(
+            publish_transcript_paths=publish_transcript_paths,
+            replay_metadata=replay_metadata,
+            batch_publish_transcripts=batch_publish_transcripts,
+            command_root=command_root,
+        )
+        transcript_entries = list(session_manifest.get("batch_publish_transcripts", ()))
+        integrity_records: list[dict[str, Any]] = []
+        for index, transcript in enumerate(transcript_entries):
+            transcript_dict = _validate_batch_publish_transcript_dict(transcript)
+            sha256, byte_count = _digest_json_value(transcript_dict)
+            integrity_records.append(
+                {
+                    "schema_version": ROS2_BATCH_PUBLISH_TRANSCRIPT_INTEGRITY_SCHEMA_VERSION,
+                    "kind": "ros2_batch_publish_transcript_integrity",
+                    "transcript_index": index,
+                    "publish_transcript_path": session_manifest["publish_transcript_paths"][index]
+                    if index < len(session_manifest["publish_transcript_paths"])
+                    else None,
+                    "topic_root": transcript_dict["topic_root"],
+                    "batch_indices": list(transcript_dict["batch_indices"]),
+                    "message_count": transcript_dict["message_count"],
+                    "record_count": transcript_dict["record_count"],
+                    "observed_record_count": transcript_dict["observed_record_count"],
+                    "sha256": sha256,
+                    "byte_count": byte_count,
+                    "replayable": bool(transcript_dict.get("replayable", True)),
+                }
+            )
+        return {
+            "schema_version": ROS2_BATCH_PUBLISH_SESSION_BUNDLE_SCHEMA_VERSION,
+            "kind": "ros2_batch_publish_session_bundle",
+            "session_manifest": session_manifest,
+            "transcript_integrity": integrity_records,
+            "transcript_count": len(integrity_records),
+            "replayable": bool(session_manifest.get("replayable", False) and all(item["replayable"] for item in integrity_records)),
+        }
+
+    def validate_batch_publish_session_bundle(
+        self,
+        bundle: dict[str, Any],
+        *,
+        base_dir: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """Validate a session bundle before replaying its transcript sidecars."""
+
+        normalized = _validate_batch_publish_session_bundle_dict(bundle)
+        session_manifest = _normalize_message_value(normalized["session_manifest"])
+        if not isinstance(session_manifest, dict):
+            raise ValueError("batch publish session bundle session_manifest must be a mapping")
+        transcript_integrity = list(normalized.get("transcript_integrity", ()))
+        if not transcript_integrity:
+            raise ValueError("batch publish session bundle is missing transcript_integrity")
+        expected_transcript_count = int(session_manifest.get("publish_transcript_count", len(transcript_integrity)))
+        if len(transcript_integrity) != expected_transcript_count:
+            raise ValueError("batch publish session bundle transcript count does not match the session manifest")
+        expected_batch_transcript_count = int(
+            session_manifest.get("batch_publish_transcript_count", expected_transcript_count)
+        )
+        if expected_batch_transcript_count != expected_transcript_count:
+            raise ValueError("batch publish session bundle transcript counts are inconsistent in the session manifest")
+
+        base_path = None if base_dir is None else Path(base_dir)
+
+        def _resolve_path(raw_path: str) -> Path:
+            path = Path(raw_path)
+            if path.is_absolute() or base_path is None:
+                return path
+            return base_path / path
+
+        validated_integrity: list[dict[str, Any]] = []
+        for index, integrity_entry in enumerate(transcript_integrity):
+            entry = _normalize_message_value(integrity_entry)
+            if not isinstance(entry, dict):
+                raise ValueError("batch publish transcript integrity entry must be a mapping")
+            if int(entry.get("schema_version", ROS2_BATCH_PUBLISH_TRANSCRIPT_INTEGRITY_SCHEMA_VERSION)) != ROS2_BATCH_PUBLISH_TRANSCRIPT_INTEGRITY_SCHEMA_VERSION:
+                raise ValueError(
+                    f"Unsupported ROS 2 batch publish transcript integrity schema version: {entry.get('schema_version')}"
+                )
+            if entry.get("kind", "ros2_batch_publish_transcript_integrity") != "ros2_batch_publish_transcript_integrity":
+                raise ValueError(f"Unsupported ROS 2 batch publish transcript integrity kind: {entry.get('kind')}")
+
+            transcript_path = entry.get("publish_transcript_path")
+            if transcript_path is None:
+                raise ValueError("batch publish transcript integrity entry is missing publish_transcript_path")
+            resolved_path = _resolve_path(str(transcript_path))
+            transcript_dict = _validate_batch_publish_transcript_dict(
+                json.loads(resolved_path.read_text(encoding="utf-8"))
+            )
+            actual_sha256, actual_byte_count = _digest_json_value(transcript_dict)
+            expected_sha256 = str(entry.get("sha256"))
+            if actual_sha256 != expected_sha256:
+                raise ValueError(
+                    f"Transcript digest mismatch for '{resolved_path}': expected {expected_sha256} got {actual_sha256}"
+                )
+            if actual_byte_count != int(entry.get("byte_count", actual_byte_count)):
+                raise ValueError(
+                    f"Transcript byte-count mismatch for '{resolved_path}': expected {entry.get('byte_count')} got {actual_byte_count}"
+                )
+            if transcript_dict["topic_root"] != entry.get("topic_root"):
+                raise ValueError(
+                    f"Transcript topic root mismatch for '{resolved_path}': expected {entry.get('topic_root')} got {transcript_dict['topic_root']}"
+                )
+            validated_integrity.append(
+                {
+                    **entry,
+                    "publish_transcript_path": str(resolved_path),
+                    "validated": True,
+                    "sha256": actual_sha256,
+                    "byte_count": actual_byte_count,
+                    "topic_root": transcript_dict["topic_root"],
+                    "message_count": transcript_dict["message_count"],
+                    "record_count": transcript_dict["record_count"],
+                    "observed_record_count": transcript_dict["observed_record_count"],
+                }
+            )
+
+        replay_groups = self.build_batch_publish_replay_groups(session_manifest, base_dir=base_dir)
+        return {
+            "schema_version": ROS2_BATCH_PUBLISH_SESSION_BUNDLE_SCHEMA_VERSION,
+            "kind": "ros2_batch_publish_session_bundle_validation",
+            "bundle_replayable": bool(normalized.get("replayable", False)),
+            "transcript_count": len(validated_integrity),
+            "validated_transcript_integrity": validated_integrity,
+            "session_manifest": session_manifest,
+            "replay_groups": replay_groups,
+            "replayable": bool(session_manifest.get("replayable", False) and all(item["replayable"] for item in validated_integrity)),
         }
 
     def build_batch_publish_replay_groups(
