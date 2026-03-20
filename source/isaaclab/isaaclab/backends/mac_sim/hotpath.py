@@ -599,6 +599,120 @@ def _anymal_body_positions_impl(
     return mx.concatenate([base_pos, foot_pos, thigh_pos], axis=1)
 
 
+_anymal_body_positions_compiled = mx.compile(_anymal_body_positions_impl)
+_anymal_body_positions_metal = None
+_anymal_body_positions_hotpath_initialized = False
+
+
+def _build_anymal_body_positions_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        uint joint_dim = (uint)params[1];
+        float foot_clearance = params[0];
+        uint root_base = env_id * 3;
+        uint joint_base = env_id * joint_dim;
+        uint command_base = env_id * 3;
+        uint body_base = env_id * 9;
+
+        float root_x = root_pos_w[root_base + 0];
+        float root_y = root_pos_w[root_base + 1];
+        float root_z = root_pos_w[root_base + 2];
+        float command_x = commands[command_base + 0];
+        float command_y = commands[command_base + 1];
+        float command_speed = metal::sqrt(command_x * command_x + command_y * command_y);
+        float phase_base = gait_phase[env_id];
+
+        body_pos_w[body_base + 0] = root_x;
+        body_pos_w[body_base + 1] = root_y;
+        body_pos_w[body_base + 2] = root_z;
+
+        for (uint leg_id = 0; leg_id < 4; ++leg_id) {
+            uint leg_joint_base = joint_base + leg_id * 3;
+            float hip_abduction = joint_pos[leg_joint_base + 0];
+            float hip_pitch = joint_pos[leg_joint_base + 1];
+            float knee = joint_pos[leg_joint_base + 2];
+            float phase = phase_base + gait_phase_offsets[leg_id];
+            float swing = metal::max(metal::sin(phase), 0.0f) * (0.25f + command_speed);
+            float extension = 0.20f + 0.16f * metal::cos(hip_pitch) + 0.18f * metal::cos(hip_pitch + knee);
+            extension = metal::clamp(extension, 0.22f, 0.62f);
+            float step_x = 0.10f * command_x * metal::cos(phase);
+            float step_y = 0.06f * command_y * metal::sin(phase);
+            uint offset_base = leg_id * 2;
+            float hip_offset_x = hip_offsets[offset_base + 0];
+            float hip_offset_y = hip_offsets[offset_base + 1];
+
+            uint foot_base = body_base + 3 + leg_id * 3;
+            body_pos_w[foot_base + 0] = root_x + hip_offset_x + step_x - 0.04f * metal::sin(hip_pitch);
+            body_pos_w[foot_base + 1] = root_y + hip_offset_y + step_y + 0.04f * hip_abduction;
+            body_pos_w[foot_base + 2] = root_z - extension + foot_clearance * swing - 0.02f * metal::tanh(knee);
+
+            uint thigh_base = body_base + 15 + leg_id * 3;
+            body_pos_w[thigh_base + 0] = root_x + 0.55f * hip_offset_x;
+            body_pos_w[thigh_base + 1] = root_y + 0.55f * hip_offset_y + 0.02f * hip_abduction;
+            body_pos_w[thigh_base + 2] = root_z - 0.24f - 0.05f * metal::tanh(hip_pitch);
+        }
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="anymal_body_positions",
+            input_names=["root_pos_w", "joint_pos", "commands", "gait_phase", "hip_offsets", "gait_phase_offsets", "params"],
+            output_names=["body_pos_w"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_anymal_body_positions_hotpath() -> None:
+    global _anymal_body_positions_metal
+    global _anymal_body_positions_hotpath_initialized
+    if _anymal_body_positions_hotpath_initialized:
+        return
+    _anymal_body_positions_hotpath_initialized = True
+    _anymal_body_positions_metal = _build_anymal_body_positions_metal_kernel()
+
+
+def anymal_body_positions_hotpath(
+    root_pos_w: mx.array,
+    joint_pos: mx.array,
+    commands: mx.array,
+    gait_phase: mx.array,
+    hip_offsets: mx.array,
+    gait_phase_offsets: mx.array,
+    foot_clearance: float,
+) -> mx.array:
+    _ensure_anymal_body_positions_hotpath()
+    if _anymal_body_positions_metal is None:
+        return _anymal_body_positions_compiled(
+            root_pos_w,
+            joint_pos,
+            commands,
+            gait_phase,
+            hip_offsets,
+            gait_phase_offsets,
+            foot_clearance,
+        )
+    root_pos_w = mx.array(root_pos_w, dtype=mx.float32)
+    joint_pos = mx.array(joint_pos, dtype=mx.float32)
+    commands = mx.array(commands, dtype=mx.float32)
+    gait_phase = mx.array(gait_phase, dtype=mx.float32)
+    hip_offsets = mx.array(hip_offsets, dtype=mx.float32)
+    gait_phase_offsets = mx.array(gait_phase_offsets, dtype=mx.float32)
+    if int(joint_pos.shape[0]) == 0:
+        return mx.zeros((0, 9, 3), dtype=mx.float32)
+    params = mx.array([foot_clearance, int(joint_pos.shape[1])], dtype=mx.float32)
+    outputs = _anymal_body_positions_metal(
+        inputs=[root_pos_w, joint_pos, commands, gait_phase, hip_offsets, gait_phase_offsets, params],
+        grid=(int(joint_pos.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(joint_pos.shape[0]), 9, 3)],
+        output_dtypes=[mx.float32],
+    )
+    return outputs[0]
+
+
 def _h1_leg_extension_impl(joint_pos: mx.array) -> mx.array:
     num_envs = joint_pos.shape[0]
     leg_pos = joint_pos[:, :10].reshape((num_envs, 2, 5))
@@ -729,9 +843,129 @@ def _h1_body_positions_impl(
     return mx.concatenate([torso_pos, foot_pos, knee_pos], axis=1)
 
 
-anymal_body_positions_hotpath = mx.compile(_anymal_body_positions_impl)
-h1_body_positions_hotpath = mx.compile(_h1_body_positions_impl)
+_h1_body_positions_compiled = mx.compile(_h1_body_positions_impl)
+_h1_body_positions_metal = None
+_h1_body_positions_hotpath_initialized = False
 
+
+def _build_h1_body_positions_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float foot_clearance = params[0];
+        uint joint_dim = (uint)params[1];
+        uint root_base = env_id * 3;
+        uint joint_base = env_id * joint_dim;
+        uint command_base = env_id * 3;
+        uint body_base = env_id * 15;
+
+        float root_x = root_pos_w[root_base + 0];
+        float root_y = root_pos_w[root_base + 1];
+        float root_z = root_pos_w[root_base + 2];
+        float command_x = commands[command_base + 0];
+        float command_y = commands[command_base + 1];
+        float command_speed = metal::sqrt(command_x * command_x + command_y * command_y);
+        float phase_base = gait_phase[env_id];
+
+        body_pos_w[body_base + 0] = root_x;
+        body_pos_w[body_base + 1] = root_y;
+        body_pos_w[body_base + 2] = root_z;
+
+        for (uint leg_id = 0; leg_id < 2; ++leg_id) {
+            uint leg_joint_base = joint_base + leg_id * 5;
+            uint hip_offset_base = leg_id * 2;
+            float hip_yaw = joint_pos[leg_joint_base + 0];
+            float hip_roll = joint_pos[leg_joint_base + 1];
+            float hip_pitch = joint_pos[leg_joint_base + 2];
+            float knee = joint_pos[leg_joint_base + 3];
+            float ankle = joint_pos[leg_joint_base + 4];
+            float phase = phase_base + gait_phase_offsets[leg_id];
+            float swing = metal::max(metal::sin(phase), 0.0f) * (0.18f + 0.65f * command_speed);
+            float extension = 0.40f
+                + 0.20f * metal::cos(hip_pitch + 0.20f)
+                + 0.26f * metal::cos(hip_pitch + knee - 0.10f)
+                + 0.08f * metal::cos(hip_pitch + knee + ankle);
+            extension = metal::clamp(extension, 0.58f, 0.98f);
+            float step_x = 0.18f * command_x * metal::cos(phase);
+            float step_y = 0.06f * command_y * metal::sin(phase);
+            float hip_offset_x = hip_offsets[hip_offset_base + 0];
+            float hip_offset_y = hip_offsets[hip_offset_base + 1];
+
+            float foot_x = root_x + hip_offset_x + step_x - 0.04f * metal::sin(hip_pitch);
+            float foot_y = root_y + hip_offset_y + step_y + 0.03f * hip_roll + 0.02f * hip_yaw;
+            float foot_z = root_z - extension + foot_clearance * swing - 0.03f * metal::tanh(ankle);
+            uint foot_base = body_base + 3 + leg_id * 3;
+            body_pos_w[foot_base + 0] = foot_x;
+            body_pos_w[foot_base + 1] = foot_y;
+            body_pos_w[foot_base + 2] = foot_z;
+
+            float knee_x = root_x + 0.5f * hip_offset_x + 0.5f * step_x - 0.02f * metal::sin(hip_pitch);
+            float knee_y = root_y + 0.5f * hip_offset_y + 0.015f * hip_roll;
+            float knee_z = root_z - 0.42f - 0.18f * metal::tanh(hip_pitch) - 0.08f * metal::tanh(knee);
+            uint knee_base = body_base + 9 + leg_id * 3;
+            body_pos_w[knee_base + 0] = knee_x;
+            body_pos_w[knee_base + 1] = knee_y;
+            body_pos_w[knee_base + 2] = knee_z;
+        }
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="h1_body_positions",
+            input_names=["root_pos_w", "joint_pos", "commands", "gait_phase", "hip_offsets", "gait_phase_offsets", "params"],
+            output_names=["body_pos_w"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_h1_body_positions_hotpath() -> None:
+    global _h1_body_positions_metal
+    global _h1_body_positions_hotpath_initialized
+    if _h1_body_positions_hotpath_initialized:
+        return
+    _h1_body_positions_hotpath_initialized = True
+    _h1_body_positions_metal = _build_h1_body_positions_metal_kernel()
+
+
+def h1_body_positions_hotpath(
+    root_pos_w: mx.array,
+    joint_pos: mx.array,
+    commands: mx.array,
+    gait_phase: mx.array,
+    hip_offsets: mx.array,
+    gait_phase_offsets: mx.array,
+    foot_clearance: float,
+) -> mx.array:
+    _ensure_h1_body_positions_hotpath()
+    if _h1_body_positions_metal is None:
+        return _h1_body_positions_compiled(
+            root_pos_w,
+            joint_pos,
+            commands,
+            gait_phase,
+            hip_offsets,
+            gait_phase_offsets,
+            foot_clearance,
+        )
+    root_pos_w = mx.array(root_pos_w, dtype=mx.float32)
+    joint_pos = mx.array(joint_pos, dtype=mx.float32)
+    commands = mx.array(commands, dtype=mx.float32)
+    gait_phase = mx.array(gait_phase, dtype=mx.float32)
+    hip_offsets = mx.array(hip_offsets, dtype=mx.float32)
+    gait_phase_offsets = mx.array(gait_phase_offsets, dtype=mx.float32)
+    if int(joint_pos.shape[0]) == 0:
+        return mx.zeros((0, 5, 3), dtype=mx.float32)
+    params = mx.array([foot_clearance, int(joint_pos.shape[1])], dtype=mx.float32)
+    outputs = _h1_body_positions_metal(
+        inputs=[root_pos_w, joint_pos, commands, gait_phase, hip_offsets, gait_phase_offsets, params],
+        grid=(int(joint_pos.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(joint_pos.shape[0]), 5, 3)],
+        output_dtypes=[mx.float32],
+    )
+    return outputs[0]
 
 def _franka_end_effector_position_impl(joint_pos: mx.array) -> mx.array:
     q0 = joint_pos[:, 0]

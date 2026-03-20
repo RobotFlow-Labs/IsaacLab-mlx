@@ -710,7 +710,7 @@ The current ROS 2 bridge is also intentionally plain. It focuses on message/proc
 - [`source/isaaclab/isaaclab/backends/ros2_compat.py`](source/isaaclab/isaaclab/backends/ros2_compat.py)
 - [`scripts/tools/ros2_bridge_smoke.py`](scripts/tools/ros2_bridge_smoke.py)
 
-Batch publish helpers now reject mixed topic-root batches across command building, typed manifest generation, and CLI publish execution, and the replayable batch transcript captures ordered input envelopes, commands, and publish results for deterministic audit, so planner world-state and joint-trajectory envelopes cannot be silently interleaved and replayed out of contract.
+Batch publish helpers now reject mixed topic-root batches across command building, typed manifest generation, and CLI publish execution, and the replayable batch transcript plus session manifest capture ordered input envelopes, commands, publish results, transcript paths, and replay metadata for deterministic audit, so planner world-state and joint-trajectory envelopes cannot be silently interleaved and replayed out of contract.
 
 Example planner smoke:
 
@@ -734,6 +734,7 @@ This is the current compatibility contract:
 - ROS compatibility on macOS means plain message/process interoperability first, including ROS-friendly world-state and joint-trajectory envelopes plus typed round-trip reconstruction without importing ROS Python bindings
 - batched ROS planner envelopes are reconstructed by `batch_index`, not by input order, so JSONL message reordering cannot silently corrupt planner/world batch recovery
 - batch publish transcripts preserve planned envelopes, generated commands, and publish results as plain data so process-level failures can be audited and replayed without ROS Python bindings
+- batch publish session manifests aggregate transcript paths and replay metadata so a publish session can be reconstructed deterministically after the fact
 - CUDA stream transport, NITROS, and GXF remain future follow-on work
 
 ## Kernel Inventory

@@ -102,6 +102,26 @@ def main() -> int:
     ros_bridge = Ros2ProcessBridge()
     planner_batch_publish_transcript = ros_bridge.build_batch_publish_transcript(planner_world_batch_envelopes)
     trajectory_batch_publish_transcript = ros_bridge.build_batch_publish_transcript(trajectory_batch_envelopes)
+    planner_batch_transcript_path = args.output.with_name(f"{args.output.stem}.planner-batch-transcript.json")
+    trajectory_batch_transcript_path = args.output.with_name(f"{args.output.stem}.trajectory-batch-transcript.json")
+    planner_batch_transcript_path.write_text(
+        json.dumps(planner_batch_publish_transcript, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    trajectory_batch_transcript_path.write_text(
+        json.dumps(trajectory_batch_publish_transcript, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    process_session_manifest = ros_bridge.build_batch_publish_session_manifest(
+        publish_transcript_paths=(planner_batch_transcript_path, trajectory_batch_transcript_path),
+        replay_metadata={
+            "source": "mac_planner_smoke",
+            "planner_backend": planner.state_dict()["backend"],
+            "planner_world_batch_size": len(planner_world_batch_envelopes),
+            "trajectory_batch_size": len(trajectory_batch_envelopes),
+        },
+        batch_publish_transcripts=(planner_batch_publish_transcript, trajectory_batch_publish_transcript),
+    )
 
     payload = {
         "planner": planner.state_dict(),
@@ -119,6 +139,9 @@ def main() -> int:
         "trajectory_ros_batch_pub_commands": ros_bridge.build_topic_pub_batch_commands(trajectory_batch_envelopes),
         "planner_ros_batch_publish_transcript": planner_batch_publish_transcript,
         "trajectory_ros_batch_publish_transcript": trajectory_batch_publish_transcript,
+        "planner_ros_batch_transcript_path": str(planner_batch_transcript_path),
+        "trajectory_ros_batch_transcript_path": str(trajectory_batch_transcript_path),
+        "process_session_manifest": process_session_manifest,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -211,6 +211,36 @@ def test_ros2_process_bridge_builds_batch_publish_transcript_in_batch_index_orde
     assert transcript["command_sequence"][0][4] == "/planner/world_state/0"
 
 
+def test_ros2_process_bridge_builds_batch_publish_session_manifest():
+    """Session manifests should capture command roots, transcript paths, and replay metadata."""
+    bridge = Ros2ProcessBridge(ros2_executable="ros2")
+    transcript = bridge.build_batch_publish_transcript(
+        (
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/0",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 0},
+                batch_index=0,
+            ),
+        )
+    )
+
+    manifest = bridge.build_batch_publish_session_manifest(
+        publish_transcript_paths=("/tmp/planner-transcript.json", "/tmp/trajectory-transcript.json"),
+        replay_metadata={"source": "unit-test", "replayable": True},
+        batch_publish_transcripts=(transcript,),
+    )
+
+    assert manifest["schema_version"] == 1
+    assert manifest["kind"] == "ros2_batch_publish_session_manifest"
+    assert manifest["command_root"] == ["ros2", "topic", "pub"]
+    assert manifest["publish_transcript_paths"] == ["/tmp/planner-transcript.json", "/tmp/trajectory-transcript.json"]
+    assert manifest["replay_metadata"]["source"] == "unit-test"
+    assert manifest["batch_publish_transcript_count"] == 1
+    assert manifest["topic_roots"] == ["/planner/world_state"]
+    assert manifest["replayable"] is True
+
+
 def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(monkeypatch):
     """Batch publish failures should report the failing batch index and topic."""
     bridge = Ros2ProcessBridge()
@@ -608,3 +638,10 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
     assert summary["planner_batch_publish_transcript"]["publish_state"] == "planned"
     assert summary["trajectory_batch_publish_transcript"]["publish_state"] == "planned"
     assert summary["planner_batch_publish_transcript"]["batch_indices"] == [0, 1]
+    assert summary["process_session_manifest"]["command_root"] == ["ros2", "topic", "pub"]
+    assert summary["process_session_manifest"]["publish_transcript_count"] == 2
+    assert summary["process_session_manifest"]["batch_publish_transcript_count"] == 2
+    assert summary["process_session_manifest"]["topic_roots"] == [
+        "/planner/joint_trajectory",
+        "/planner/world_state",
+    ]

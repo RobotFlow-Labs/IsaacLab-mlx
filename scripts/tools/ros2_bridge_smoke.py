@@ -131,6 +131,26 @@ def main() -> int:
     ]
     planner_batch_publish_transcript = bridge.build_batch_publish_transcript(tuple(reversed(planner_world_batch_envelopes)))
     trajectory_batch_publish_transcript = bridge.build_batch_publish_transcript(tuple(reversed(planner_plan_batch_envelopes)))
+    planner_batch_transcript_path = args.output.with_name(f"{args.output.stem}.planner-batch-transcript.json")
+    trajectory_batch_transcript_path = args.output.with_name(f"{args.output.stem}.trajectory-batch-transcript.json")
+    planner_batch_transcript_path.write_text(
+        json.dumps(planner_batch_publish_transcript, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    trajectory_batch_transcript_path.write_text(
+        json.dumps(trajectory_batch_publish_transcript, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    process_session_manifest = bridge.build_batch_publish_session_manifest(
+        publish_transcript_paths=(planner_batch_transcript_path, trajectory_batch_transcript_path),
+        replay_metadata={
+            "source": "ros2_bridge_smoke",
+            "message_count": len(restored),
+            "planner_backend": planner.state_dict()["backend"],
+            "topic_roots": ["/planner/world_state", "/planner/joint_trajectory"],
+        },
+        batch_publish_transcripts=(planner_batch_publish_transcript, trajectory_batch_publish_transcript),
+    )
 
     summary = {
         "cli_available": bridge.cli_available(),
@@ -157,6 +177,9 @@ def main() -> int:
         "trajectory_batch_publish_manifest": trajectory_batch_publish_manifest,
         "planner_batch_publish_transcript": planner_batch_publish_transcript,
         "trajectory_batch_publish_transcript": trajectory_batch_publish_transcript,
+        "planner_batch_transcript_path": str(planner_batch_transcript_path),
+        "trajectory_batch_transcript_path": str(trajectory_batch_transcript_path),
+        "process_session_manifest": process_session_manifest,
         "message_summary": message_summary,
     }
     if args.summary_out is not None:

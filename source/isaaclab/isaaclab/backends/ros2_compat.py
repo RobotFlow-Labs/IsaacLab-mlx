@@ -19,6 +19,7 @@ from .planner_compat import JointMotionPlan, PlannerWorldObstacle, PlannerWorldS
 
 ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION = 1
+ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION = 1
 
 
 def _normalize_message_value(value: Any) -> Any:
@@ -465,6 +466,40 @@ class Ros2ProcessBridge:
             "observed_record_count": len(transcript_records),
             "success": success,
             "replayable": True,
+        }
+
+    def build_batch_publish_session_manifest(
+        self,
+        *,
+        publish_transcript_paths: list[str | Path] | tuple[str | Path, ...],
+        replay_metadata: dict[str, Any] | None = None,
+        batch_publish_transcripts: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+        command_root: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any]:
+        """Build a replayable process/session manifest for batch publish audits."""
+
+        normalized_paths = [str(Path(path)) for path in publish_transcript_paths]
+        transcripts = [] if batch_publish_transcripts is None else [_normalize_message_value(item) for item in batch_publish_transcripts]
+        topic_roots = sorted(
+            {
+                transcript["topic_root"]
+                for transcript in transcripts
+                if isinstance(transcript, dict) and transcript.get("topic_root") is not None
+            }
+        )
+        manifest_command_root = [self.ros2_executable, "topic", "pub"] if command_root is None else list(command_root)
+        return {
+            "schema_version": ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION,
+            "kind": "ros2_batch_publish_session_manifest",
+            "command_root": manifest_command_root,
+            "ros2_executable": self.ros2_executable,
+            "publish_transcript_paths": normalized_paths,
+            "replay_metadata": _normalize_message_value(replay_metadata or {}),
+            "batch_publish_transcripts": transcripts,
+            "topic_roots": topic_roots,
+            "publish_transcript_count": len(normalized_paths),
+            "batch_publish_transcript_count": len(transcripts),
+            "replayable": bool(transcripts or normalized_paths),
         }
 
     def publish_batch_via_cli(

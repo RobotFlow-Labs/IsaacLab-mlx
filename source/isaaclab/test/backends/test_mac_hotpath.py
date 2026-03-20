@@ -175,7 +175,13 @@ def test_anymal_leg_extension_hotpath_matches_reference_math():
 
 def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
     root_pos_w = mx.array([[0.0, 0.0, 0.92], [1.2, 0.1, 0.95]], dtype=mx.float32)
-    joint_pos = mx.zeros((2, 19), dtype=mx.float32)
+    joint_pos = mx.array(
+        [
+            [0.02, -0.10, 0.45, -0.20, 0.08, 0.12, -0.06, 0.14, 0.18, -0.04, 0.05, 0.01, -0.02, 0.03, 0.04, -0.05, 0.06, -0.07, 0.08],
+            [-0.03, 0.15, 0.35, 0.05, -0.09, -0.11, 0.07, -0.13, 0.09, 0.12, -0.04, 0.02, 0.06, -0.08, 0.10, 0.11, -0.12, 0.13, -0.14],
+        ],
+        dtype=mx.float32,
+    )
     commands = mx.array([[0.5, 0.0, 0.1], [0.2, 0.1, -0.1]], dtype=mx.float32)
     gait_phase = mx.array([0.0, math.pi / 3.0], dtype=mx.float32)
     hip_offsets = mx.array([[0.0, 0.11], [0.0, -0.11]], dtype=mx.float32)
@@ -185,7 +191,43 @@ def test_h1_body_positions_hotpath_returns_expected_shape_and_base_slot():
     mx.eval(body_pos)
 
     assert body_pos.shape == (2, 5, 3)
-    assert np.allclose(np.array(body_pos)[:, 0, :], np.array(root_pos_w))
+    root_np = np.array(root_pos_w)
+    joint_np = np.array(joint_pos)[:, :10].reshape((2, 2, 5))
+    commands_np = np.array(commands)
+    gait_phase_np = np.array(gait_phase)[:, None]
+    hip_offsets_np = np.array(hip_offsets).reshape((1, 2, 2))
+    gait_phase_offsets_np = np.array(gait_phase_offsets).reshape((1, 2))
+    hip_yaw = joint_np[:, :, 0]
+    hip_roll = joint_np[:, :, 1]
+    hip_pitch = joint_np[:, :, 2]
+    knee = joint_np[:, :, 3]
+    ankle = joint_np[:, :, 4]
+    extension = 0.40 + 0.20 * np.cos(hip_pitch + 0.20) + 0.26 * np.cos(hip_pitch + knee - 0.10) + 0.08 * np.cos(
+        hip_pitch + knee + ankle
+    )
+    extension = np.clip(extension, 0.58, 0.98)
+    command_speed = np.linalg.norm(commands_np[:, :2], axis=1, keepdims=True)
+    phase = gait_phase_np + gait_phase_offsets_np
+    swing = np.maximum(np.sin(phase), 0.0) * (0.18 + 0.65 * command_speed)
+    root_xy = root_np[:, None, :2]
+    root_z = root_np[:, 2:3]
+    step_x = 0.18 * commands_np[:, 0:1] * np.cos(phase)
+    step_y = 0.06 * commands_np[:, 1:2] * np.sin(phase)
+    foot_xy = root_xy + hip_offsets_np
+    foot_xy_x = foot_xy[:, :, 0] + step_x - 0.04 * np.sin(hip_pitch)
+    foot_xy_y = foot_xy[:, :, 1] + step_y + 0.03 * hip_roll + 0.02 * hip_yaw
+    foot_xy = np.stack([foot_xy_x, foot_xy_y], axis=-1)
+    foot_z = root_z - extension + 0.06 * swing - 0.03 * np.tanh(ankle)
+    foot_pos = np.concatenate([foot_xy, foot_z[:, :, None]], axis=-1)
+    knee_xy = root_xy + 0.5 * hip_offsets_np
+    knee_xy_x = knee_xy[:, :, 0] + 0.5 * step_x - 0.02 * np.sin(hip_pitch)
+    knee_xy_y = knee_xy[:, :, 1] + 0.015 * hip_roll
+    knee_xy = np.stack([knee_xy_x, knee_xy_y], axis=-1)
+    knee_z = root_z - 0.42 - 0.18 * np.tanh(hip_pitch) - 0.08 * np.tanh(knee)
+    knee_pos = np.concatenate([knee_xy, knee_z[:, :, None]], axis=-1)
+    expected = np.concatenate([root_np[:, None, :], foot_pos, knee_pos], axis=1).astype(np.float32)
+
+    assert np.allclose(np.array(body_pos), expected)
 
 
 def test_h1_leg_extension_hotpath_matches_reference_math():
