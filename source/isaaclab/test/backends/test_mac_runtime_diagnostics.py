@@ -110,6 +110,54 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
         "external_stereo_capture": "zed-sdk-mlx terminal-hosted capture path",
         "synthetic_camera_tasks": "task-local synthetic camera slices",
     }
+    assert payload["sensor"]["sensor_surface"] == {
+        "shared_proprioception": True,
+        "shared_raycast_api": True,
+        "task_local_raycasts": True,
+        "task_local_synthetic_camera_slices": True,
+        "task_local_external_stereo_tooling": True,
+        "shared_camera_depth_segmentation": False,
+    }
+    assert payload["sensor"]["sensor_surface_sources"] == {
+        "shared_proprioception": "shared proprioception channels",
+        "shared_raycast_api": "plane raycasts and analytic terrain queries",
+        "task_local_raycasts": "mac-native analytic task slices",
+        "task_local_synthetic_camera_slices": "task-local synthetic camera slices",
+        "task_local_external_stereo_tooling": "zed-sdk-mlx terminal-hosted capture path",
+        "shared_camera_depth_segmentation": "not provided by mac-sensors",
+    }
+    assert payload["sensor"]["sensor_boundaries"] == {
+        "proprioception": {
+            "shared": True,
+            "task_local": False,
+            "source": "shared proprioception channels",
+        },
+        "raycast_api": {
+            "shared": True,
+            "task_local": False,
+            "source": "plane raycasts and analytic terrain queries",
+        },
+        "raycast_tasks": {
+            "shared": False,
+            "task_local": True,
+            "source": "mac-native analytic task slices",
+        },
+        "synthetic_camera_slices": {
+            "shared": False,
+            "task_local": True,
+            "source": "task-local synthetic camera slices",
+        },
+        "external_stereo_tooling": {
+            "shared": False,
+            "task_local": True,
+            "source": "zed-sdk-mlx terminal-hosted capture path",
+        },
+        "camera_depth_segmentation": {
+            "shared": False,
+            "task_local": False,
+            "source": "not provided by mac-sensors",
+        },
+    }
     assert payload["planner"]["backend"] == "mac-planners"
 
 
