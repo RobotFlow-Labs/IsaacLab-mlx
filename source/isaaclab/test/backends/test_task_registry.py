@@ -37,6 +37,7 @@ SAFE_TASK_IDS = (
     "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
     "Isaac-Factory-PegInsert-Direct-v0",
+    "Isaac-Factory-GearMesh-Direct-v0",
     "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
     "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
     "Isaac-Lift-Cube-Franka-v0",
@@ -125,6 +126,7 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     ur10e_gear_2f85_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
     ur10e_gear_2f85_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
     factory_peg_insert_spec = gym.spec("Isaac-Factory-PegInsert-Direct-v0")
+    factory_gear_mesh_spec = gym.spec("Isaac-Factory-GearMesh-Direct-v0")
     openarm_lift_spec = gym.spec("Isaac-Lift-Cube-OpenArm-v0")
     agibot_toy2box_spec = gym.spec("Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0")
     agibot_mug_spec = gym.spec("Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0")
@@ -151,6 +153,8 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert ur10e_gear_2f85_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert factory_peg_insert_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-peg-insert"
     assert factory_peg_insert_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert factory_gear_mesh_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-gear-mesh"
+    assert factory_gear_mesh_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
     assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert agibot_toy2box_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-agibot-place-surrogate"
@@ -241,6 +245,28 @@ def test_parse_env_cfg_supports_factory_peg_insert_task_cfg(monkeypatch):
     assert parsed_cfg.semantic_contract == "reduced-analytic-peg-insert"
     assert parsed_cfg.upstream_alias_semantics_preserved is False
     assert parsed_cfg.gripper_variant == "peg-insert"
+
+
+def test_parse_env_cfg_supports_factory_gear_mesh_task_cfg(monkeypatch):
+    """parse_env_cfg should resolve the reduced factory gear-mesh config without Isaac Sim imports."""
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+
+    cfg = parse_cfg.load_cfg_from_registry("Isaac-Factory-GearMesh-Direct-v0", "env_cfg_entry_point")
+    parsed_cfg = parse_cfg.parse_env_cfg("Isaac-Factory-GearMesh-Direct-v0", device="cpu", num_envs=16)
+
+    assert type(cfg).__name__ == "MacFactoryGearMeshEnvCfg"
+    assert type(parsed_cfg).__name__ == "MacFactoryGearMeshEnvCfg"
+    assert parsed_cfg.num_envs == 16
+    assert parsed_cfg.semantic_contract == "reduced-analytic-gear-mesh"
+    assert parsed_cfg.upstream_alias_semantics_preserved is False
+    assert parsed_cfg.gripper_variant == "gear-mesh"
 
 
 def test_parse_env_cfg_supports_anymal_rough_task_cfg(monkeypatch):

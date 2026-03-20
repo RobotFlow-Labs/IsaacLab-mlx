@@ -588,6 +588,20 @@ class MacFactoryPegInsertEnvCfg(MacUR10eGearAssembly2F140EnvCfg):
 
 
 @configclass
+class MacFactoryGearMeshEnvCfg(MacFactoryPegInsertEnvCfg):
+    """Reduced mac-native factory gear-mesh configuration built on the analytic insertion substrate."""
+
+    task_name: str = "factory-gear-mesh"
+    semantic_contract: str = "reduced-analytic-gear-mesh"
+    gripper_variant: str = "gear-mesh"
+    contract_notes: str = (
+        "This mac-native slice preserves the factory gear-mesh alignment and insertion workflow with "
+        "analytic pose tracking and scalar insertion progress instead of the full contact-rich factory "
+        "scene, compliance model, and task-specific controller stack."
+    )
+
+
+@configclass
 class MacOpenArmReachEnvCfg(MacFrankaReachEnvCfg):
     """Reduced mac-native OpenArm unimanual reach configuration."""
 

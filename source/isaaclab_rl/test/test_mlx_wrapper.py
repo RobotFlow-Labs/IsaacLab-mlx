@@ -43,6 +43,7 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
         "factory-peg-insert",
+        "factory-gear-mesh",
         "ur10-long-suction-stack",
         "ur10-short-suction-stack",
         "franka-lift",
@@ -72,6 +73,7 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
         "factory-peg-insert",
+        "factory-gear-mesh",
         "ur10-long-suction-stack",
         "ur10-short-suction-stack",
         "franka-lift",
@@ -162,6 +164,12 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").task == "Isaac-Factory-PegInsert-Direct-v0"
     assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").semantic_contract == "reduced-analytic-peg-insert"
     assert get_mlx_task_spec("Isaac-Factory-PegInsert-Direct-v0").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("Isaac-Factory-GearMesh-Direct-v0").task == "Isaac-Factory-GearMesh-Direct-v0"
+    assert get_mlx_task_spec("Isaac-Factory-GearMesh-Direct-v0").semantic_contract == "reduced-analytic-gear-mesh"
+    assert get_mlx_task_spec("Isaac-Factory-GearMesh-Direct-v0").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("factory-gear-mesh").default_hidden_dim == 128
+    assert get_mlx_task_spec("factory-gear-mesh").semantic_contract == "reduced-analytic-gear-mesh"
+    assert get_mlx_task_spec("factory-gear-mesh").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Rel-Play-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-OpenArm-Play-v0") == get_mlx_task_spec("openarm-lift")
@@ -214,6 +222,12 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
             "factory-peg-insert",
             "reduced-analytic-peg-insert",
             "peg-insert",
+        ),
+        (
+            "Isaac-Factory-GearMesh-Direct-v0",
+            "factory-gear-mesh",
+            "reduced-analytic-gear-mesh",
+            "gear-mesh",
         ),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "skill-generation"),
@@ -1227,6 +1241,42 @@ def test_public_mlx_wrapper_normalizes_factory_peg_insert_alias_to_canonical(tmp
     assert eval_payload["task"] == "factory-peg-insert"
     assert eval_payload["episodes_completed"] == 1
     assert eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_public_mlx_wrapper_normalizes_factory_gear_mesh_alias_to_canonical(tmp_path: Path):
+    """The public wrapper should expose the reduced factory gear-mesh slice end to end."""
+
+    checkpoint_path = tmp_path / "factory_gear_mesh_wrapper_policy.npz"
+
+    train_payload = train_mlx_task(
+        "Isaac-Factory-GearMesh-Direct-v0",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=79,
+    )
+    eval_payload = evaluate_mlx_task(
+        "Isaac-Factory-GearMesh-Direct-v0",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=79,
+    )
+
+    assert train_payload["task"] == "factory-gear-mesh"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-gear-mesh"
+    assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert eval_payload["task"] == "factory-gear-mesh"
+    assert eval_payload["episodes_completed"] == 1
+    assert eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-gear-mesh"
     assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
     assert isinstance(eval_payload["completed"][0]["return"], float)
 

@@ -26,8 +26,8 @@ from isaaclab.backends import (
     get_runtime_state,
 )
 from isaaclab.backends.mac_sim.hotpath import get_franka_stack_hotpath_backend
-from isaaclab.backends.mac_sim.env_cfgs import MacFactoryPegInsertEnvCfg
-from isaaclab.backends.mac_sim.manipulation import MacFactoryPegInsertEnv
+from isaaclab.backends.mac_sim.env_cfgs import MacFactoryGearMeshEnvCfg, MacFactoryPegInsertEnvCfg
+from isaaclab.backends.mac_sim.manipulation import MacFactoryGearMeshEnv, MacFactoryPegInsertEnv
 from isaaclab.backends.mac_sim import (
     DEFAULT_HEIGHT_SCAN_OFFSETS,
     MacAgibotPlaceToy2BoxEnv,
@@ -466,6 +466,46 @@ def _factory_peg_insert_output_signature(env: Any, trace: Any) -> dict[str, floa
     payload = _ur10e_gear_output_signature(env, trace)
     payload["final_peg_insert_depth_mean"] = payload.pop("final_insert_depth_mean")
     payload["final_peg_variant_mean"] = payload.pop("final_gear_type_mean")
+    return payload
+
+
+def _factory_gear_mesh_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture compact semantic signatures for the reduced factory gear-mesh slice."""
+
+    payload = _ur10e_gear_output_signature(env, trace)
+    terminal_metrics: list[dict[str, mx.array]] = []
+    for extras in trace.extras:
+        final_task_metrics = extras.get("final_task_metrics")
+        terminated_env_ids = extras.get("terminated_env_ids", [])
+        if final_task_metrics is None or not terminated_env_ids:
+            continue
+        terminal_metrics.append(
+            {
+                "gear_mesh_insert_depth": mx.array(
+                    final_task_metrics.get("gear_mesh_insert_depth", final_task_metrics["insert_depth"])
+                )[: len(terminated_env_ids)],
+                "assembled": mx.array(final_task_metrics["assembled"])[: len(terminated_env_ids)],
+                "gear_mesh_variant_id": mx.array(
+                    final_task_metrics.get("gear_mesh_variant_id", final_task_metrics.get("peg_variant_id", final_task_metrics["gear_type_id"]))
+                )[: len(terminated_env_ids)],
+            }
+        )
+
+    if terminal_metrics:
+        insert_depth = mx.concatenate([item["gear_mesh_insert_depth"] for item in terminal_metrics], axis=0)
+        assembled = mx.concatenate([item["assembled"] for item in terminal_metrics], axis=0)
+        gear_mesh_variant_id = mx.concatenate([item["gear_mesh_variant_id"] for item in terminal_metrics], axis=0)
+        payload["final_gear_mesh_insert_depth_mean"] = float(mx.mean(insert_depth).item())
+        payload["final_gear_mesh_assembled_ratio"] = float(mx.mean(assembled).item())
+        payload["final_gear_mesh_variant_mean"] = float(mx.mean(gear_mesh_variant_id).item())
+        payload.pop("final_insert_depth_mean", None)
+        payload.pop("final_assembled_ratio", None)
+        payload.pop("final_gear_type_mean", None)
+        return payload
+
+    payload["final_gear_mesh_insert_depth_mean"] = payload.pop("final_insert_depth_mean")
+    payload["final_gear_mesh_assembled_ratio"] = payload.pop("final_assembled_ratio")
+    payload["final_gear_mesh_variant_mean"] = payload.pop("final_gear_type_mean")
     return payload
 
 
@@ -1201,6 +1241,33 @@ def benchmark_factory_peg_insert(num_envs: int, steps: int, seed: int) -> dict[s
     )
 
 
+def benchmark_factory_gear_mesh(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced factory gear-mesh MLX env step loop."""
+
+    env = MacFactoryGearMeshEnv(MacFactoryGearMeshEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "factory-gear-mesh",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _factory_gear_mesh_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_franka_cabinet(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the Franka cabinet MLX env step loop."""
 
@@ -1540,6 +1607,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_bin_stack(num_envs, steps, seed)
         elif task == "factory-peg-insert":
             benchmark = benchmark_factory_peg_insert(num_envs, steps, seed)
+        elif task == "factory-gear-mesh":
+            benchmark = benchmark_factory_gear_mesh(num_envs, steps, seed)
         elif task == "franka-cabinet":
             benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
         elif task == "franka-open-drawer":

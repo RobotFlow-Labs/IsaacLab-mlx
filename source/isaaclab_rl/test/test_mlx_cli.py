@@ -412,6 +412,79 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert factory_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-peg-insert"
     assert factory_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
+    gear_mesh_train_output_path = tmp_path / "module-factory-gear-mesh-alias-train.json"
+    gear_mesh_checkpoint_path = tmp_path / "module-factory-gear-mesh-alias-train-policy.npz"
+    gear_mesh_train_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "train",
+            "--task",
+            "Isaac-Factory-GearMesh-Direct-v0",
+            "--num-envs",
+            "8",
+            "--updates",
+            "1",
+            "--rollout-steps",
+            "8",
+            "--epochs-per-update",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--checkpoint",
+            str(gear_mesh_checkpoint_path),
+            "--json-out",
+            str(gear_mesh_train_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert gear_mesh_train_result.returncode == 0, gear_mesh_train_result.stderr
+    gear_mesh_train_payload = json.loads(gear_mesh_train_output_path.read_text(encoding="utf-8"))
+    assert gear_mesh_train_payload["task"] == "factory-gear-mesh"
+    assert Path(gear_mesh_train_payload["checkpoint_path"]).exists()
+    assert gear_mesh_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-gear-mesh"
+    assert gear_mesh_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+    gear_mesh_eval_output_path = tmp_path / "module-factory-gear-mesh-alias-eval.json"
+    gear_mesh_eval_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "isaaclab_rl.mlx_cli",
+            "evaluate",
+            "--task",
+            "Isaac-Factory-GearMesh-Direct-v0",
+            "--checkpoint",
+            str(gear_mesh_checkpoint_path),
+            "--episodes",
+            "1",
+            "--episode-length-s",
+            "0.5",
+            "--max-steps",
+            "256",
+            "--json-out",
+            str(gear_mesh_eval_output_path),
+        ],
+        cwd=_repo_root(),
+        env=_module_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert gear_mesh_eval_result.returncode == 0, gear_mesh_eval_result.stderr
+    gear_mesh_eval_payload = json.loads(gear_mesh_eval_output_path.read_text(encoding="utf-8"))
+    assert gear_mesh_eval_payload["task"] == "factory-gear-mesh"
+    assert gear_mesh_eval_payload["episodes_completed"] == 1
+    assert gear_mesh_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-gear-mesh"
+    assert gear_mesh_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
     ur10e_eval_output_path = tmp_path / "module-ur10e-alias-eval.json"
     ur10e_eval_result = subprocess.run(
         [

@@ -50,6 +50,7 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
         "factory-peg-insert",
+        "factory-gear-mesh",
         "ur10-long-suction-stack",
         "ur10-short-suction-stack",
         "franka-lift",
@@ -848,6 +849,27 @@ def test_rough_locomotion_thin_wrappers_are_directly_runnable():
         assert "usage:" in result.stdout.lower()
 
 
+def test_factory_gear_mesh_thin_wrappers_are_directly_runnable():
+    repo_root = Path(__file__).resolve().parents[4]
+    scripts = (
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "train_factory_gear_mesh.py",
+        repo_root / "scripts" / "reinforcement_learning" / "mlx" / "play_factory_gear_mesh.py",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
+
+    for script in scripts:
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage:" in result.stdout.lower()
+
+
 def test_factory_peg_insert_benchmark_group_is_runnable(tmp_path: Path):
     repo_root = Path(__file__).resolve().parents[4]
     json_out = tmp_path / "factory-peg-insert-benchmark.json"
@@ -878,8 +900,48 @@ def test_factory_peg_insert_benchmark_group_is_runnable(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(json_out.read_text(encoding="utf-8"))
-    assert payload["tasks"] == ["factory-peg-insert"]
+    assert payload["tasks"] == ["factory-peg-insert", "factory-gear-mesh"]
     assert payload["cpu_fallback_detected"] is False
     assert payload["benchmarks"][0]["task"] == "factory-peg-insert"
     assert payload["benchmarks"][0]["output_signature"]["final_peg_insert_depth_mean"] >= 0.0
     assert payload["benchmarks"][0]["output_signature"]["final_peg_variant_mean"] >= 0.0
+    assert payload["benchmarks"][1]["task"] == "factory-gear-mesh"
+    assert payload["benchmarks"][1]["output_signature"]["final_gear_mesh_insert_depth_mean"] >= 0.0
+    assert payload["benchmarks"][1]["output_signature"]["final_gear_mesh_variant_mean"] >= 0.0
+
+
+def test_factory_gear_mesh_single_task_benchmark_is_runnable(tmp_path: Path):
+    repo_root = Path(__file__).resolve().parents[4]
+    json_out = tmp_path / "factory-gear-mesh-benchmark.json"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "benchmarks" / "mlx" / "benchmark_mac_tasks.py"),
+            "--tasks",
+            "factory-gear-mesh",
+            "--num-envs",
+            "4",
+            "--steps",
+            "4",
+            "--seed",
+            "13",
+            "--json-out",
+            str(json_out),
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(json_out.read_text(encoding="utf-8"))
+    assert payload["tasks"] == ["factory-gear-mesh"]
+    assert payload["cpu_fallback_detected"] is False
+    assert payload["benchmarks"][0]["task"] == "factory-gear-mesh"
+    assert payload["benchmarks"][0]["output_signature"]["final_gear_mesh_insert_depth_mean"] >= 0.0
+    assert payload["benchmarks"][0]["output_signature"]["final_gear_mesh_variant_mean"] >= 0.0

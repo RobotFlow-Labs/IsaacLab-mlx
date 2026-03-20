@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T06:39:43Z",
+  "generated_at": "2026-03-20T07:39:20Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 33,
+  "task_count": 34,
   "task_group": "full",
   "tasks": {
     "agibot-place-toy2box": {
@@ -261,6 +261,34 @@
         "sim_backend": "mac-sim"
       }
     },
+    "factory-gear-mesh": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_ee_height_mean": 0.41429030895233154,
+          "final_gear_mesh_assembled_ratio": 0.0,
+          "final_gear_mesh_insert_depth_mean": 0.0,
+          "final_gear_mesh_variant_mean": 1.125,
+          "final_joint_pos_abs_mean": 1.0599894523620605,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.9389724135398865,
+          "final_policy_mean": -0.06648749858140945,
+          "final_policy_std": 0.7846049070358276,
+          "final_reward_mean": 0.015260584652423859,
+          "final_target_distance_mean": 0.3959442377090454
+        },
+        "semantic_contract": "reduced-analytic-gear-mesh",
+        "upstream_alias_semantics_preserved": false
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "factory-peg-insert": {
       "contract": {
         "action_dim": 6,
@@ -271,7 +299,7 @@
           "final_ee_height_mean": 0.41429030895233154,
           "final_joint_pos_abs_mean": 1.0599894523620605,
           "final_joint_vel_abs_mean": 0.0,
-          "final_orientation_error_mean": 0.9389723539352417,
+          "final_orientation_error_mean": 0.9389724135398865,
           "final_peg_insert_depth_mean": 0.0,
           "final_peg_variant_mean": 1.125,
           "final_policy_mean": -0.06648749858140945,
@@ -752,7 +780,7 @@
           "final_joint_vel_abs_mean": 0.0,
           "final_middle_stack_distance_mean": 0.17054051160812378,
           "final_middle_stacked_ratio": 0.0,
-          "final_policy_mean": 0.0010546718258410692,
+          "final_policy_mean": 0.0010546721750870347,
           "final_policy_std": 0.5777475833892822,
           "final_reward_mean": 0.0008584142196923494,
           "final_support_cube_height_mean": 0.0203000009059906,
@@ -806,9 +834,9 @@
           "final_joint_vel_abs_mean": 0.0,
           "final_middle_stack_distance_mean": 0.16377542912960052,
           "final_middle_stacked_ratio": 0.0,
-          "final_policy_mean": -0.0014453281182795763,
+          "final_policy_mean": -0.0014453277690336108,
           "final_policy_std": 0.5767267942428589,
-          "final_reward_mean": 0.0007686479366384447,
+          "final_reward_mean": 0.0007686478784307837,
           "final_support_cube_height_mean": 0.0203000009059906,
           "final_top_stack_distance_mean": 0.32296204566955566,
           "final_top_stacked_ratio": 0.0
@@ -860,7 +888,7 @@
           "final_insert_depth_mean": 0.0,
           "final_joint_pos_abs_mean": 1.0599894523620605,
           "final_joint_vel_abs_mean": 0.0,
-          "final_orientation_error_mean": 0.9389723539352417,
+          "final_orientation_error_mean": 0.9389724135398865,
           "final_policy_mean": -0.06945309787988663,
           "final_policy_std": 0.7835043668746948,
           "final_reward_mean": 0.01597747392952442,
@@ -888,11 +916,11 @@
           "final_insert_depth_mean": 0.0,
           "final_joint_pos_abs_mean": 1.0599894523620605,
           "final_joint_vel_abs_mean": 0.0,
-          "final_orientation_error_mean": 0.9389723539352417,
+          "final_orientation_error_mean": 0.9389724135398865,
           "final_policy_mean": -0.06997941434383392,
           "final_policy_std": 0.782200276851654,
           "final_reward_mean": 0.015466186217963696,
-          "final_target_distance_mean": 0.3767542243003845
+          "final_target_distance_mean": 0.3767542541027069
         },
         "semantic_contract": "reduced-analytic-assembly",
         "upstream_alias_semantics_preserved": false

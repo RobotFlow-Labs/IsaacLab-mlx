@@ -785,6 +785,22 @@ MAC_SAFE_TASK_SPECS = (
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacQuadcopterEnvCfg",
         },
     },
+    {
+        "id": "Isaac-Factory-GearMesh-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim.manipulation:MacFactoryGearMeshEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFactoryGearMeshEnvCfg",
+            },
+            semantic_contract="reduced-analytic-gear-mesh",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native factory gear-mesh slice preserves the alignment and insertion workflow "
+                "with an analytic insertion-depth surrogate instead of the upstream contact-rich factory "
+                "scene and task-specific controller stack."
+            ),
+        ),
+    },
 )
 
 
@@ -803,14 +819,6 @@ ISAACSIM_ONLY_TASK_SPECS = (
         "kwargs": _isaacsim_only_kwargs(
             env_cfg_entry_point="isaaclab_tasks.direct.automate.disassembly_env:DisassemblyEnvCfg",
             rl_games_cfg_entry_point="isaaclab_tasks.direct.automate.agents:rl_games_ppo_cfg.yaml",
-        ),
-    },
-    {
-        "id": "Isaac-Factory-GearMesh-Direct-v0",
-        "entry_point": "isaaclab_tasks.direct.factory.factory_env:FactoryEnv",
-        "kwargs": _isaacsim_only_kwargs(
-            env_cfg_entry_point="isaaclab_tasks.direct.factory.factory_env_cfg:FactoryTaskGearMeshCfg",
-            rl_games_cfg_entry_point="isaaclab_tasks.direct.factory.agents:rl_games_ppo_cfg.yaml",
         ),
     },
     {
@@ -946,6 +954,22 @@ ISAACSIM_ONLY_TASK_SPECS = (
             upstream_alias_semantics_preserved=False,
             contract_notes=(
                 "The mac-native factory peg-insert slice preserves the alignment and insertion workflow "
+                "with an analytic insertion-depth surrogate instead of the upstream contact-rich factory "
+                "scene and task-specific controller stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Factory-GearMesh-Direct-v0",
+        "entry_point": "isaaclab.backends.mac_sim.manipulation:MacFactoryGearMeshEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFactoryGearMeshEnvCfg",
+            },
+            semantic_contract="reduced-analytic-gear-mesh",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native factory gear-mesh slice preserves the alignment and insertion workflow "
                 "with an analytic insertion-depth surrogate instead of the upstream contact-rich factory "
                 "scene and task-specific controller stack."
             ),

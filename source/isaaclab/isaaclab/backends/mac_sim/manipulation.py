@@ -48,6 +48,7 @@ from .env_cfgs import (
     MacFrankaStackVisuomotorEnvCfg,
     MacFrankaTeddyBearLiftEnvCfg,
     MacFactoryPegInsertEnvCfg,
+    MacFactoryGearMeshEnvCfg,
     MacUR10LongSuctionStackEnvCfg,
     MacUR10ReachEnvCfg,
     MacUR10ShortSuctionStackEnvCfg,
@@ -215,6 +216,27 @@ class MacFactoryPegInsertTrainCfg:
     entropy_coef: float = 0.001
     action_std: float = 0.2
     checkpoint_path: str = "logs/mlx/factory_peg_insert_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacFactoryGearMeshTrainCfg:
+    """Training configuration for the reduced factory gear-mesh slice."""
+
+    env: MacFactoryGearMeshEnvCfg = MacFactoryGearMeshEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.2
+    checkpoint_path: str = "logs/mlx/factory_gear_mesh_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
 
@@ -985,6 +1007,30 @@ class MacFactoryPegInsertSimBackend(MacUR10eGearAssemblySimBackend):
         payload["subsystems"]["peg_variant_randomization"] = True
         payload["peg_variant_offsets_x"] = list(self.cfg.gear_type_offsets_x)
         payload["peg_variant_name"] = self.cfg.gripper_variant
+        return payload
+
+
+class MacFactoryGearMeshSimBackend(MacFactoryPegInsertSimBackend):
+    """Reduced factory gear-mesh backend on top of the analytic insertion substrate."""
+
+    task_key = "factory-gear-mesh"
+    upstream_task_id = "Isaac-Factory-GearMesh-Direct-v0"
+
+    def state_dict(self) -> dict[str, Any]:
+        payload = super().state_dict()
+        payload["task"] = self.task_key
+        payload["upstream_task_id"] = self.upstream_task_id
+        payload["semantic_contract"] = self.cfg.semantic_contract
+        payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
+        payload["contract_notes"] = self.cfg.contract_notes
+        payload["subsystems"].pop("peg_insert_logic", None)
+        payload["subsystems"].pop("peg_variant_randomization", None)
+        payload["subsystems"]["gear_mesh_logic"] = True
+        payload["subsystems"]["gear_mesh_variant_randomization"] = True
+        payload["gear_mesh_variant_offsets_x"] = list(self.cfg.gear_type_offsets_x)
+        payload["gear_mesh_variant_name"] = self.cfg.gripper_variant
+        payload.pop("peg_variant_offsets_x", None)
+        payload.pop("peg_variant_name", None)
         return payload
 
 
@@ -2552,6 +2598,44 @@ class MacFactoryPegInsertEnv(MacUR10eGearAssemblyEnv):
         return obs, reward, terminated, truncated, extras
 
 
+class MacFactoryGearMeshEnv(MacFactoryPegInsertEnv):
+    """Vectorized reduced factory gear-mesh task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacFactoryGearMeshEnvCfg | None = None):
+        self.cfg = cfg or MacFactoryGearMeshEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacFactoryGearMeshSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self.reset()
+
+    def step(self, actions: Any) -> tuple[dict[str, mx.array], mx.array, mx.array, mx.array, dict[str, Any]]:
+        obs, reward, terminated, truncated, extras = super().step(actions)
+        final_task_metrics = extras.get("final_task_metrics")
+        if final_task_metrics is not None:
+            final_task_metrics = dict(final_task_metrics)
+            if "peg_variant_id" in final_task_metrics:
+                final_task_metrics["gear_mesh_variant_id"] = final_task_metrics.pop("peg_variant_id")
+            if "insert_depth" in final_task_metrics:
+                final_task_metrics["gear_mesh_insert_depth"] = final_task_metrics["insert_depth"]
+            extras["final_task_metrics"] = final_task_metrics
+        return obs, reward, terminated, truncated, extras
+
+
 class MacUR10StackRgbEnv(MacUR10ReachEnv):
     """Vectorized reduced UR10 suction three-cube stack task for MLX/mac-sim."""
 
@@ -3725,6 +3809,17 @@ def train_factory_peg_insert_policy(cfg: MacFactoryPegInsertTrainCfg) -> dict[st
     )
 
 
+def train_factory_gear_mesh_policy(cfg: MacFactoryGearMeshTrainCfg) -> dict[str, Any]:
+    """Train a reduced factory gear-mesh policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacFactoryGearMeshEnv,
+        task_id="Isaac-Factory-GearMesh-Direct-v0",
+        log_prefix="mlx-factory-gear-mesh",
+    )
+
+
 def play_ur10e_deploy_reach_policy(
     checkpoint_path: str,
     *,
@@ -3871,6 +3966,25 @@ def play_factory_peg_insert_policy(
     return _play_reach_like_policy(
         checkpoint_path,
         env_factory=MacFactoryPegInsertEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_factory_gear_mesh_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFactoryGearMeshEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced factory gear-mesh policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFactoryGearMeshEnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacFactoryGearMeshEnv,
         env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,
