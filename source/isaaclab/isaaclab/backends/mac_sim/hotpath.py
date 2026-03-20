@@ -1611,6 +1611,8 @@ _franka_end_effector_position_compiled = mx.compile(_franka_end_effector_positio
 _ur10e_end_effector_pose_compiled = mx.compile(_ur10e_end_effector_pose_impl)
 _franka_end_effector_position_metal = None
 _franka_end_effector_hotpath_initialized = False
+_ur10e_end_effector_pose_metal = None
+_ur10e_end_effector_hotpath_initialized = False
 FRANKA_HOTPATH_BACKEND = HOTPATH_BACKEND
 UR10E_HOTPATH_BACKEND = HOTPATH_BACKEND
 _locomotion_root_step_metal = None
@@ -1675,6 +1677,74 @@ def get_ur10e_hotpath_backend() -> str:
     return UR10E_HOTPATH_BACKEND
 
 
+def _build_ur10e_end_effector_pose_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        uint base = env_id * 6;
+        float q0 = joint_pos[base + 0];
+        float q1 = joint_pos[base + 1];
+        float q2 = joint_pos[base + 2];
+        float q3 = joint_pos[base + 3];
+        float q4 = joint_pos[base + 4];
+        float q5 = joint_pos[base + 5];
+
+        float elbow = q1 + q2;
+        float wrist = elbow + 0.5f * q3;
+
+        float x = 0.72f + 0.22f * metal::cos(q1) + 0.18f * metal::cos(elbow) + 0.08f * metal::cos(wrist) - 0.06f * metal::sin(q0);
+        float y = -0.225f + 0.18f * metal::sin(q0) + 0.06f * metal::sin(q0 + 0.5f * q1) + 0.03f * metal::tanh(q5);
+        float z = 0.20f + 0.18f * metal::sin(-q1) + 0.11f * metal::sin(-elbow) + 0.05f * metal::sin(-wrist) - 0.03f * metal::tanh(q4);
+
+        float roll = 3.14159265358979323846f + 0.20f * metal::tanh(q3);
+        float pitch = -0.10f * metal::tanh(q1 + q2) + 0.08f * metal::tanh(q4);
+        float yaw = -1.57079632679489661923f + q0 + 0.18f * metal::tanh(q5);
+
+        float half_roll = 0.5f * roll;
+        float half_pitch = 0.5f * pitch;
+        float half_yaw = 0.5f * yaw;
+        float cr = metal::cos(half_roll);
+        float sr = metal::sin(half_roll);
+        float cp = metal::cos(half_pitch);
+        float sp = metal::sin(half_pitch);
+        float cy = metal::cos(half_yaw);
+        float sy = metal::sin(half_yaw);
+        float qw = cr * cp * cy + sr * sp * sy;
+        float qx = sr * cp * cy - cr * sp * sy;
+        float qy = cr * sp * cy + sr * cp * sy;
+        float qz = cr * cp * sy - sr * sp * cy;
+        float quat_norm = metal::max(metal::sqrt(qw * qw + qx * qx + qy * qy + qz * qz), 1.0e-8f);
+        float inv_norm = 1.0f / quat_norm;
+
+        ee_pos_w[env_id * 3 + 0] = x;
+        ee_pos_w[env_id * 3 + 1] = y;
+        ee_pos_w[env_id * 3 + 2] = z;
+        ee_quat_w[env_id * 4 + 0] = qw * inv_norm;
+        ee_quat_w[env_id * 4 + 1] = qx * inv_norm;
+        ee_quat_w[env_id * 4 + 2] = qy * inv_norm;
+        ee_quat_w[env_id * 4 + 3] = qz * inv_norm;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="ur10e_end_effector_pose",
+            input_names=["joint_pos"],
+            output_names=["ee_pos_w", "ee_quat_w"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_ur10e_end_effector_hotpath() -> None:
+    global _ur10e_end_effector_pose_metal
+    global _ur10e_end_effector_hotpath_initialized
+    if _ur10e_end_effector_hotpath_initialized:
+        return
+    _ur10e_end_effector_hotpath_initialized = True
+    _ur10e_end_effector_pose_metal = _build_ur10e_end_effector_pose_metal_kernel()
+
+
 def franka_end_effector_position_hotpath(joint_pos: mx.array) -> mx.array:
     _ensure_franka_end_effector_hotpath()
     joint_pos = mx.array(joint_pos, dtype=mx.float32)
@@ -1692,10 +1762,21 @@ def franka_end_effector_position_hotpath(joint_pos: mx.array) -> mx.array:
 
 
 def ur10e_end_effector_pose_hotpath(joint_pos: mx.array) -> tuple[mx.array, mx.array]:
+    _ensure_ur10e_end_effector_hotpath()
     joint_pos = mx.array(joint_pos, dtype=mx.float32)
     if int(joint_pos.shape[0]) == 0:
         return mx.zeros((0, 3), dtype=mx.float32), mx.zeros((0, 4), dtype=mx.float32)
-    return _ur10e_end_effector_pose_compiled(joint_pos)
+    joint_pos = joint_pos[:, :6]
+    if _ur10e_end_effector_pose_metal is None:
+        return _ur10e_end_effector_pose_compiled(joint_pos)
+    outputs = _ur10e_end_effector_pose_metal(
+        inputs=[joint_pos],
+        grid=(int(joint_pos.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[(int(joint_pos.shape[0]), 3), (int(joint_pos.shape[0]), 4)],
+        output_dtypes=[mx.float32, mx.float32],
+    )
+    return outputs[0], outputs[1]
 
 
 _franka_cabinet_step_compiled = mx.compile(_franka_cabinet_step_impl)

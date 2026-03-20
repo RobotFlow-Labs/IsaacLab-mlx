@@ -35,12 +35,14 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     get_franka_stack_hotpath_backend,
     get_franka_stack_rgb_hotpath_backend,
     get_locomotion_hotpath_backend,
+    get_ur10e_hotpath_backend,
     h1_body_positions_hotpath,
     h1_leg_extension_hotpath,
     get_h1_leg_extension_hotpath_backend,
     locomotion_root_step_hotpath,
     prime_contact_state,
     quadruped_support_metrics_hotpath,
+    ur10e_end_effector_pose_hotpath,
 )
 from isaaclab.backends.mac_sim import BatchedContactSensorState, MacPlaneTerrain  # noqa: E402
 
@@ -303,6 +305,7 @@ def test_hotpath_backend_label_is_stable():
     assert get_franka_stack_rgb_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack-rgb"}
     assert get_locomotion_hotpath_backend() in {"mlx-compiled", "mlx-metal-root-step"}
     assert get_h1_leg_extension_hotpath_backend() in {"mlx-compiled", "mlx-metal-h1-leg-extension"}
+    assert get_ur10e_hotpath_backend() == "mlx-compiled"
 
 
 def test_franka_end_effector_hotpath_matches_reference_math():
@@ -333,6 +336,60 @@ def test_franka_end_effector_hotpath_matches_reference_math():
     ).astype(np.float32)
 
     assert np.allclose(np.array(ee_pos), expected)
+
+
+def test_ur10e_end_effector_pose_hotpath_matches_reference_math():
+    joint_pos = mx.array(
+        [
+            [0.12, -0.55, 0.42, -1.10, 0.18, 0.30],
+            [-0.08, -0.35, 0.28, -0.90, -0.12, -0.22],
+        ],
+        dtype=mx.float32,
+    )
+
+    ee_pos_w, ee_quat_w = ur10e_end_effector_pose_hotpath(joint_pos)
+    mx.eval(ee_pos_w, ee_quat_w)
+
+    joint_np = np.array(joint_pos)
+    q0, q1, q2, q3, q4, q5 = [joint_np[:, idx] for idx in range(6)]
+    elbow = q1 + q2
+    wrist = elbow + 0.5 * q3
+    expected_pos = np.stack(
+        (
+            0.72 + 0.22 * np.cos(q1) + 0.18 * np.cos(elbow) + 0.08 * np.cos(wrist) - 0.06 * np.sin(q0),
+            -0.225 + 0.18 * np.sin(q0) + 0.06 * np.sin(q0 + 0.5 * q1) + 0.03 * np.tanh(q5),
+            0.20 + 0.18 * np.sin(-q1) + 0.11 * np.sin(-elbow) + 0.05 * np.sin(-wrist) - 0.03 * np.tanh(q4),
+        ),
+        axis=-1,
+    ).astype(np.float32)
+    roll = np.pi + 0.20 * np.tanh(q3)
+    pitch = -0.10 * np.tanh(q1 + q2) + 0.08 * np.tanh(q4)
+    yaw = -np.pi / 2.0 + q0 + 0.18 * np.tanh(q5)
+    half_roll = 0.5 * roll
+    half_pitch = 0.5 * pitch
+    half_yaw = 0.5 * yaw
+    cr = np.cos(half_roll)
+    sr = np.sin(half_roll)
+    cp = np.cos(half_pitch)
+    sp = np.sin(half_pitch)
+    cy = np.cos(half_yaw)
+    sy = np.sin(half_yaw)
+    expected_quat = np.stack(
+        (
+            cr * cp * cy + sr * sp * sy,
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+        ),
+        axis=-1,
+    )
+    expected_quat = expected_quat / np.linalg.norm(expected_quat, axis=1, keepdims=True)
+    expected_quat = expected_quat.astype(np.float32)
+
+    assert ee_pos_w.shape == (2, 3)
+    assert ee_quat_w.shape == (2, 4)
+    assert np.allclose(np.array(ee_pos_w), expected_pos)
+    assert np.allclose(np.array(ee_quat_w), expected_quat)
 
 
 def test_franka_lift_object_hotpath_matches_reference_math():
