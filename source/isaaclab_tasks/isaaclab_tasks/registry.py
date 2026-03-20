@@ -65,6 +65,96 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Reach-OpenArm-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmReachEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm reach slice preserves the single-arm reach workflow "
+                "with an analytic 7-DoF surrogate instead of the exact OpenArm morphology."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Reach-OpenArm-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmReachEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm reach slice preserves the single-arm reach workflow "
+                "with an analytic 7-DoF surrogate instead of the exact OpenArm morphology."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Reach-OpenArm-Bi-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmBiReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmBiReachEnvCfg",
+            },
+            semantic_contract="reduced-openarm-bimanual-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm bimanual reach slice preserves the dual-arm reach workflow "
+                "with paired analytic surrogates instead of the exact OpenArm body-frame stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Reach-OpenArm-Bi-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmBiReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmBiReachEnvCfg",
+            },
+            semantic_contract="reduced-openarm-bimanual-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm bimanual reach slice preserves the dual-arm reach workflow "
+                "with paired analytic surrogates instead of the exact OpenArm body-frame stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Reach-UR10-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10ReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10ReachEnvCfg",
+            },
+            semantic_contract="reduced-analytic-pose",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10 reach slice preserves the pose-tracking workflow with an "
+                "analytic pose surrogate instead of the full UR10 controller stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Reach-UR10-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10ReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10ReachEnvCfg",
+            },
+            semantic_contract="reduced-analytic-pose",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10 reach slice preserves the pose-tracking workflow with an "
+                "analytic pose surrogate instead of the full UR10 controller stack."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Deploy-Reach-UR10e-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacUR10eDeployReachEnv",
         "kwargs": _with_task_contract(
@@ -128,6 +218,36 @@ MAC_SAFE_TASK_SPECS = (
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaLiftEnvCfg",
         },
+    },
+    {
+        "id": "Isaac-Lift-Cube-OpenArm-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmLiftEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmLiftEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm lift slice preserves the lift workflow with a reduced "
+                "analytic surrogate instead of the exact OpenArm grasp geometry."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Lift-Cube-OpenArm-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmLiftEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmLiftEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm lift slice preserves the lift workflow with a reduced "
+                "analytic surrogate instead of the exact OpenArm grasp geometry."
+            ),
+        ),
     },
     {
         "id": "Isaac-Stack-Cube-Franka-v0",
@@ -255,6 +375,36 @@ MAC_SAFE_TASK_SPECS = (
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaOpenDrawerEnvCfg",
         },
+    },
+    {
+        "id": "Isaac-Open-Drawer-OpenArm-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmOpenDrawerEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmOpenDrawerEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm open-drawer slice preserves the drawer-opening workflow "
+                "with reduced analytic grasp logic instead of the exact cabinet scene."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Open-Drawer-OpenArm-Play-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacOpenArmOpenDrawerEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacOpenArmOpenDrawerEnvCfg",
+            },
+            semantic_contract="reduced-openarm-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native OpenArm open-drawer slice preserves the drawer-opening workflow "
+                "with reduced analytic grasp logic instead of the exact cabinet scene."
+            ),
+        ),
     },
     {
         "id": "Isaac-Franka-Cabinet-Direct-Play-v0",

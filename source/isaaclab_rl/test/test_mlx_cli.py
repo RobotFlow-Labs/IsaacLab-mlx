@@ -472,3 +472,88 @@ def test_mlx_cli_module_handles_teddy_bear_lift_alias(tmp_path: Path):
     train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
     assert train_payload["task"] == "franka-teddy-bear-lift"
     assert Path(train_payload["checkpoint_path"]).exists()
+
+
+def test_mlx_cli_module_normalizes_reduced_openarm_and_ur10_aliases(tmp_path: Path):
+    eval_cases = [
+        ("Isaac-Reach-OpenArm-Play-v0", "openarm-reach"),
+        ("Isaac-Reach-OpenArm-Bi-Play-v0", "openarm-bi-reach"),
+        ("Isaac-Reach-UR10-Play-v0", "ur10-reach"),
+        ("Isaac-Open-Drawer-OpenArm-Play-v0", "openarm-open-drawer"),
+    ]
+    train_cases = [
+        ("Isaac-Reach-OpenArm-v0", "openarm-reach"),
+        ("Isaac-Reach-OpenArm-Bi-v0", "openarm-bi-reach"),
+        ("Isaac-Reach-UR10-v0", "ur10-reach"),
+        ("Isaac-Lift-Cube-OpenArm-v0", "openarm-lift"),
+        ("Isaac-Open-Drawer-OpenArm-v0", "openarm-open-drawer"),
+    ]
+
+    for alias, canonical in eval_cases:
+        output_path = tmp_path / f"{canonical}-eval.json"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "evaluate",
+                "--task",
+                alias,
+                "--num-envs",
+                "8",
+                "--episodes",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--max-steps",
+                "256",
+                "--json-out",
+                str(output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        assert payload["task"] == canonical
+        assert payload["episodes_completed"] == 1
+
+    for index, (alias, canonical) in enumerate(train_cases, start=1):
+        output_path = tmp_path / f"{canonical}-train.json"
+        checkpoint_path = tmp_path / f"{canonical}-policy-{index}.npz"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "train",
+                "--task",
+                alias,
+                "--num-envs",
+                "8",
+                "--updates",
+                "1",
+                "--rollout-steps",
+                "8",
+                "--epochs-per-update",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--checkpoint",
+                str(checkpoint_path),
+                "--json-out",
+                str(output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        assert payload["task"] == canonical
+        assert Path(payload["checkpoint_path"]).exists()

@@ -448,6 +448,132 @@ class MacUR10eDeployReachEnvCfg:
 
 
 @configclass
+class MacUR10ReachEnvCfg(MacUR10eDeployReachEnvCfg):
+    """Reduced mac-native UR10 reach configuration."""
+
+    episode_length_s: float = 8.0
+    action_scale: float = 0.075
+    success_bonus: float = 2.0
+    target_x_range: tuple[float, float] = (0.45, 0.95)
+    target_y_range: tuple[float, float] = (-0.28, 0.28)
+    target_z_range: tuple[float, float] = (0.16, 0.42)
+    target_roll_range: tuple[float, float] = (-math.pi / 6.0, math.pi / 6.0)
+    target_pitch_range: tuple[float, float] = (math.pi / 2.0, math.pi / 2.0)
+    target_yaw_range: tuple[float, float] = (-math.pi / 2.0, math.pi / 2.0)
+    semantic_contract: str = "reduced-analytic-pose"
+    upstream_alias_semantics_preserved: bool = False
+
+
+@configclass
+class MacOpenArmReachEnvCfg(MacFrankaReachEnvCfg):
+    """Reduced mac-native OpenArm unimanual reach configuration."""
+
+    action_scale: float = 0.32
+    distance_reward_gain: float = 8.0
+    default_joint_pos: tuple[float, ...] = (1.57, 0.0, -1.57, 1.57, 0.0, 0.0, 0.0)
+    target_x_range: tuple[float, float] = (0.18, 0.42)
+    target_y_range: tuple[float, float] = (-0.18, 0.18)
+    target_z_range: tuple[float, float] = (0.10, 0.28)
+    semantic_contract: str = "reduced-openarm-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "This mac-native slice preserves the single-arm OpenArm reach workflow with a reduced "
+        "analytic 7-DoF surrogate rather than the exact OpenArm morphology and upstream controller stack."
+    )
+
+
+@configclass
+class MacOpenArmBiReachEnvCfg:
+    """Reduced mac-native OpenArm bimanual reach configuration."""
+
+    num_envs: int = 256
+    sim_dt: float = 1.0 / 120.0
+    decimation: int = 2
+    episode_length_s: float = 8.0
+    action_space: int = 14
+    observation_space: int = 46
+    state_space: int = 0
+
+    action_scale: float = 0.28
+    action_rate_penalty_scale: float = -0.01
+    joint_vel_penalty_scale: float = -0.0005
+    reach_reward_scale: float = 1.15
+    success_bonus: float = 3.5
+    success_threshold: float = 0.08
+    distance_reward_gain: float = 7.0
+
+    joint_stiffness: float = 13.0
+    joint_damping: float = 3.0
+    joint_inertia: float = 1.15
+    joint_reset_noise: float = 0.05
+    default_joint_pos: tuple[float, ...] = (
+        1.57,
+        0.0,
+        -1.57,
+        1.57,
+        0.0,
+        0.0,
+        0.0,
+        -1.57,
+        0.0,
+        1.57,
+        -1.57,
+        0.0,
+        0.0,
+        0.0,
+    )
+    joint_lower_limits: tuple[float, ...] = (
+        -2.6,
+        -1.8,
+        -2.6,
+        -3.0,
+        -2.6,
+        -0.1,
+        -2.6,
+        -2.6,
+        -1.8,
+        -2.6,
+        -3.0,
+        -2.6,
+        -0.1,
+        -2.6,
+    )
+    joint_upper_limits: tuple[float, ...] = (
+        2.6,
+        1.8,
+        2.6,
+        -0.05,
+        2.6,
+        3.5,
+        2.6,
+        2.6,
+        1.8,
+        2.6,
+        -0.05,
+        2.6,
+        3.5,
+        2.6,
+    )
+
+    left_target_x_range: tuple[float, float] = (0.12, 0.36)
+    left_target_y_range: tuple[float, float] = (0.08, 0.28)
+    left_target_z_range: tuple[float, float] = (0.10, 0.28)
+    right_target_x_range: tuple[float, float] = (0.12, 0.36)
+    right_target_y_range: tuple[float, float] = (-0.28, -0.08)
+    right_target_z_range: tuple[float, float] = (0.10, 0.28)
+    left_arm_base_offset: tuple[float, float, float] = (0.0, 0.18, 0.0)
+    right_arm_base_offset: tuple[float, float, float] = (0.0, -0.18, 0.0)
+
+    semantic_contract: str = "reduced-openarm-bimanual-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "This mac-native slice preserves the dual-arm OpenArm reach workflow with a reduced analytic "
+        "two-arm surrogate rather than the exact bimanual controller and body-frame stack."
+    )
+    seed: int = 42
+
+
+@configclass
 class MacFrankaLiftEnvCfg(MacFrankaReachEnvCfg):
     """Configuration for the first mac-native Franka cube-lift slice."""
 
@@ -488,6 +614,28 @@ class MacFrankaTeddyBearLiftEnvCfg(MacFrankaLiftEnvCfg):
     lift_reward_scale: float = 4.5
     lift_success_bonus: float = 5.0
     manipulated_object_label: str = "teddy-bear"
+
+
+@configclass
+class MacOpenArmLiftEnvCfg(MacFrankaLiftEnvCfg):
+    """Reduced mac-native OpenArm cube-lift configuration."""
+
+    action_scale: float = 0.24
+    gripper_action_scale: float = 0.022
+    default_joint_pos: tuple[float, ...] = (1.57, 0.0, -1.57, 1.57, 0.0, 0.0, 0.0, 0.022)
+    joint_upper_limits: tuple[float, ...] = (2.6, 1.8, 2.6, -0.05, 2.6, 3.5, 2.6, 0.044)
+    cube_x_range: tuple[float, float] = (0.20, 0.34)
+    cube_y_range: tuple[float, float] = (-0.08, 0.08)
+    grasp_distance_threshold: float = 0.06
+    gripper_closed_threshold: float = 0.012
+    grasp_offset_z: float = 0.045
+    lift_success_height: float = 0.16
+    semantic_contract: str = "reduced-openarm-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "This mac-native slice preserves the OpenArm cube-lift workflow with reduced analytic "
+        "grasp logic and a 7-DoF surrogate rather than the exact OpenArm kinematic chain."
+    )
 
 
 @configclass
@@ -548,6 +696,28 @@ class MacFrankaCabinetEnvCfg(MacFrankaLiftEnvCfg):
 @configclass
 class MacFrankaOpenDrawerEnvCfg(MacFrankaCabinetEnvCfg):
     """Configuration for a reduced mac-native Franka open-drawer slice."""
+
+
+@configclass
+class MacOpenArmOpenDrawerEnvCfg(MacFrankaOpenDrawerEnvCfg):
+    """Reduced mac-native OpenArm open-drawer configuration."""
+
+    action_scale: float = 0.24
+    gripper_action_scale: float = 0.022
+    default_joint_pos: tuple[float, ...] = (1.57, 0.0, -1.57, 1.57, 0.0, 0.0, 0.0, 0.022)
+    joint_upper_limits: tuple[float, ...] = (2.6, 1.8, 2.6, -0.05, 2.6, 3.5, 2.6, 0.044)
+    handle_anchor_x_range: tuple[float, float] = (0.22, 0.34)
+    handle_anchor_y_range: tuple[float, float] = (-0.05, 0.05)
+    handle_anchor_z_range: tuple[float, float] = (0.12, 0.18)
+    handle_grasp_threshold: float = 0.055
+    drawer_open_distance_max: float = 0.18
+    drawer_success_distance: float = 0.14
+    semantic_contract: str = "reduced-openarm-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "This mac-native slice preserves the OpenArm drawer-opening workflow with reduced analytic "
+        "grasp and drawer logic rather than the exact OpenArm cabinet scene and finger geometry."
+    )
 
 
 @configclass

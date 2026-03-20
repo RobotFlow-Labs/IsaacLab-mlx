@@ -154,6 +154,57 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         notes="Analytic joint-space reach slice.",
     ),
     MacNativeTaskSpec(
+        key="openarm-reach",
+        upstream_task_id="Isaac-Reach-OpenArm-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/openarm_reach_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.25,
+        semantic_contract="reduced-openarm-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic OpenArm unimanual reach slice preserving the reach workflow with a "
+            "7-DoF surrogate rather than the exact OpenArm morphology."
+        ),
+    ),
+    MacNativeTaskSpec(
+        key="openarm-bi-reach",
+        upstream_task_id="Isaac-Reach-OpenArm-Bi-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/openarm_bi_reach_policy.npz",
+        default_hidden_dim=160,
+        default_action_std=0.22,
+        semantic_contract="reduced-openarm-bimanual-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic dual-arm OpenArm reach slice preserving the bimanual reach workflow "
+            "with paired 7-DoF surrogates instead of the exact OpenArm body-frame stack."
+        ),
+    ),
+    MacNativeTaskSpec(
+        key="ur10-reach",
+        upstream_task_id="Isaac-Reach-UR10-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10_reach_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-pose",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10 reach slice preserving the pose-tracking workflow with an "
+            "analytic pose surrogate instead of the full UR10 controller stack."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="ur10e-deploy-reach",
         upstream_task_id="Isaac-Deploy-Reach-UR10e-v0",
         family="manipulation",
@@ -182,6 +233,23 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         default_hidden_dim=128,
         default_action_std=0.25,
         notes="Analytic cube lift slice with lightweight grasp logic.",
+    ),
+    MacNativeTaskSpec(
+        key="openarm-lift",
+        upstream_task_id="Isaac-Lift-Cube-OpenArm-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/openarm_lift_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.22,
+        semantic_contract="reduced-openarm-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic OpenArm cube-lift slice preserving the lift workflow with lightweight "
+            "grasp logic rather than the exact OpenArm grasp geometry."
+        ),
     ),
     MacNativeTaskSpec(
         key="franka-teddy-bear-lift",
@@ -272,6 +340,23 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         default_hidden_dim=128,
         default_action_std=0.25,
         notes="Manager-style open-drawer task mapped onto the reduced analytic drawer substrate.",
+    ),
+    MacNativeTaskSpec(
+        key="openarm-open-drawer",
+        upstream_task_id="Isaac-Open-Drawer-OpenArm-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/openarm_open_drawer_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.22,
+        semantic_contract="reduced-openarm-surrogate",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic OpenArm open-drawer slice preserving the drawer workflow with "
+            "lightweight grasp logic rather than the exact cabinet scene."
+        ),
     ),
 )
 

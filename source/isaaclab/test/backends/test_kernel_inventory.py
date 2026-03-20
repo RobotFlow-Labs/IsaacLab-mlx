@@ -23,8 +23,12 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "openarm-reach",
+        "openarm-bi-reach",
+        "ur10-reach",
         "ur10e-deploy-reach",
         "franka-lift",
+        "openarm-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -32,6 +36,7 @@ def test_kernel_inventory_lists_expected_current_mac_native_tasks():
         "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
+        "openarm-open-drawer",
     )
 
 

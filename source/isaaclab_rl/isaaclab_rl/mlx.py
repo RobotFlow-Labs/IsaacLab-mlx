@@ -39,12 +39,27 @@ from isaaclab.backends.mac_sim import (
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
     MacFrankaLiftTrainCfg,
+    MacOpenArmLiftEnv,
+    MacOpenArmLiftEnvCfg,
+    MacOpenArmLiftTrainCfg,
     MacFrankaOpenDrawerEnv,
     MacFrankaOpenDrawerEnvCfg,
     MacFrankaOpenDrawerTrainCfg,
+    MacOpenArmOpenDrawerEnv,
+    MacOpenArmOpenDrawerEnvCfg,
+    MacOpenArmOpenDrawerTrainCfg,
+    MacOpenArmBiReachEnv,
+    MacOpenArmBiReachEnvCfg,
+    MacOpenArmBiReachTrainCfg,
+    MacOpenArmReachEnv,
+    MacOpenArmReachEnvCfg,
+    MacOpenArmReachTrainCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
     MacFrankaReachTrainCfg,
+    MacUR10ReachEnv,
+    MacUR10ReachEnvCfg,
+    MacUR10ReachTrainCfg,
     MacUR10eDeployReachEnv,
     MacUR10eDeployReachEnvCfg,
     MacUR10eDeployReachTrainCfg,
@@ -72,8 +87,13 @@ from isaaclab.backends.mac_sim import (
     play_franka_bin_stack_policy,
     play_franka_cabinet_policy,
     play_franka_lift_policy,
+    play_openarm_lift_policy,
     play_franka_open_drawer_policy,
+    play_openarm_open_drawer_policy,
+    play_openarm_bi_reach_policy,
+    play_openarm_reach_policy,
     play_franka_reach_policy,
+    play_ur10_reach_policy,
     play_ur10e_deploy_reach_policy,
     play_franka_stack_policy,
     play_franka_stack_instance_randomize_policy,
@@ -86,8 +106,13 @@ from isaaclab.backends.mac_sim import (
     train_franka_bin_stack_policy,
     train_franka_cabinet_policy,
     train_franka_lift_policy,
+    train_openarm_lift_policy,
     train_franka_open_drawer_policy,
+    train_openarm_open_drawer_policy,
+    train_openarm_bi_reach_policy,
+    train_openarm_reach_policy,
     train_franka_reach_policy,
+    train_ur10_reach_policy,
     train_ur10e_deploy_reach_policy,
     train_franka_stack_policy,
     train_franka_stack_instance_randomize_policy,
@@ -136,12 +161,20 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Reach-Franka-IK-Rel-v0": "franka-reach",
     "Isaac-Reach-Franka-OSC-v0": "franka-reach",
     "Isaac-Reach-Franka-OSC-Play-v0": "franka-reach",
+    "Isaac-Reach-OpenArm-v0": "openarm-reach",
+    "Isaac-Reach-OpenArm-Play-v0": "openarm-reach",
+    "Isaac-Reach-OpenArm-Bi-v0": "openarm-bi-reach",
+    "Isaac-Reach-OpenArm-Bi-Play-v0": "openarm-bi-reach",
+    "Isaac-Reach-UR10-v0": "ur10-reach",
+    "Isaac-Reach-UR10-Play-v0": "ur10-reach",
     "Isaac-Deploy-Reach-UR10e-v0": "ur10e-deploy-reach",
     "Isaac-Deploy-Reach-UR10e-Play-v0": "ur10e-deploy-reach",
     "Isaac-Lift-Cube-Franka-v0": "franka-lift",
     "Isaac-Lift-Cube-Franka-Play-v0": "franka-lift",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0": "franka-lift",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0": "franka-lift",
+    "Isaac-Lift-Cube-OpenArm-v0": "openarm-lift",
+    "Isaac-Lift-Cube-OpenArm-Play-v0": "openarm-lift",
     "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0": "franka-teddy-bear-lift",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0": "franka-stack-instance-randomize",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0": "franka-stack-instance-randomize",
@@ -161,6 +194,8 @@ MLX_TASK_ALIASES: dict[str, str] = {
     "Isaac-Open-Drawer-Franka-Play-v0": "franka-open-drawer",
     "Isaac-Open-Drawer-Franka-IK-Abs-v0": "franka-open-drawer",
     "Isaac-Open-Drawer-Franka-IK-Rel-v0": "franka-open-drawer",
+    "Isaac-Open-Drawer-OpenArm-v0": "openarm-open-drawer",
+    "Isaac-Open-Drawer-OpenArm-Play-v0": "openarm-open-drawer",
 }
 
 
@@ -314,6 +349,57 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_reach_policy(cfg)
+    elif task == "openarm-reach":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacOpenArmReachTrainCfg(
+            env=MacOpenArmReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/openarm_reach_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_openarm_reach_policy(cfg)
+    elif task == "openarm-bi-reach":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 160
+        )
+        cfg = MacOpenArmBiReachTrainCfg(
+            env=MacOpenArmBiReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/openarm_bi_reach_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_openarm_bi_reach_policy(cfg)
+    elif task == "ur10-reach":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacUR10ReachTrainCfg(
+            env=MacUR10ReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/ur10_reach_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_ur10_reach_policy(cfg)
     elif task == "ur10e-deploy-reach":
         resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
             resume_from, spec.default_hidden_dim or 128
@@ -348,6 +434,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_lift_policy(cfg)
+    elif task == "openarm-lift":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacOpenArmLiftTrainCfg(
+            env=MacOpenArmLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/openarm_lift_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_openarm_lift_policy(cfg)
     elif task == "franka-teddy-bear-lift":
         resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
             resume_from, spec.default_hidden_dim or 128
@@ -467,6 +570,23 @@ def train_mlx_task(
             eval_interval=eval_interval,
         )
         result = train_franka_open_drawer_policy(cfg)
+    elif task == "openarm-open-drawer":
+        resolved_hidden_dim = hidden_dim if hidden_dim is not None else resolve_resume_hidden_dim(
+            resume_from, spec.default_hidden_dim or 128
+        )
+        cfg = MacOpenArmOpenDrawerTrainCfg(
+            env=MacOpenArmOpenDrawerEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s),
+            hidden_dim=resolved_hidden_dim,
+            updates=updates,
+            rollout_steps=rollout_steps,
+            epochs_per_update=epochs_per_update,
+            learning_rate=learning_rate,
+            action_std=spec.default_action_std if action_std is None else action_std,
+            checkpoint_path=checkpoint or spec.default_checkpoint or "logs/mlx/openarm_open_drawer_policy.npz",
+            resume_from=resume_from,
+            eval_interval=eval_interval,
+        )
+        result = train_openarm_open_drawer_policy(cfg)
     else:
         raise ValueError(f"Unsupported MLX training task: {task}")
 
@@ -798,6 +918,135 @@ def evaluate_mlx_task(
             "max_steps": max_steps,
         }
 
+    if task == "openarm-reach":
+        if checkpoint is not None:
+            returns = play_openarm_reach_policy(
+                checkpoint,
+                env_cfg=MacOpenArmReachEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacOpenArmReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacOpenArmReachEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "openarm-bi-reach":
+        if checkpoint is not None:
+            returns = play_openarm_bi_reach_policy(
+                checkpoint,
+                env_cfg=MacOpenArmBiReachEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacOpenArmBiReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacOpenArmBiReachEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "ur10-reach":
+        if checkpoint is not None:
+            returns = play_ur10_reach_policy(
+                checkpoint,
+                env_cfg=MacUR10ReachEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacUR10ReachEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacUR10ReachEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
     if task == "ur10e-deploy-reach":
         if checkpoint is not None:
             returns = play_ur10e_deploy_reach_policy(
@@ -859,6 +1108,49 @@ def evaluate_mlx_task(
             }
         cfg = MacFrankaLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
         env = MacFrankaLiftEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "openarm-lift":
+        if checkpoint is not None:
+            returns = play_openarm_lift_policy(
+                checkpoint,
+                env_cfg=MacOpenArmLiftEnvCfg(num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacOpenArmLiftEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacOpenArmLiftEnv(cfg)
         mx.random.seed(seed)
         env.reset()
         completed: list[dict[str, Any]] = []
@@ -1251,6 +1543,51 @@ def evaluate_mlx_task(
             completed.extend(
                 {"length": int(length), "final_distance": float(extras["final_distance_to_goal"])}
                 for length in extras.get("completed_lengths", [])
+            )
+            if len(completed) >= episodes:
+                break
+        return {
+            "task": task,
+            "mode": "manual",
+            "episodes_requested": episodes,
+            "episodes_completed": len(completed[:episodes]),
+            "completed": completed[:episodes],
+            "max_steps": max_steps,
+        }
+
+    if task == "openarm-open-drawer":
+        if checkpoint is not None:
+            returns = play_openarm_open_drawer_policy(
+                checkpoint,
+                env_cfg=MacOpenArmOpenDrawerEnvCfg(
+                    num_envs=max(1, num_envs), seed=seed, episode_length_s=episode_length_s
+                ),
+                episodes=episodes,
+                hidden_dim=hidden_dim,
+            )
+            return {
+                "task": task,
+                "mode": "checkpoint",
+                "episodes_requested": episodes,
+                "episodes_completed": len(returns),
+                "completed": [{"return": float(value)} for value in returns],
+                "checkpoint": checkpoint,
+            }
+        cfg = MacOpenArmOpenDrawerEnvCfg(num_envs=num_envs, seed=seed, episode_length_s=episode_length_s)
+        env = MacOpenArmOpenDrawerEnv(cfg)
+        mx.random.seed(seed)
+        env.reset()
+        completed: list[dict[str, Any]] = []
+        for _ in range(max_steps):
+            actions = (
+                mx.random.uniform(low=-1.0, high=1.0, shape=(cfg.num_envs, cfg.action_space))
+                if random_actions
+                else mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+            )
+            _, _, _, _, extras = env.step(actions)
+            completed.extend(
+                {"length": int(length), "return": float(value)}
+                for length, value in zip(extras.get("completed_lengths", []), extras.get("completed_returns", []), strict=True)
             )
             if len(completed) >= episodes:
                 break

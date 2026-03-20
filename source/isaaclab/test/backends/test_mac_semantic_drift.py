@@ -55,7 +55,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 21
+    assert snapshot["task_count"] == 26
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -64,11 +64,25 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["anymal-c-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["franka-reach"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["franka-reach"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["openarm-reach"]["contract"]["action_dim"] == 7
+    assert snapshot["tasks"]["openarm-reach"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["openarm-reach"]["contract"]["output_signature"]["final_target_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["openarm-bi-reach"]["contract"]["action_dim"] == 14
+    assert snapshot["tasks"]["openarm-bi-reach"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["openarm-bi-reach"]["contract"]["output_signature"]["final_left_target_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["openarm-bi-reach"]["contract"]["output_signature"]["final_right_target_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10-reach"]["contract"]["action_dim"] == 6
+    assert snapshot["tasks"]["ur10-reach"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10-reach"]["contract"]["output_signature"]["final_target_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10-reach"]["contract"]["output_signature"]["final_orientation_error_mean"] >= 0.0
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["action_dim"] == 6
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["hotpath"] == expected_ur10e_hotpath
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_target_distance_mean"] >= 0.0
     assert snapshot["tasks"]["ur10e-deploy-reach"]["contract"]["output_signature"]["final_orientation_error_mean"] >= 0.0
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["openarm-lift"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["openarm-lift"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["openarm-lift"]["contract"]["output_signature"]["final_grasp_ratio"] >= 0.0
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-teddy-bear-lift"]["contract"]["output_signature"]["final_lift_gap_mean"] >= 0.0
@@ -104,6 +118,10 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["franka-open-drawer"]["contract"]["hotpath"] == expected_franka_hotpath
     assert snapshot["tasks"]["franka-open-drawer"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["franka-open-drawer"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
+    assert snapshot["tasks"]["openarm-open-drawer"]["contract"]["action_dim"] == 8
+    assert snapshot["tasks"]["openarm-open-drawer"]["contract"]["hotpath"] == expected_franka_hotpath
+    assert snapshot["tasks"]["openarm-open-drawer"]["contract"]["output_signature"]["final_drawer_open_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["openarm-open-drawer"]["contract"]["output_signature"]["final_drawer_opened_ratio"] <= 1.0
     assert snapshot["tasks"]["h1-rough"]["contract"]["sensor_scan_dim"] == 9
     assert snapshot["tasks"]["h1-flat-height-scan"]["contract"]["hotpath"] == expected_locomotion_hotpath
     assert snapshot["tasks"]["quadcopter"]["contract"]["output_signature"]["final_distance_to_goal_mean"] > 0.0

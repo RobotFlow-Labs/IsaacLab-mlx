@@ -65,8 +65,12 @@ def test_current_mac_native_benchmark_group_is_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "openarm-reach",
+        "openarm-bi-reach",
+        "ur10-reach",
         "ur10e-deploy-reach",
         "franka-lift",
+        "openarm-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -74,6 +78,7 @@ def test_current_mac_native_benchmark_group_is_stable():
         "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
+        "openarm-open-drawer",
     )
     assert benchmark_module.TASK_GROUPS == expected_groups
     assert benchmark_module.resolve_requested_tasks(None, "current-mac-native") == benchmark_module.CURRENT_MAC_NATIVE_TASKS
@@ -172,6 +177,42 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_ee_height_mean",
                 "final_target_distance_mean",
             }
+        elif benchmark["task"] == "openarm-reach":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_target_distance_mean",
+            }
+        elif benchmark["task"] == "openarm-bi-reach":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_left_ee_height_mean",
+                "final_right_ee_height_mean",
+                "final_left_target_distance_mean",
+                "final_right_target_distance_mean",
+            }
+        elif benchmark["task"] == "ur10-reach":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_ur10e_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_target_distance_mean",
+                "final_orientation_error_mean",
+            }
         elif benchmark["task"] == "ur10e-deploy-reach":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_ur10e_hotpath
             assert benchmark["output_signature"].keys() == {
@@ -185,6 +226,19 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_orientation_error_mean",
             }
         elif benchmark["task"] == "franka-lift":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_cube_distance_mean",
+                "final_cube_height_mean",
+                "final_grasp_ratio",
+            }
+        elif benchmark["task"] == "openarm-lift":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",
@@ -297,6 +351,20 @@ def test_run_benchmarks_covers_all_current_mac_native_tasks(tmp_path: Path):
                 "final_drawer_opened_ratio",
             }
         elif benchmark["task"] == "franka-open-drawer":
+            assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
+            assert benchmark["output_signature"].keys() == {
+                "final_policy_mean",
+                "final_policy_std",
+                "final_reward_mean",
+                "final_joint_pos_abs_mean",
+                "final_joint_vel_abs_mean",
+                "final_ee_height_mean",
+                "final_handle_distance_mean",
+                "final_drawer_open_mean",
+                "final_drawer_open_ratio",
+                "final_drawer_opened_ratio",
+            }
+        elif benchmark["task"] == "openarm-open-drawer":
             assert benchmark["diagnostics"]["sim_backend"]["subsystems"]["hotpath"] == expected_franka_hotpath
             assert benchmark["output_signature"].keys() == {
                 "final_policy_mean",

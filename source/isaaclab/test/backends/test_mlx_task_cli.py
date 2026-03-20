@@ -43,8 +43,12 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "openarm-reach",
+        "openarm-bi-reach",
+        "ur10-reach",
         "ur10e-deploy-reach",
         "franka-lift",
+        "openarm-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -52,6 +56,7 @@ def test_shared_task_cli_registry_aligns_with_current_mac_native_tasks():
         "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
+        "openarm-open-drawer",
     )
 
 
@@ -217,6 +222,33 @@ def test_shared_task_cli_evaluates_ur10e_deploy_reach_manual_slice():
     assert payload["completed"][0]["length"] > 0
 
 
+def test_shared_task_cli_evaluates_new_reduced_manipulation_manual_slices():
+    cases = (
+        ("openarm-reach", 30),
+        ("openarm-bi-reach", 31),
+        ("ur10-reach", 32),
+        ("openarm-lift", 33),
+        ("openarm-open-drawer", 34),
+    )
+
+    for task, seed in cases:
+        payload = evaluate_mlx_task(
+            task,
+            num_envs=8,
+            episodes=1,
+            seed=seed,
+            episode_length_s=0.5,
+            max_steps=512,
+            random_actions=False,
+        )
+
+        assert payload["task"] == task
+        assert payload["mode"] == "manual"
+        assert payload["episodes_requested"] == 1
+        assert payload["episodes_completed"] == 1
+        assert payload["completed"][0]["length"] > 0
+
+
 def test_shared_task_cli_trains_franka_reach_slice(tmp_path: Path):
     checkpoint_path = tmp_path / "franka_reach_policy.npz"
 
@@ -259,6 +291,36 @@ def test_shared_task_cli_trains_ur10e_deploy_reach_slice(tmp_path: Path):
     assert Path(payload["checkpoint_path"]).exists()
     assert Path(payload["metadata_path"]).exists()
     assert payload["completed_episodes"] >= 0
+
+
+def test_shared_task_cli_trains_new_reduced_manipulation_slices(tmp_path: Path):
+    cases = (
+        ("openarm-reach", 40),
+        ("openarm-bi-reach", 41),
+        ("ur10-reach", 42),
+        ("openarm-lift", 43),
+        ("openarm-open-drawer", 44),
+    )
+
+    for task, seed in cases:
+        checkpoint_path = tmp_path / f"{task}_policy.npz"
+        payload = train_mlx_task(
+            task,
+            num_envs=8,
+            updates=1,
+            rollout_steps=8,
+            epochs_per_update=1,
+            hidden_dim=48 if task == "openarm-bi-reach" else 32,
+            checkpoint=str(checkpoint_path),
+            eval_interval=1,
+            episode_length_s=0.5,
+            seed=seed,
+        )
+
+        assert payload["task"] == task
+        assert Path(payload["checkpoint_path"]).exists()
+        assert Path(payload["metadata_path"]).exists()
+        assert payload["completed_episodes"] >= 0
 
 
 def test_shared_task_cli_trains_franka_lift_slice(tmp_path: Path):
@@ -621,6 +683,37 @@ def test_franka_bin_stack_thin_wrappers_are_directly_runnable():
     env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
 
     for script in scripts:
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "usage:" in result.stdout.lower()
+
+
+def test_new_reduced_manipulation_thin_wrappers_are_directly_runnable():
+    repo_root = Path(__file__).resolve().parents[4]
+    scripts = (
+        "train_openarm_reach.py",
+        "play_openarm_reach.py",
+        "train_openarm_bi_reach.py",
+        "play_openarm_bi_reach.py",
+        "train_ur10_reach.py",
+        "play_ur10_reach.py",
+        "train_openarm_lift.py",
+        "play_openarm_lift.py",
+        "train_openarm_open_drawer.py",
+        "play_openarm_open_drawer.py",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f".:source/isaaclab:source/isaaclab_rl:{env.get('PYTHONPATH', '')}".rstrip(":")
+
+    for script_name in scripts:
+        script = repo_root / "scripts" / "reinforcement_learning" / "mlx" / script_name
         result = subprocess.run(
             [sys.executable, str(script), "--help"],
             cwd=repo_root,

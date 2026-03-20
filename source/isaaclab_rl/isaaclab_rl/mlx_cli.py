@@ -27,8 +27,12 @@ TASK_PREFIXES = {
     "h1-flat": "mlx-h1-flat",
     "h1-rough": "mlx-h1-rough",
     "franka-reach": "mlx-franka-reach",
+    "openarm-reach": "mlx-openarm-reach",
+    "openarm-bi-reach": "mlx-openarm-bi-reach",
+    "ur10-reach": "mlx-ur10-reach",
     "ur10e-deploy-reach": "mlx-ur10e-deploy-reach",
     "franka-lift": "mlx-franka-lift",
+    "openarm-lift": "mlx-openarm-lift",
     "franka-teddy-bear-lift": "mlx-franka-teddy-bear-lift",
     "franka-stack-instance-randomize": "mlx-franka-stack-instance-randomize",
     "franka-stack": "mlx-franka-stack",
@@ -36,6 +40,7 @@ TASK_PREFIXES = {
     "franka-bin-stack": "mlx-franka-bin-stack",
     "franka-cabinet": "mlx-franka-cabinet",
     "franka-open-drawer": "mlx-franka-open-drawer",
+    "openarm-open-drawer": "mlx-openarm-open-drawer",
 }
 
 

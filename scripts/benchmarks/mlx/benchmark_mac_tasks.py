@@ -45,10 +45,20 @@ from isaaclab.backends.mac_sim import (
     MacFrankaCabinetEnvCfg,
     MacFrankaLiftEnv,
     MacFrankaLiftEnvCfg,
+    MacOpenArmLiftEnv,
+    MacOpenArmLiftEnvCfg,
     MacFrankaOpenDrawerEnv,
     MacFrankaOpenDrawerEnvCfg,
+    MacOpenArmOpenDrawerEnv,
+    MacOpenArmOpenDrawerEnvCfg,
+    MacOpenArmBiReachEnv,
+    MacOpenArmBiReachEnvCfg,
+    MacOpenArmReachEnv,
+    MacOpenArmReachEnvCfg,
     MacFrankaReachEnv,
     MacFrankaReachEnvCfg,
+    MacUR10ReachEnv,
+    MacUR10ReachEnvCfg,
     MacUR10eDeployReachEnv,
     MacUR10eDeployReachEnvCfg,
     MacFrankaStackEnv,
@@ -343,6 +353,25 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
     return payload
 
 
+def _openarm_bi_output_signature(env: Any, trace: Any) -> dict[str, float]:
+    """Capture compact semantic signatures for the reduced bimanual OpenArm reach slice."""
+
+    policy = trace.observations[-1]["policy"] if trace.observations else trace.initial_observations["policy"]
+    reward = trace.rewards[-1] if trace.rewards else mx.zeros((env.num_envs,), dtype=mx.float32)
+    joint_pos, joint_vel = env.sim_backend.get_joint_state(None)
+    return {
+        "final_policy_mean": float(mx.mean(policy).item()),
+        "final_policy_std": float(mx.std(policy).item()),
+        "final_reward_mean": float(mx.mean(reward).item()),
+        "final_joint_pos_abs_mean": float(mx.mean(mx.abs(joint_pos)).item()),
+        "final_joint_vel_abs_mean": float(mx.mean(mx.abs(joint_vel)).item()),
+        "final_left_ee_height_mean": float(mx.mean(env.sim_backend.left_ee_pos_w[:, 2]).item()),
+        "final_right_ee_height_mean": float(mx.mean(env.sim_backend.right_ee_pos_w[:, 2]).item()),
+        "final_left_target_distance_mean": float(mx.mean(env.sim_backend.left_goal_distance()).item()),
+        "final_right_target_distance_mean": float(mx.mean(env.sim_backend.right_goal_distance()).item()),
+    }
+
+
 def _cartpole_camera_output_signature(env: Any, reward: mx.array, image: mx.array) -> dict[str, float]:
     """Capture a compact semantic signature for the synthetic cartpole camera slices."""
 
@@ -589,6 +618,87 @@ def benchmark_franka_reach(num_envs: int, steps: int, seed: int) -> dict[str, An
     )
 
 
+def benchmark_openarm_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced OpenArm reach MLX env step loop."""
+
+    env = MacOpenArmReachEnv(MacOpenArmReachEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "openarm-reach",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_openarm_bi_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced OpenArm bimanual reach MLX env step loop."""
+
+    env = MacOpenArmBiReachEnv(MacOpenArmBiReachEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "openarm-bi-reach",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _openarm_bi_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+ 
+
+def benchmark_ur10_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10 reach MLX env step loop."""
+
+    env = MacUR10ReachEnv(MacUR10ReachEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10-reach",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
 def benchmark_ur10e_deploy_reach(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
     """Benchmark the reduced UR10e deploy-reach MLX env step loop."""
 
@@ -630,6 +740,33 @@ def benchmark_franka_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any
 
     return _make_benchmark_result(
         "franka-lift",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_openarm_lift(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced OpenArm lift MLX env step loop."""
+
+    env = MacOpenArmLiftEnv(MacOpenArmLiftEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "openarm-lift",
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
@@ -819,6 +956,33 @@ def benchmark_franka_open_drawer(num_envs: int, steps: int, seed: int) -> dict[s
 
     return _make_benchmark_result(
         "franka-open-drawer",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_openarm_open_drawer(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced OpenArm open-drawer MLX env step loop."""
+
+    env = MacOpenArmOpenDrawerEnv(MacOpenArmOpenDrawerEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "openarm-open-drawer",
         num_envs=num_envs,
         steps=steps,
         elapsed_s=elapsed_s,
@@ -1054,10 +1218,18 @@ def run_benchmarks(
             benchmark = benchmark_h1_rough(num_envs, steps, seed)
         elif task == "franka-reach":
             benchmark = benchmark_franka_reach(num_envs, steps, seed)
+        elif task == "openarm-reach":
+            benchmark = benchmark_openarm_reach(num_envs, steps, seed)
+        elif task == "openarm-bi-reach":
+            benchmark = benchmark_openarm_bi_reach(num_envs, steps, seed)
+        elif task == "ur10-reach":
+            benchmark = benchmark_ur10_reach(num_envs, steps, seed)
         elif task == "ur10e-deploy-reach":
             benchmark = benchmark_ur10e_deploy_reach(num_envs, steps, seed)
         elif task == "franka-lift":
             benchmark = benchmark_franka_lift(num_envs, steps, seed)
+        elif task == "openarm-lift":
+            benchmark = benchmark_openarm_lift(num_envs, steps, seed)
         elif task == "franka-teddy-bear-lift":
             benchmark = benchmark_franka_teddy_bear_lift(num_envs, steps, seed)
         elif task == "franka-stack":
@@ -1072,6 +1244,8 @@ def run_benchmarks(
             benchmark = benchmark_franka_cabinet(num_envs, steps, seed)
         elif task == "franka-open-drawer":
             benchmark = benchmark_franka_open_drawer(num_envs, steps, seed)
+        elif task == "openarm-open-drawer":
+            benchmark = benchmark_openarm_open_drawer(num_envs, steps, seed)
         elif task == "anymal-c-flat-height-scan":
             benchmark = benchmark_anymal_c_flat_height_scan(num_envs, steps, seed)
         elif task == "h1-flat-height-scan":

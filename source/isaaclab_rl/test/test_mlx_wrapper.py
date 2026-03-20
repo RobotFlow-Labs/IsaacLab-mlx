@@ -36,8 +36,12 @@ def test_public_mlx_task_lists_are_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "openarm-reach",
+        "openarm-bi-reach",
+        "ur10-reach",
         "ur10e-deploy-reach",
         "franka-lift",
+        "openarm-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -45,6 +49,7 @@ def test_public_mlx_task_lists_are_stable():
         "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
+        "openarm-open-drawer",
     )
     assert list_trainable_mlx_tasks() == (
         "cartpole",
@@ -53,8 +58,12 @@ def test_public_mlx_task_lists_are_stable():
         "h1-flat",
         "h1-rough",
         "franka-reach",
+        "openarm-reach",
+        "openarm-bi-reach",
+        "ur10-reach",
         "ur10e-deploy-reach",
         "franka-lift",
+        "openarm-lift",
         "franka-teddy-bear-lift",
         "franka-stack-instance-randomize",
         "franka-stack",
@@ -62,13 +71,26 @@ def test_public_mlx_task_lists_are_stable():
         "franka-bin-stack",
         "franka-cabinet",
         "franka-open-drawer",
+        "openarm-open-drawer",
     )
     assert get_mlx_task_spec("h1-flat").default_hidden_dim == 192
     assert get_mlx_task_spec("franka-reach").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-reach").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-reach").semantic_contract == "reduced-openarm-surrogate"
+    assert get_mlx_task_spec("openarm-reach").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("openarm-bi-reach").default_hidden_dim == 160
+    assert get_mlx_task_spec("openarm-bi-reach").semantic_contract == "reduced-openarm-bimanual-surrogate"
+    assert get_mlx_task_spec("openarm-bi-reach").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("ur10-reach").default_hidden_dim == 128
+    assert get_mlx_task_spec("ur10-reach").semantic_contract == "reduced-analytic-pose"
+    assert get_mlx_task_spec("ur10-reach").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("ur10e-deploy-reach").default_hidden_dim == 128
     assert get_mlx_task_spec("ur10e-deploy-reach").semantic_contract == "reduced-analytic-pose"
     assert get_mlx_task_spec("ur10e-deploy-reach").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("franka-lift").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-lift").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-lift").semantic_contract == "reduced-openarm-surrogate"
+    assert get_mlx_task_spec("openarm-lift").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("franka-teddy-bear-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack-instance-randomize").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-stack").default_hidden_dim == 128
@@ -79,14 +101,21 @@ def test_public_mlx_task_lists_are_stable():
     assert "mimic" in get_mlx_task_spec("franka-bin-stack").notes.lower()
     assert get_mlx_task_spec("franka-cabinet").default_hidden_dim == 128
     assert get_mlx_task_spec("franka-open-drawer").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-open-drawer").default_hidden_dim == 128
+    assert get_mlx_task_spec("openarm-open-drawer").semantic_contract == "reduced-openarm-surrogate"
+    assert get_mlx_task_spec("openarm-open-drawer").upstream_alias_semantics_preserved is False
 
 
 def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     """Upstream Franka task ids should resolve to the canonical public MLX task specs."""
 
     assert get_mlx_task_spec("Isaac-Reach-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-reach")
+    assert get_mlx_task_spec("Isaac-Reach-OpenArm-v0") == get_mlx_task_spec("openarm-reach")
+    assert get_mlx_task_spec("Isaac-Reach-OpenArm-Bi-Play-v0") == get_mlx_task_spec("openarm-bi-reach")
+    assert get_mlx_task_spec("Isaac-Reach-UR10-Play-v0") == get_mlx_task_spec("ur10-reach")
     assert get_mlx_task_spec("Isaac-Deploy-Reach-UR10e-Play-v0") == get_mlx_task_spec("ur10e-deploy-reach")
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
+    assert get_mlx_task_spec("Isaac-Lift-Cube-OpenArm-Play-v0") == get_mlx_task_spec("openarm-lift")
     assert get_mlx_task_spec("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-teddy-bear-lift")
     assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0") == get_mlx_task_spec(
         "franka-stack-instance-randomize"
@@ -94,6 +123,7 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
     assert get_mlx_task_spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0") == get_mlx_task_spec("franka-bin-stack")
     assert get_mlx_task_spec("Isaac-Open-Drawer-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-open-drawer")
+    assert get_mlx_task_spec("Isaac-Open-Drawer-OpenArm-Play-v0") == get_mlx_task_spec("openarm-open-drawer")
 
 
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
@@ -284,7 +314,7 @@ def test_evaluate_cartpole_camera_manual_via_public_mlx_wrapper():
     assert depth_payload["episodes_completed"] == 1
 
 
-def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
+def test_evaluate_manipulation_and_ur10_manual_slices_via_public_mlx_wrapper():
     """The public wrapper should expose manual evaluation for the trainable manipulation slices."""
 
     reach_payload = evaluate_mlx_task(
@@ -296,6 +326,33 @@ def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
         random_actions=False,
         seed=31,
     )
+    openarm_reach_payload = evaluate_mlx_task(
+        "openarm-reach",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=32,
+    )
+    openarm_bi_reach_payload = evaluate_mlx_task(
+        "openarm-bi-reach",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=33,
+    )
+    ur10_payload = evaluate_mlx_task(
+        "ur10-reach",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=34,
+    )
     ur10e_payload = evaluate_mlx_task(
         "ur10e-deploy-reach",
         num_envs=8,
@@ -304,6 +361,15 @@ def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
         max_steps=512,
         random_actions=False,
         seed=35,
+    )
+    openarm_lift_payload = evaluate_mlx_task(
+        "openarm-lift",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=38,
     )
     lift_payload = evaluate_mlx_task(
         "franka-lift",
@@ -368,13 +434,30 @@ def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
         random_actions=False,
         seed=51,
     )
+    openarm_open_drawer_payload = evaluate_mlx_task(
+        "openarm-open-drawer",
+        num_envs=8,
+        episodes=1,
+        episode_length_s=0.5,
+        max_steps=512,
+        random_actions=False,
+        seed=52,
+    )
 
     assert reach_payload["task"] == "franka-reach"
     assert reach_payload["episodes_completed"] == 1
+    assert openarm_reach_payload["task"] == "openarm-reach"
+    assert openarm_reach_payload["episodes_completed"] == 1
+    assert openarm_bi_reach_payload["task"] == "openarm-bi-reach"
+    assert openarm_bi_reach_payload["episodes_completed"] == 1
+    assert ur10_payload["task"] == "ur10-reach"
+    assert ur10_payload["episodes_completed"] == 1
     assert ur10e_payload["task"] == "ur10e-deploy-reach"
     assert ur10e_payload["episodes_completed"] == 1
     assert lift_payload["task"] == "franka-lift"
     assert lift_payload["episodes_completed"] == 1
+    assert openarm_lift_payload["task"] == "openarm-lift"
+    assert openarm_lift_payload["episodes_completed"] == 1
     assert stack_instance_payload["task"] == "franka-stack-instance-randomize"
     assert stack_instance_payload["episodes_completed"] == 1
     assert stack_payload["task"] == "franka-stack"
@@ -387,6 +470,8 @@ def test_evaluate_manipulation_and_ur10e_manual_slices_via_public_mlx_wrapper():
     assert cabinet_payload["episodes_completed"] == 1
     assert open_drawer_payload["task"] == "franka-open-drawer"
     assert open_drawer_payload["episodes_completed"] == 1
+    assert openarm_open_drawer_payload["task"] == "openarm-open-drawer"
+    assert openarm_open_drawer_payload["episodes_completed"] == 1
 
 
 def test_train_and_evaluate_franka_reach_via_public_mlx_wrapper(tmp_path: Path):
@@ -417,6 +502,105 @@ def test_train_and_evaluate_franka_reach_via_public_mlx_wrapper(tmp_path: Path):
     assert train_payload["task"] == "franka-reach"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-reach"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_openarm_reach_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for reduced OpenArm reach."""
+
+    checkpoint_path = tmp_path / "openarm-reach-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "openarm-reach",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=42,
+    )
+    eval_payload = evaluate_mlx_task(
+        "openarm-reach",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=42,
+    )
+
+    assert train_payload["task"] == "openarm-reach"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "openarm-reach"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_openarm_bi_reach_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for reduced OpenArm bimanual reach."""
+
+    checkpoint_path = tmp_path / "openarm-bi-reach-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "openarm-bi-reach",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=48,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=43,
+    )
+    eval_payload = evaluate_mlx_task(
+        "openarm-bi-reach",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=43,
+    )
+
+    assert train_payload["task"] == "openarm-bi-reach"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "openarm-bi-reach"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_ur10_reach_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for reduced UR10 reach."""
+
+    checkpoint_path = tmp_path / "ur10-reach-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "ur10-reach",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=44,
+    )
+    eval_payload = evaluate_mlx_task(
+        "ur10-reach",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=44,
+    )
+
+    assert train_payload["task"] == "ur10-reach"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "ur10-reach"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)
@@ -483,6 +667,39 @@ def test_train_and_evaluate_franka_lift_via_public_mlx_wrapper(tmp_path: Path):
     assert train_payload["task"] == "franka-lift"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-lift"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_openarm_lift_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for reduced OpenArm lift."""
+
+    checkpoint_path = tmp_path / "openarm-lift-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "openarm-lift",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=45,
+    )
+    eval_payload = evaluate_mlx_task(
+        "openarm-lift",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=45,
+    )
+
+    assert train_payload["task"] == "openarm-lift"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "openarm-lift"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)
@@ -713,6 +930,39 @@ def test_train_and_evaluate_franka_open_drawer_via_public_mlx_wrapper(tmp_path: 
     assert train_payload["task"] == "franka-open-drawer"
     assert Path(train_payload["checkpoint_path"]).exists()
     assert eval_payload["task"] == "franka-open-drawer"
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+def test_train_and_evaluate_openarm_open_drawer_via_public_mlx_wrapper(tmp_path: Path):
+    """The public wrapper should expose a train/replay surface for reduced OpenArm open-drawer."""
+
+    checkpoint_path = tmp_path / "openarm-open-drawer-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        "openarm-open-drawer",
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=71,
+    )
+    eval_payload = evaluate_mlx_task(
+        "openarm-open-drawer",
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=71,
+    )
+
+    assert train_payload["task"] == "openarm-open-drawer"
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == "openarm-open-drawer"
     assert eval_payload["mode"] == "checkpoint"
     assert eval_payload["episodes_completed"] == 1
     assert isinstance(eval_payload["completed"][0]["return"], float)

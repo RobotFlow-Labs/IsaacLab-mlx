@@ -24,11 +24,15 @@ SAFE_TASK_IDS = (
     "Isaac-Reach-Franka-IK-Abs-v0",
     "Isaac-Reach-Franka-IK-Rel-v0",
     "Isaac-Reach-Franka-OSC-v0",
+    "Isaac-Reach-OpenArm-v0",
+    "Isaac-Reach-OpenArm-Bi-v0",
+    "Isaac-Reach-UR10-v0",
     "Isaac-Deploy-Reach-UR10e-v0",
     "Isaac-Deploy-Reach-UR10e-Play-v0",
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+    "Isaac-Lift-Cube-OpenArm-v0",
     "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
@@ -39,6 +43,7 @@ SAFE_TASK_IDS = (
     "Isaac-Franka-Cabinet-Direct-v0",
     "Isaac-Open-Drawer-Franka-v0",
     "Isaac-Open-Drawer-Franka-IK-Abs-v0",
+    "Isaac-Open-Drawer-OpenArm-v0",
     "Isaac-Velocity-Flat-H1-v0",
     "Isaac-Velocity-Rough-H1-v0",
     "Isaac-Velocity-Flat-Anymal-C-Direct-v0",
@@ -87,12 +92,27 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     for task_id in SAFE_TASK_IDS:
         assert gym.spec(task_id).id == task_id
 
+    openarm_reach_spec = gym.spec("Isaac-Reach-OpenArm-v0")
+    openarm_bi_reach_spec = gym.spec("Isaac-Reach-OpenArm-Bi-v0")
+    ur10_reach_spec = gym.spec("Isaac-Reach-UR10-v0")
     ur10e_spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
     ur10e_play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+    openarm_lift_spec = gym.spec("Isaac-Lift-Cube-OpenArm-v0")
+    openarm_open_drawer_spec = gym.spec("Isaac-Open-Drawer-OpenArm-v0")
+    assert openarm_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
+    assert openarm_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert openarm_bi_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-bimanual-surrogate"
+    assert openarm_bi_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
+    assert ur10_reach_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
+    assert openarm_lift_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-openarm-surrogate"
+    assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     bin_stack_spec = gym.spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0")
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-mimic"
@@ -215,9 +235,13 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-v0", device="cpu", num_envs=6)
     reach_ik_abs_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-IK-Abs-v0", device="cpu", num_envs=7)
     reach_osc_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-Franka-OSC-v0", device="cpu", num_envs=8)
+    openarm_reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-OpenArm-v0", device="cpu", num_envs=9)
+    openarm_bi_reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-OpenArm-Bi-v0", device="cpu", num_envs=10)
+    ur10_reach_cfg = parse_cfg.parse_env_cfg("Isaac-Reach-UR10-v0", device="cpu", num_envs=11)
     lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-v0", device="cpu", num_envs=5)
     lift_ik_abs_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-IK-Abs-v0", device="cpu", num_envs=6)
     lift_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=7)
+    openarm_lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-OpenArm-v0", device="cpu", num_envs=8)
     teddy_bear_lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0", device="cpu", num_envs=8)
     stack_instance_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Instance-Randomize-Franka-v0", device="cpu", num_envs=9)
     stack_instance_ik_rel_cfg = parse_cfg.parse_env_cfg(
@@ -233,6 +257,7 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     bin_stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", device="cpu", num_envs=5)
     cabinet_cfg = parse_cfg.parse_env_cfg("Isaac-Franka-Cabinet-Direct-v0", device="cpu", num_envs=3)
     open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-Franka-IK-Abs-v0", device="cpu", num_envs=4)
+    openarm_open_drawer_cfg = parse_cfg.parse_env_cfg("Isaac-Open-Drawer-OpenArm-v0", device="cpu", num_envs=5)
 
     assert type(reach_cfg).__name__ == "MacFrankaReachEnvCfg"
     assert reach_cfg.num_envs == 6
@@ -241,6 +266,16 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert reach_ik_abs_cfg.num_envs == 7
     assert type(reach_osc_cfg).__name__ == "MacFrankaReachEnvCfg"
     assert reach_osc_cfg.num_envs == 8
+    assert type(openarm_reach_cfg).__name__ == "MacOpenArmReachEnvCfg"
+    assert openarm_reach_cfg.num_envs == 9
+    assert openarm_reach_cfg.action_space == 7
+    assert type(openarm_bi_reach_cfg).__name__ == "MacOpenArmBiReachEnvCfg"
+    assert openarm_bi_reach_cfg.num_envs == 10
+    assert openarm_bi_reach_cfg.action_space == 14
+    assert openarm_bi_reach_cfg.observation_space == 46
+    assert type(ur10_reach_cfg).__name__ == "MacUR10ReachEnvCfg"
+    assert ur10_reach_cfg.num_envs == 11
+    assert ur10_reach_cfg.action_space == 6
     assert type(lift_cfg).__name__ == "MacFrankaLiftEnvCfg"
     assert lift_cfg.num_envs == 5
     assert lift_cfg.action_space == 8
@@ -248,6 +283,9 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert lift_ik_abs_cfg.num_envs == 6
     assert type(lift_ik_rel_cfg).__name__ == "MacFrankaLiftEnvCfg"
     assert lift_ik_rel_cfg.num_envs == 7
+    assert type(openarm_lift_cfg).__name__ == "MacOpenArmLiftEnvCfg"
+    assert openarm_lift_cfg.num_envs == 8
+    assert openarm_lift_cfg.action_space == 8
     assert type(teddy_bear_lift_cfg).__name__ == "MacFrankaTeddyBearLiftEnvCfg"
     assert teddy_bear_lift_cfg.num_envs == 8
     assert teddy_bear_lift_cfg.action_space == 8
@@ -282,6 +320,10 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert cabinet_cfg.action_space == 8
     assert type(open_drawer_cfg).__name__ == "MacFrankaOpenDrawerEnvCfg"
     assert open_drawer_cfg.num_envs == 4
+    assert open_drawer_cfg.action_space == 8
+    assert type(openarm_open_drawer_cfg).__name__ == "MacOpenArmOpenDrawerEnvCfg"
+    assert openarm_open_drawer_cfg.num_envs == 5
+    assert openarm_open_drawer_cfg.action_space == 8
 
 
 def test_parse_env_cfg_supports_ur10e_deploy_reach_task_cfg(monkeypatch):

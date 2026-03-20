@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-19T23:38:13Z",
+  "generated_at": "2026-03-20T00:21:42Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 21,
+  "task_count": 26,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -522,6 +522,101 @@
         "sim_backend": "mac-sim"
       }
     },
+    "openarm-bi-reach": {
+      "contract": {
+        "action_dim": 14,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 46,
+        "output_signature": {
+          "final_joint_pos_abs_mean": 0.5757149457931519,
+          "final_joint_vel_abs_mean": 0.0284010861068964,
+          "final_left_ee_height_mean": 0.4816737174987793,
+          "final_left_target_distance_mean": 0.4285203218460083,
+          "final_policy_mean": 0.0033731856383383274,
+          "final_policy_std": 0.5445762872695923,
+          "final_reward_mean": 0.003308990504592657,
+          "final_right_ee_height_mean": 0.10133308172225952,
+          "final_right_target_distance_mean": 0.31728506088256836
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "openarm-lift": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 27,
+        "output_signature": {
+          "final_cube_distance_mean": 0.5217757225036621,
+          "final_cube_height_mean": 0.03999999910593033,
+          "final_ee_height_mean": 0.4789370894432068,
+          "final_grasp_ratio": 0.0,
+          "final_joint_pos_abs_mean": 0.4133933186531067,
+          "final_joint_vel_abs_mean": 0.027231788262724876,
+          "final_policy_mean": 0.027026759460568428,
+          "final_policy_std": 0.4563792943954468,
+          "final_reward_mean": 0.00042519927956163883
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "openarm-open-drawer": {
+      "contract": {
+        "action_dim": 8,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 28,
+        "output_signature": {
+          "final_drawer_open_mean": 0.0,
+          "final_drawer_open_ratio": 0.0,
+          "final_drawer_opened_ratio": 0.0,
+          "final_ee_height_mean": 0.47912973165512085,
+          "final_handle_distance_mean": 0.4314947724342346,
+          "final_joint_pos_abs_mean": 0.4157494008541107,
+          "final_joint_vel_abs_mean": 0.025157935917377472,
+          "final_policy_mean": 0.03101309761404991,
+          "final_policy_std": 0.4468006193637848,
+          "final_reward_mean": 0.0008237359579652548
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "openarm-reach": {
+      "contract": {
+        "action_dim": 7,
+        "hotpath": "mlx-metal-ee",
+        "observation_dim": 23,
+        "output_signature": {
+          "final_ee_height_mean": 0.48048165440559387,
+          "final_joint_pos_abs_mean": 0.4621579051017761,
+          "final_joint_vel_abs_mean": 0.02702132798731327,
+          "final_policy_mean": 0.040573738515377045,
+          "final_policy_std": 0.48968836665153503,
+          "final_reward_mean": 0.0009114777203649282,
+          "final_target_distance_mean": 0.41816580295562744
+        }
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "quadcopter": {
       "contract": {
         "observation_dim": 12,
@@ -533,6 +628,29 @@
           "final_root_height_mean": 1.018649935722351
         },
         "thrust_action": 0.2
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "ur10-reach": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_ee_height_mean": 0.4130062460899353,
+          "final_joint_pos_abs_mean": 1.0610690116882324,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.5878143310546875,
+          "final_policy_mean": -0.04927729070186615,
+          "final_policy_std": 0.774682879447937,
+          "final_reward_mean": 0.0027479692362248898,
+          "final_target_distance_mean": 0.4433174729347229
+        }
       },
       "cpu_fallback": false,
       "runtime": {
