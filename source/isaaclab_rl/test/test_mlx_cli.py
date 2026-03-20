@@ -493,6 +493,18 @@ def test_mlx_cli_module_handles_lift_alias_and_reduced_manipulation_aliases(tmp_
 
     for alias_task, canonical_task, semantic_contract, file_stem in (
         ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference", "ur10e-ros"),
+        (
+            "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0",
+            "ur10e-gear-assembly-2f140",
+            "reduced-no-ros-inference",
+            "ur10e-gear-2f140-ros",
+        ),
+        (
+            "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+            "ur10e-gear-assembly-2f85",
+            "reduced-no-ros-inference",
+            "ur10e-gear-2f85-ros",
+        ),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "franka-blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "franka-skillgen"),
         (
@@ -580,6 +592,79 @@ def test_mlx_cli_module_handles_lift_alias_and_reduced_manipulation_aliases(tmp_
         assert Path(alias_train_payload["checkpoint_path"]).exists()
         assert alias_train_payload["task_spec"]["semantic_contract"] == semantic_contract
         assert alias_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+
+def test_mlx_cli_module_supports_ur10_suction_stack_public_tasks(tmp_path: Path):
+    for task in ("ur10-long-suction-stack", "ur10-short-suction-stack"):
+        train_output_path = tmp_path / f"{task}-train.json"
+        eval_output_path = tmp_path / f"{task}-eval.json"
+        checkpoint_path = tmp_path / f"{task}-policy.npz"
+
+        train_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "train",
+                "--task",
+                task,
+                "--num-envs",
+                "8",
+                "--updates",
+                "1",
+                "--rollout-steps",
+                "8",
+                "--epochs-per-update",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--checkpoint",
+                str(checkpoint_path),
+                "--json-out",
+                str(train_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert train_result.returncode == 0, train_result.stderr
+        train_payload = json.loads(train_output_path.read_text(encoding="utf-8"))
+        assert train_payload["task"] == task
+        assert Path(train_payload["checkpoint_path"]).exists()
+
+        eval_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "evaluate",
+                "--task",
+                task,
+                "--num-envs",
+                "8",
+                "--episodes",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--max-steps",
+                "256",
+                "--json-out",
+                str(eval_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert eval_result.returncode == 0, eval_result.stderr
+        eval_payload = json.loads(eval_output_path.read_text(encoding="utf-8"))
+        assert eval_payload["task"] == task
+        assert eval_payload["episodes_completed"] == 1
 
 
 def test_mlx_cli_module_handles_teddy_bear_lift_alias(tmp_path: Path):

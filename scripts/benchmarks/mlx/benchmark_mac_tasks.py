@@ -63,6 +63,8 @@ from isaaclab.backends.mac_sim import (
     MacUR10eGearAssembly2F140EnvCfg,
     MacUR10eGearAssembly2F85Env,
     MacUR10eGearAssembly2F85EnvCfg,
+    MacUR10LongSuctionStackEnv,
+    MacUR10LongSuctionStackEnvCfg,
     MacUR10eDeployReachEnv,
     MacUR10eDeployReachEnvCfg,
     MacFrankaStackEnv,
@@ -73,6 +75,8 @@ from isaaclab.backends.mac_sim import (
     MacFrankaStackRgbEnvCfg,
     MacFrankaTeddyBearLiftEnv,
     MacFrankaTeddyBearLiftEnvCfg,
+    MacUR10ShortSuctionStackEnv,
+    MacUR10ShortSuctionStackEnvCfg,
     MacH1FlatEnv,
     MacH1FlatEnvCfg,
     MacH1RoughEnv,
@@ -277,6 +281,7 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
         "final_ee_height_mean": float(mx.mean(env.sim_backend.ee_pos_w[:, 2]).item()),
     }
     task_name = env.sim_backend.state_dict()["task"]
+    ur10_three_cube_task = task_name in {"ur10-long-suction-stack", "ur10-short-suction-stack"}
     if hasattr(env.sim_backend, "drawer_open_amount"):
         if terminal_policy_observations:
             terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
@@ -323,12 +328,28 @@ def _franka_output_signature(env: Any, trace: Any) -> dict[str, float]:
     elif hasattr(env.sim_backend, "middle_cube_pos_w"):
         if terminal_policy_observations:
             terminal_policy = mx.concatenate(terminal_policy_observations, axis=0)
-            payload["final_support_cube_height_mean"] = float(mx.mean(terminal_policy[:, 27]).item())
-            payload["final_middle_stack_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 31:34], axis=1)).item())
-            payload["final_top_stack_distance_mean"] = float(mx.mean(mx.linalg.norm(terminal_policy[:, 34:37], axis=1)).item())
-            payload["final_middle_stacked_ratio"] = float(mx.mean(terminal_policy[:, 39]).item())
-            payload["final_top_stacked_ratio"] = float(mx.mean(terminal_policy[:, 40]).item())
-            payload["final_active_is_top_ratio"] = float(mx.mean(terminal_policy[:, 41]).item())
+            if ur10_three_cube_task:
+                payload["final_support_cube_height_mean"] = float(mx.mean(terminal_policy[:, 25]).item())
+                payload["final_middle_stack_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(terminal_policy[:, 29:32], axis=1)).item()
+                )
+                payload["final_top_stack_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(terminal_policy[:, 32:35], axis=1)).item()
+                )
+                payload["final_middle_stacked_ratio"] = float(mx.mean(terminal_policy[:, 37]).item())
+                payload["final_top_stacked_ratio"] = float(mx.mean(terminal_policy[:, 38]).item())
+                payload["final_active_is_top_ratio"] = float(mx.mean(terminal_policy[:, 39]).item())
+            else:
+                payload["final_support_cube_height_mean"] = float(mx.mean(terminal_policy[:, 27]).item())
+                payload["final_middle_stack_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(terminal_policy[:, 31:34], axis=1)).item()
+                )
+                payload["final_top_stack_distance_mean"] = float(
+                    mx.mean(mx.linalg.norm(terminal_policy[:, 34:37], axis=1)).item()
+                )
+                payload["final_middle_stacked_ratio"] = float(mx.mean(terminal_policy[:, 39]).item())
+                payload["final_top_stacked_ratio"] = float(mx.mean(terminal_policy[:, 40]).item())
+                payload["final_active_is_top_ratio"] = float(mx.mean(terminal_policy[:, 41]).item())
             if task_name == "franka-bin-stack":
                 payload["final_bin_anchor_height_mean"] = float(mx.mean(terminal_policy[:, 44]).item())
                 payload["final_support_bin_offset_mean"] = float(
@@ -811,6 +832,60 @@ def benchmark_ur10e_gear_assembly_2f85(num_envs: int, steps: int, seed: int) -> 
             "observation_dim": env.cfg.observation_space,
             "action_dim": env.cfg.action_space,
             "output_signature": _ur10e_gear_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_ur10_long_suction_stack(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10 long-suction three-cube stack MLX env step loop."""
+
+    env = MacUR10LongSuctionStackEnv(MacUR10LongSuctionStackEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10-long-suction-stack",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
+            "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
+        },
+    )
+
+
+def benchmark_ur10_short_suction_stack(num_envs: int, steps: int, seed: int) -> dict[str, Any]:
+    """Benchmark the reduced UR10 short-suction three-cube stack MLX env step loop."""
+
+    env = MacUR10ShortSuctionStackEnv(MacUR10ShortSuctionStackEnvCfg(num_envs=num_envs, seed=seed))
+    observations, _ = env.reset()
+    actions = mx.zeros((num_envs, env.cfg.action_space), dtype=mx.float32)
+    _sync([observations["policy"]])
+
+    start = time.perf_counter()
+    trace = rollout_env(env, actions, steps=steps, sync_callback=_sync)
+    elapsed_s = time.perf_counter() - start
+
+    return _make_benchmark_result(
+        "ur10-short-suction-stack",
+        num_envs=num_envs,
+        steps=steps,
+        elapsed_s=elapsed_s,
+        runtime_state=_env_runtime_state(env),
+        extra={
+            "observation_dim": env.cfg.observation_space,
+            "action_dim": env.cfg.action_space,
+            "output_signature": _franka_output_signature(env, trace),
             "diagnostics": mac_env_diagnostics(env, rollout_summary=trace.summary()),
         },
     )
@@ -1318,6 +1393,10 @@ def run_benchmarks(
             benchmark = benchmark_ur10e_gear_assembly_2f140(num_envs, steps, seed)
         elif task == "ur10e-gear-assembly-2f85":
             benchmark = benchmark_ur10e_gear_assembly_2f85(num_envs, steps, seed)
+        elif task == "ur10-long-suction-stack":
+            benchmark = benchmark_ur10_long_suction_stack(num_envs, steps, seed)
+        elif task == "ur10-short-suction-stack":
+            benchmark = benchmark_ur10_short_suction_stack(num_envs, steps, seed)
         elif task == "ur10e-deploy-reach":
             benchmark = benchmark_ur10e_deploy_reach(num_envs, steps, seed)
         elif task == "franka-lift":

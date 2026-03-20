@@ -259,6 +259,42 @@ MAC_NATIVE_TASK_SPECS: tuple[MacNativeTaskSpec, ...] = (
         ),
     ),
     MacNativeTaskSpec(
+        key="ur10-long-suction-stack",
+        upstream_task_id="Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10_long_suction_stack_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-suction-stack",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10 long-suction three-cube stack slice preserving the stack workflow "
+            "with analytic pose tracking and suction-state surrogates instead of the upstream "
+            "CPU-only surface-gripper stack."
+        ),
+    ),
+    MacNativeTaskSpec(
+        key="ur10-short-suction-stack",
+        upstream_task_id="Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
+        family="manipulation",
+        benchmark_groups=("current-mac-native",),
+        sensor_contract=("proprioception",),
+        trainable=True,
+        default_checkpoint="logs/mlx/ur10_short_suction_stack_policy.npz",
+        default_hidden_dim=128,
+        default_action_std=0.2,
+        semantic_contract="reduced-analytic-suction-stack",
+        upstream_alias_semantics_preserved=False,
+        notes=(
+            "Reduced analytic UR10 short-suction three-cube stack slice preserving the stack workflow "
+            "with analytic pose tracking and suction-state surrogates instead of the upstream "
+            "CPU-only surface-gripper stack."
+        ),
+    ),
+    MacNativeTaskSpec(
         key="franka-lift",
         upstream_task_id="Isaac-Lift-Cube-Franka-v0",
         family="manipulation",

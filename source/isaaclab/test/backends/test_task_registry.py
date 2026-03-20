@@ -32,8 +32,12 @@ SAFE_TASK_IDS = (
     "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0",
+    "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+    "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
+    "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
@@ -440,12 +444,26 @@ def test_parse_env_cfg_supports_ur10e_gear_assembly_task_cfgs(monkeypatch):
 
     cfg_2f140 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-v0", device="cpu", num_envs=6)
     play_cfg_2f140 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0", device="cpu", num_envs=7)
+    ros_cfg_2f140 = parse_cfg.parse_env_cfg(
+        "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0", device="cpu", num_envs=10
+    )
     cfg_2f85 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-v0", device="cpu", num_envs=8)
     play_cfg_2f85 = parse_cfg.parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0", device="cpu", num_envs=9)
+    ros_cfg_2f85 = parse_cfg.parse_env_cfg(
+        "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0", device="cpu", num_envs=11
+    )
+    long_stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0", device="cpu", num_envs=12)
+    short_stack_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0", device="cpu", num_envs=13
+    )
     spec_2f140 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-v0")
     play_spec_2f140 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0")
+    ros_spec_2f140 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0")
     spec_2f85 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
     play_spec_2f85 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0")
+    ros_spec_2f85 = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0")
+    long_stack_spec = gym.spec("Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0")
+    short_stack_spec = gym.spec("Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0")
 
     assert type(cfg_2f140).__name__ == "MacUR10eGearAssembly2F140EnvCfg"
     assert cfg_2f140.num_envs == 6
@@ -458,6 +476,12 @@ def test_parse_env_cfg_supports_ur10e_gear_assembly_task_cfgs(monkeypatch):
     assert play_cfg_2f140.num_envs == 7
     assert play_cfg_2f140.action_space == 6
     assert play_cfg_2f140.observation_space == 19
+    assert type(ros_cfg_2f140).__name__ == "MacUR10eGearAssembly2F140RosInferenceEnvCfg"
+    assert ros_cfg_2f140.num_envs == 10
+    assert ros_cfg_2f140.action_space == 6
+    assert ros_cfg_2f140.observation_space == 19
+    assert ros_cfg_2f140.semantic_contract == "reduced-no-ros-inference"
+    assert ros_cfg_2f140.upstream_alias_semantics_preserved is False
     assert type(cfg_2f85).__name__ == "MacUR10eGearAssembly2F85EnvCfg"
     assert cfg_2f85.num_envs == 8
     assert cfg_2f85.action_space == 6
@@ -469,14 +493,70 @@ def test_parse_env_cfg_supports_ur10e_gear_assembly_task_cfgs(monkeypatch):
     assert play_cfg_2f85.num_envs == 9
     assert play_cfg_2f85.action_space == 6
     assert play_cfg_2f85.observation_space == 19
+    assert type(ros_cfg_2f85).__name__ == "MacUR10eGearAssembly2F85RosInferenceEnvCfg"
+    assert ros_cfg_2f85.num_envs == 11
+    assert ros_cfg_2f85.action_space == 6
+    assert ros_cfg_2f85.observation_space == 19
+    assert ros_cfg_2f85.semantic_contract == "reduced-no-ros-inference"
+    assert ros_cfg_2f85.upstream_alias_semantics_preserved is False
+    assert type(long_stack_cfg).__name__ == "MacUR10LongSuctionStackEnvCfg"
+    assert long_stack_cfg.num_envs == 12
+    assert long_stack_cfg.action_space == 7
+    assert long_stack_cfg.observation_space == 40
+    assert long_stack_cfg.semantic_contract == "reduced-analytic-suction-stack"
+    assert long_stack_cfg.upstream_alias_semantics_preserved is False
+    assert type(short_stack_cfg).__name__ == "MacUR10ShortSuctionStackEnvCfg"
+    assert short_stack_cfg.num_envs == 13
+    assert short_stack_cfg.action_space == 7
+    assert short_stack_cfg.observation_space == 40
+    assert short_stack_cfg.semantic_contract == "reduced-analytic-suction-stack"
+    assert short_stack_cfg.upstream_alias_semantics_preserved is False
     assert spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert play_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert play_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ros_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-ros-inference"
+    assert ros_spec_2f140.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert play_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert play_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ros_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-ros-inference"
+    assert ros_spec_2f85.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+
+
+def test_parse_env_cfg_supports_ur10_suction_stack_task_cfgs(monkeypatch):
+    """parse_env_cfg should resolve the mac-native UR10 suction stack configs without Isaac Sim imports."""
+
+    task_source = Path(__file__).resolve().parents[3] / "isaaclab_tasks"
+    monkeypatch.syspath_prepend(str(task_source))
+    _clear_task_modules()
+    _clear_task_specs()
+    set_runtime_selection(resolve_runtime_selection(compute_backend="mlx", sim_backend="mac-sim", device="cpu"))
+
+    importlib.import_module("isaaclab_tasks")
+    parse_cfg = importlib.import_module("isaaclab_tasks.utils.parse_cfg")
+    registry = importlib.import_module("isaaclab_tasks.registry")
+
+    long_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0", device="cpu", num_envs=12)
+    short_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0", device="cpu", num_envs=13)
+    long_spec = gym.spec("Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0")
+    short_spec = gym.spec("Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0")
+
+    assert type(long_cfg).__name__ == "MacUR10LongSuctionStackEnvCfg"
+    assert long_cfg.num_envs == 12
+    assert long_cfg.action_space == 7
+    assert long_cfg.observation_space == 40
+    assert long_cfg.semantic_contract == "reduced-analytic-suction-stack"
+    assert long_cfg.upstream_alias_semantics_preserved is False
+    assert type(short_cfg).__name__ == "MacUR10ShortSuctionStackEnvCfg"
+    assert short_cfg.num_envs == 13
+    assert short_cfg.action_space == 7
+    assert short_cfg.observation_space == 40
+    assert short_cfg.semantic_contract == "reduced-analytic-suction-stack"
+    assert short_cfg.upstream_alias_semantics_preserved is False
+    assert long_spec.id == "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0"
+    assert short_spec.id == "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0"
 
 
 def test_parse_env_cfg_supports_cartpole_camera_task_cfgs(monkeypatch):

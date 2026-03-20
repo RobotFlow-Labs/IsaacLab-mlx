@@ -55,7 +55,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 28
+    assert snapshot["task_count"] == 30
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -89,6 +89,24 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_insert_depth_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_assembled_ratio"] <= 1.0
     assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_gear_type_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["action_dim"] == 7
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["semantic_contract"] == "reduced-analytic-suction-stack"
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_middle_stack_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_top_stack_distance_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_middle_stacked_ratio"] <= 1.0
+    assert 0.0 <= snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_top_stacked_ratio"] <= 1.0
+    assert 0.0 <= snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["output_signature"]["final_active_is_top_ratio"] <= 1.0
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["action_dim"] == 7
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["hotpath"] == expected_ur10e_hotpath
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["semantic_contract"] == "reduced-analytic-suction-stack"
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_support_cube_height_mean"] > 0.0
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_middle_stack_distance_mean"] >= 0.0
+    assert snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_top_stack_distance_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_middle_stacked_ratio"] <= 1.0
+    assert 0.0 <= snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_top_stacked_ratio"] <= 1.0
+    assert 0.0 <= snapshot["tasks"]["ur10-short-suction-stack"]["contract"]["output_signature"]["final_active_is_top_ratio"] <= 1.0
     assert snapshot["tasks"]["franka-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["openarm-lift"]["contract"]["action_dim"] == 8
     assert snapshot["tasks"]["openarm-lift"]["contract"]["hotpath"] == expected_franka_hotpath

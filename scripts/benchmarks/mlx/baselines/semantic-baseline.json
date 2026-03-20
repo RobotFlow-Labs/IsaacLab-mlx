@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T00:48:18Z",
+  "generated_at": "2026-03-20T02:04:47Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 28,
+  "task_count": 30,
   "task_group": "full",
   "tasks": {
     "anymal-c-flat": {
@@ -221,7 +221,9 @@
           "final_support_cube_height_mean": 0.03999999910593033,
           "final_top_stack_distance_mean": 0.27425581216812134,
           "final_top_stacked_ratio": 0.0
-        }
+        },
+        "semantic_contract": "reduced-no-mimic",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -344,7 +346,9 @@
           "final_stack_distance_mean": 0.17270350456237793,
           "final_stacked_ratio": 0.0,
           "final_support_cube_height_mean": 0.03999999910593033
-        }
+        },
+        "semantic_contract": "aligned",
+        "upstream_alias_semantics_preserved": true
       },
       "cpu_fallback": false,
       "runtime": {
@@ -373,7 +377,9 @@
           "final_stacked_ratio": 0.0,
           "final_support_cube_height_mean": 0.03999999910593033,
           "final_support_variant_mean": 1.25
-        }
+        },
+        "semantic_contract": "aligned",
+        "upstream_alias_semantics_preserved": true
       },
       "cpu_fallback": false,
       "runtime": {
@@ -400,7 +406,9 @@
           "final_support_cube_height_mean": 0.03999999910593033,
           "final_top_stack_distance_mean": 0.24102027714252472,
           "final_top_stacked_ratio": 0.0
-        }
+        },
+        "semantic_contract": "aligned",
+        "upstream_alias_semantics_preserved": true
       },
       "cpu_fallback": false,
       "runtime": {
@@ -537,7 +545,9 @@
           "final_reward_mean": 0.003308990504592657,
           "final_right_ee_height_mean": 0.10133308172225952,
           "final_right_target_distance_mean": 0.31728506088256836
-        }
+        },
+        "semantic_contract": "reduced-openarm-bimanual-surrogate",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -561,7 +571,9 @@
           "final_policy_mean": 0.027026759460568428,
           "final_policy_std": 0.4563792943954468,
           "final_reward_mean": 0.00042519927956163883
-        }
+        },
+        "semantic_contract": "reduced-openarm-surrogate",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -586,7 +598,9 @@
           "final_policy_mean": 0.03101309761404991,
           "final_policy_std": 0.4468006193637848,
           "final_reward_mean": 0.0008237359579652548
-        }
+        },
+        "semantic_contract": "reduced-openarm-surrogate",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -608,7 +622,9 @@
           "final_policy_std": 0.48968836665153503,
           "final_reward_mean": 0.0009114777203649282,
           "final_target_distance_mean": 0.41816580295562744
-        }
+        },
+        "semantic_contract": "reduced-openarm-surrogate",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -636,6 +652,35 @@
         "sim_backend": "mac-sim"
       }
     },
+    "ur10-long-suction-stack": {
+      "contract": {
+        "action_dim": 7,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 40,
+        "output_signature": {
+          "final_active_is_top_ratio": 0.0,
+          "final_ee_height_mean": 0.4179418981075287,
+          "final_joint_pos_abs_mean": 1.0525225400924683,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_middle_stack_distance_mean": 0.17054051160812378,
+          "final_middle_stacked_ratio": 0.0,
+          "final_policy_mean": 0.0010546718258410692,
+          "final_policy_std": 0.5777475833892822,
+          "final_reward_mean": 0.0008584142196923494,
+          "final_support_cube_height_mean": 0.0203000009059906,
+          "final_top_stack_distance_mean": 0.3373965620994568,
+          "final_top_stacked_ratio": 0.0
+        },
+        "semantic_contract": "reduced-analytic-suction-stack",
+        "upstream_alias_semantics_preserved": false
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
     "ur10-reach": {
       "contract": {
         "action_dim": 6,
@@ -650,7 +695,38 @@
           "final_policy_std": 0.774682879447937,
           "final_reward_mean": 0.0027479692362248898,
           "final_target_distance_mean": 0.4433174729347229
-        }
+        },
+        "semantic_contract": "reduced-analytic-pose",
+        "upstream_alias_semantics_preserved": false
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "ur10-short-suction-stack": {
+      "contract": {
+        "action_dim": 7,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 40,
+        "output_signature": {
+          "final_active_is_top_ratio": 0.0,
+          "final_ee_height_mean": 0.4179418981075287,
+          "final_joint_pos_abs_mean": 1.0525225400924683,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_middle_stack_distance_mean": 0.16377542912960052,
+          "final_middle_stacked_ratio": 0.0,
+          "final_policy_mean": -0.0014453281182795763,
+          "final_policy_std": 0.5767267942428589,
+          "final_reward_mean": 0.0007686479366384447,
+          "final_support_cube_height_mean": 0.0203000009059906,
+          "final_top_stack_distance_mean": 0.32296204566955566,
+          "final_top_stacked_ratio": 0.0
+        },
+        "semantic_contract": "reduced-analytic-suction-stack",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -673,7 +749,9 @@
           "final_policy_std": 0.7770656943321228,
           "final_reward_mean": 0.009998437948524952,
           "final_target_distance_mean": 0.3093169629573822
-        }
+        },
+        "semantic_contract": "reduced-analytic-pose",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -699,7 +777,9 @@
           "final_policy_std": 0.7835043668746948,
           "final_reward_mean": 0.01597747392952442,
           "final_target_distance_mean": 0.38411426544189453
-        }
+        },
+        "semantic_contract": "reduced-analytic-assembly",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {
@@ -725,7 +805,9 @@
           "final_policy_std": 0.782200276851654,
           "final_reward_mean": 0.015466186217963696,
           "final_target_distance_mean": 0.3767542243003845
-        }
+        },
+        "semantic_contract": "reduced-analytic-assembly",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {

@@ -42,6 +42,8 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-deploy-reach",
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
+        "ur10-long-suction-stack",
+        "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
         "franka-teddy-bear-lift",
@@ -66,6 +68,8 @@ def test_public_mlx_task_lists_are_stable():
         "ur10e-deploy-reach",
         "ur10e-gear-assembly-2f140",
         "ur10e-gear-assembly-2f85",
+        "ur10-long-suction-stack",
+        "ur10-short-suction-stack",
         "franka-lift",
         "openarm-lift",
         "franka-teddy-bear-lift",
@@ -97,6 +101,12 @@ def test_public_mlx_task_lists_are_stable():
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").default_hidden_dim == 128
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").semantic_contract == "reduced-analytic-assembly"
     assert get_mlx_task_spec("ur10e-gear-assembly-2f85").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("ur10-long-suction-stack").default_hidden_dim == 128
+    assert get_mlx_task_spec("ur10-long-suction-stack").semantic_contract == "reduced-analytic-suction-stack"
+    assert get_mlx_task_spec("ur10-long-suction-stack").upstream_alias_semantics_preserved is False
+    assert get_mlx_task_spec("ur10-short-suction-stack").default_hidden_dim == 128
+    assert get_mlx_task_spec("ur10-short-suction-stack").semantic_contract == "reduced-analytic-suction-stack"
+    assert get_mlx_task_spec("ur10-short-suction-stack").upstream_alias_semantics_preserved is False
     assert get_mlx_task_spec("franka-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("openarm-lift").default_hidden_dim == 128
     assert get_mlx_task_spec("openarm-lift").semantic_contract == "reduced-openarm-surrogate"
@@ -130,6 +140,10 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0") == get_mlx_task_spec(
         "ur10e-gear-assembly-2f85"
     )
+    assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0").task == "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0"
+    assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0").semantic_contract == "reduced-no-ros-inference"
+    assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").task == "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0"
+    assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").semantic_contract == "reduced-no-ros-inference"
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-OpenArm-Play-v0") == get_mlx_task_spec("openarm-lift")
     assert get_mlx_task_spec("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-teddy-bear-lift")
@@ -146,6 +160,18 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     ("alias_task", "canonical_task", "semantic_contract", "note_fragment"),
     (
         ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference", "ros inference"),
+        (
+            "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0",
+            "ur10e-gear-assembly-2f140",
+            "reduced-no-ros-inference",
+            "ros inference",
+        ),
+        (
+            "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+            "ur10e-gear-assembly-2f85",
+            "reduced-no-ros-inference",
+            "ros inference",
+        ),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "skill-generation"),
         (
@@ -698,6 +724,50 @@ def test_train_and_evaluate_ur10e_deploy_reach_via_public_mlx_wrapper(tmp_path: 
 @pytest.mark.parametrize(
     ("task", "seed"),
     (
+        ("ur10-long-suction-stack", 45),
+        ("ur10-short-suction-stack", 46),
+    ),
+)
+def test_train_and_evaluate_ur10_suction_stack_via_public_mlx_wrapper(
+    tmp_path: Path,
+    task: str,
+    seed: int,
+):
+    """The public wrapper should expose train/replay surfaces for the new UR10 stack slices."""
+
+    checkpoint_path = tmp_path / f"{task}-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        task,
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=seed,
+    )
+    eval_payload = evaluate_mlx_task(
+        task,
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=seed,
+    )
+
+    assert train_payload["task"] == task
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert eval_payload["task"] == task
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert isinstance(eval_payload["completed"][0]["return"], float)
+
+
+@pytest.mark.parametrize(
+    ("task", "seed"),
+    (
         ("ur10e-gear-assembly-2f140", 46),
         ("ur10e-gear-assembly-2f85", 47),
     ),
@@ -1233,6 +1303,8 @@ def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper
     ("alias_task", "canonical_task", "semantic_contract"),
     (
         ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference"),
+        ("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0", "ur10e-gear-assembly-2f140", "reduced-no-ros-inference"),
+        ("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0", "ur10e-gear-assembly-2f85", "reduced-no-ros-inference"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen"),
         ("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", "franka-stack-rgb", "reduced-visuomotor-surrogate"),

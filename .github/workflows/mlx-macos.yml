@@ -248,6 +248,10 @@ jobs:
         ur10e_cfg = parse_env_cfg("Isaac-Deploy-Reach-UR10e-v0", device="cpu", num_envs=4)
         gear_2f140_cfg = parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-v0", device="cpu", num_envs=4)
         gear_2f85_cfg = parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-v0", device="cpu", num_envs=4)
+        gear_2f140_ros_cfg = parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0", device="cpu", num_envs=4)
+        gear_2f85_ros_cfg = parse_env_cfg("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0", device="cpu", num_envs=4)
+        ur10_long_stack_cfg = parse_env_cfg("Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0", device="cpu", num_envs=4)
+        ur10_short_stack_cfg = parse_env_cfg("Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0", device="cpu", num_envs=4)
         payload = evaluate_mlx_task(
             "h1-rough",
             num_envs=4,
@@ -266,6 +270,10 @@ jobs:
             "ur10e_cfg_type": type(ur10e_cfg).__name__,
             "gear_2f140_cfg_type": type(gear_2f140_cfg).__name__,
             "gear_2f85_cfg_type": type(gear_2f85_cfg).__name__,
+            "gear_2f140_ros_cfg_type": type(gear_2f140_ros_cfg).__name__,
+            "gear_2f85_ros_cfg_type": type(gear_2f85_ros_cfg).__name__,
+            "ur10_long_stack_cfg_type": type(ur10_long_stack_cfg).__name__,
+            "ur10_short_stack_cfg_type": type(ur10_short_stack_cfg).__name__,
             "trainable_tasks": list(list_trainable_mlx_tasks()),
             "eval_task": payload["task"],
             "episodes_completed": payload["episodes_completed"],
@@ -305,11 +313,32 @@ jobs:
           --task Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0 \
           --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
           --json-out logs/runtime/release-gear-2f85-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
+          --task Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0 \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-gear-2f140-ros-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
+          --task Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0 \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-gear-2f85-ros-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx" evaluate \
+          --task ur10-long-suction-stack \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-ur10-long-stack-eval.json
+        "$release_root/.venv-release/bin/isaaclab-mlx-evaluate" \
+          --task ur10-short-suction-stack \
+          --num-envs 4 --episodes 1 --episode-length-s 0.25 --max-steps 128 --no-random-actions \
+          --json-out logs/runtime/release-ur10-short-stack-eval.json
         "$release_root/.venv-release/bin/isaaclab-mlx-train" \
           --task ur10e-gear-assembly-2f140 \
           --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
           --checkpoint logs/runtime/release-gear-2f140-policy.npz \
           --json-out logs/runtime/release-gear-2f140-train.json
+        "$release_root/.venv-release/bin/isaaclab-mlx-train" \
+          --task ur10-long-suction-stack \
+          --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
+          --checkpoint logs/runtime/release-ur10-long-stack-policy.npz \
+          --json-out logs/runtime/release-ur10-long-stack-train.json
         "$release_root/.venv-release/bin/isaaclab-mlx" train \
           --task cartpole \
           --num-envs 4 --updates 1 --rollout-steps 8 --epochs-per-update 1 --episode-length-s 0.25 \
@@ -355,6 +384,7 @@ jobs:
           source/isaaclab/test/backends/test_mac_anymal_c_rough.py \
           source/isaaclab/test/backends/test_mac_franka_reach.py \
           source/isaaclab/test/backends/test_mac_ur10e_deploy_reach.py \
+          source/isaaclab/test/backends/test_mac_ur10_stack.py \
           source/isaaclab/test/backends/test_mac_franka_lift.py \
           source/isaaclab/test/backends/test_mac_franka_teddy_bear_lift.py \
           source/isaaclab/test/backends/test_mac_franka_stack_instance_randomize.py \
@@ -822,8 +852,8 @@ jobs:
         assert stereo_payload["depth_mm_mean"] is not None
         assert Path(stereo_payload["left_rgb_path"]).is_file()
         runtime_payload = json.loads(Path("logs/runtime/mac-runtime-diagnostics.json").read_text(encoding="utf-8"))
-        assert runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 26
-        assert runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] == 24
+        assert runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 28
+        assert runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] == 26
         sensor_payload = json.loads(Path("logs/benchmarks/mlx/sensor-smoke.json").read_text(encoding="utf-8"))
         assert sensor_payload["task_group"] == "sensor-mac-native"
         assert sensor_payload["cpu_fallback_detected"] is False
@@ -852,19 +882,25 @@ jobs:
         assert release_payload["ur10e_cfg_type"] == "MacUR10eDeployReachEnvCfg"
         assert release_payload["gear_2f140_cfg_type"] == "MacUR10eGearAssembly2F140EnvCfg"
         assert release_payload["gear_2f85_cfg_type"] == "MacUR10eGearAssembly2F85EnvCfg"
+        assert release_payload["gear_2f140_ros_cfg_type"] == "MacUR10eGearAssembly2F140RosInferenceEnvCfg"
+        assert release_payload["gear_2f85_ros_cfg_type"] == "MacUR10eGearAssembly2F85RosInferenceEnvCfg"
+        assert release_payload["ur10_long_stack_cfg_type"] == "MacUR10LongSuctionStackEnvCfg"
+        assert release_payload["ur10_short_stack_cfg_type"] == "MacUR10ShortSuctionStackEnvCfg"
         assert "anymal-c-rough" in release_payload["trainable_tasks"]
         assert "h1-rough" in release_payload["trainable_tasks"]
         assert "ur10e-deploy-reach" in release_payload["trainable_tasks"]
         assert "ur10e-gear-assembly-2f140" in release_payload["trainable_tasks"]
         assert "ur10e-gear-assembly-2f85" in release_payload["trainable_tasks"]
+        assert "ur10-long-suction-stack" in release_payload["trainable_tasks"]
+        assert "ur10-short-suction-stack" in release_payload["trainable_tasks"]
         assert "franka-teddy-bear-lift" in release_payload["trainable_tasks"]
         assert "franka-stack-instance-randomize" in release_payload["trainable_tasks"]
         assert "franka-bin-stack" in release_payload["trainable_tasks"]
         assert release_payload["eval_task"] == "h1-rough"
         assert release_payload["episodes_completed"] == 1
         release_runtime_payload = json.loads(Path("logs/runtime/release-runtime-diagnostics.json").read_text(encoding="utf-8"))
-        assert release_runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 26
-        assert release_runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] == 24
+        assert release_runtime_payload["runtime"]["supported_tasks"]["public_task_count"] == 28
+        assert release_runtime_payload["sim"]["supported_tasks"]["current_mac_native_count"] == 26
         release_eval_payload = json.loads(Path("logs/runtime/release-eval.json").read_text(encoding="utf-8"))
         assert release_eval_payload["task"] == "h1-rough"
         assert release_eval_payload["episodes_completed"] == 1
@@ -894,10 +930,45 @@ jobs:
         assert release_gear_2f85_eval_payload["episodes_completed"] == 1
         assert release_gear_2f85_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-assembly"
         assert release_gear_2f85_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+        release_gear_2f140_ros_eval_payload = json.loads(
+            Path("logs/runtime/release-gear-2f140-ros-eval.json").read_text(encoding="utf-8")
+        )
+        assert release_gear_2f140_ros_eval_payload["task"] == "ur10e-gear-assembly-2f140"
+        assert release_gear_2f140_ros_eval_payload["episodes_completed"] == 1
+        assert release_gear_2f140_ros_eval_payload["task_spec"]["semantic_contract"] == "reduced-no-ros-inference"
+        assert release_gear_2f140_ros_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+        release_gear_2f85_ros_eval_payload = json.loads(
+            Path("logs/runtime/release-gear-2f85-ros-eval.json").read_text(encoding="utf-8")
+        )
+        assert release_gear_2f85_ros_eval_payload["task"] == "ur10e-gear-assembly-2f85"
+        assert release_gear_2f85_ros_eval_payload["episodes_completed"] == 1
+        assert release_gear_2f85_ros_eval_payload["task_spec"]["semantic_contract"] == "reduced-no-ros-inference"
+        assert release_gear_2f85_ros_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+        release_ur10_long_stack_eval_payload = json.loads(
+            Path("logs/runtime/release-ur10-long-stack-eval.json").read_text(encoding="utf-8")
+        )
+        assert release_ur10_long_stack_eval_payload["task"] == "ur10-long-suction-stack"
+        assert release_ur10_long_stack_eval_payload["episodes_completed"] == 1
+        assert release_ur10_long_stack_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-suction-stack"
+        assert release_ur10_long_stack_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+        release_ur10_short_stack_eval_payload = json.loads(
+            Path("logs/runtime/release-ur10-short-stack-eval.json").read_text(encoding="utf-8")
+        )
+        assert release_ur10_short_stack_eval_payload["task"] == "ur10-short-suction-stack"
+        assert release_ur10_short_stack_eval_payload["episodes_completed"] == 1
+        assert release_ur10_short_stack_eval_payload["task_spec"]["semantic_contract"] == "reduced-analytic-suction-stack"
+        assert release_ur10_short_stack_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
         release_gear_2f140_train_payload = json.loads(Path("logs/runtime/release-gear-2f140-train.json").read_text(encoding="utf-8"))
         assert release_gear_2f140_train_payload["task"] == "ur10e-gear-assembly-2f140"
         assert release_gear_2f140_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-assembly"
         assert Path(release_gear_2f140_train_payload["checkpoint_path"]).exists()
+        release_ur10_long_stack_train_payload = json.loads(
+            Path("logs/runtime/release-ur10-long-stack-train.json").read_text(encoding="utf-8")
+        )
+        assert release_ur10_long_stack_train_payload["task"] == "ur10-long-suction-stack"
+        assert release_ur10_long_stack_train_payload["task_spec"]["semantic_contract"] == "reduced-analytic-suction-stack"
+        assert release_ur10_long_stack_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+        assert Path(release_ur10_long_stack_train_payload["checkpoint_path"]).exists()
         release_stack_instance_eval_payload = json.loads(
             Path("logs/runtime/release-stack-instance-eval.json").read_text(encoding="utf-8")
         )
@@ -916,13 +987,15 @@ jobs:
         full_payload = json.loads(Path("logs/benchmarks/mlx/full-smoke.json").read_text(encoding="utf-8"))
         assert full_payload["task_group"] == "full"
         full_dashboard = json.loads(Path("logs/benchmarks/mlx/full-smoke-dashboard.json").read_text(encoding="utf-8"))
-        assert full_dashboard["summary"]["rollout_task_count"] == 28
+        assert full_dashboard["summary"]["rollout_task_count"] == 30
         assert full_dashboard["summary"]["training_task_count"] == 1
         full_trend = json.loads(Path("logs/benchmarks/mlx/full-smoke-trend.json").read_text(encoding="utf-8"))
-        assert full_trend["summary"]["task_count"] == 29
+        assert full_trend["summary"]["task_count"] == 31
         assert any(entry["kind"] == "training" for entry in full_trend["tasks"])
         semantic_report = json.loads(Path("logs/benchmarks/mlx/full-smoke-semantic-report.json").read_text(encoding="utf-8"))
         assert semantic_report["passed"] is True
+        assert semantic_report["baseline_task_count"] == 30
+        assert semantic_report["current_task_count"] == 30
         PY
 
     - name: Upload MLX smoke artifacts

@@ -44,9 +44,13 @@ from .env_cfgs import (
     MacFrankaStackVisuomotorCosmosEnvCfg,
     MacFrankaStackVisuomotorEnvCfg,
     MacFrankaTeddyBearLiftEnvCfg,
+    MacUR10LongSuctionStackEnvCfg,
     MacUR10ReachEnvCfg,
+    MacUR10ShortSuctionStackEnvCfg,
     MacUR10eGearAssembly2F140EnvCfg,
+    MacUR10eGearAssembly2F140RosInferenceEnvCfg,
     MacUR10eGearAssembly2F85EnvCfg,
+    MacUR10eGearAssembly2F85RosInferenceEnvCfg,
     MacUR10eDeployReachEnvCfg,
     MacUR10eDeployReachRosInferenceEnvCfg,
 )
@@ -436,6 +440,36 @@ class MacFrankaBinStackTrainCfg:
     checkpoint_path: str = "logs/mlx/franka_bin_stack_policy.npz"
     eval_interval: int = 5
     resume_from: str | None = None
+
+
+@configclass
+class MacUR10LongSuctionStackTrainCfg:
+    """Training configuration for the reduced UR10 long-suction stack slice."""
+
+    env: MacUR10LongSuctionStackEnvCfg = MacUR10LongSuctionStackEnvCfg()
+    hidden_dim: int = 128
+    updates: int = 10
+    rollout_steps: int = 24
+    epochs_per_update: int = 2
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip_epsilon: float = 0.2
+    value_loss_coef: float = 0.5
+    entropy_coef: float = 0.001
+    action_std: float = 0.2
+    checkpoint_path: str = "logs/mlx/ur10_long_suction_stack_policy.npz"
+    eval_interval: int = 5
+    resume_from: str | None = None
+
+
+@configclass
+class MacUR10ShortSuctionStackTrainCfg(MacUR10LongSuctionStackTrainCfg):
+    """Training configuration for the reduced UR10 short-suction stack slice."""
+
+    env: MacUR10ShortSuctionStackEnvCfg = MacUR10ShortSuctionStackEnvCfg()
+    checkpoint_path: str = "logs/mlx/ur10_short_suction_stack_policy.npz"
+
 
 class MacFrankaReachSimBackend(MacSimBackend):
     """A lightweight batched Franka reach backend on MLX/mac-sim."""
@@ -859,6 +893,320 @@ class MacUR10eGearAssembly2F85SimBackend(MacUR10eGearAssemblySimBackend):
 
     task_key = "ur10e-gear-assembly-2f85"
     upstream_task_id = "Isaac-Deploy-GearAssembly-UR10e-2F85-v0"
+
+
+class MacUR10StackRgbSimBackend(MacSimBackend):
+    """A reduced batched UR10 suction three-cube stack backend on MLX/mac-sim."""
+
+    capabilities = SimCapabilities(
+        batched_stepping=True,
+        articulated_rigid_bodies=True,
+        contacts=False,
+        proprioceptive_observations=True,
+        cameras=False,
+        planners=False,
+    )
+    contract = SimBackendContract(
+        reset_signature="reset(soft: bool = False) -> None",
+        step_signature="step(render: bool = True, update_fabric: bool = False) -> None",
+        articulations=ArticulationCapabilities(
+            joint_state_io=True,
+            root_state_io=False,
+            effort_targets=True,
+            batched_views=True,
+        ),
+    )
+    task_key = "ur10-suction-stack"
+    upstream_task_id = "Isaac-Stack-Cube-UR10-IK-Rel-v0"
+
+    def __init__(
+        self,
+        cfg: MacUR10LongSuctionStackEnvCfg | MacUR10ShortSuctionStackEnvCfg,
+        *,
+        reset_sampler: DeterministicResetSampler | None = None,
+    ):
+        self.cfg = cfg
+        self.num_envs = cfg.num_envs
+        self.reset_sampler = reset_sampler or DeterministicResetSampler(cfg.seed)
+        self.arm_joint_dim = len(cfg.default_joint_pos)
+        self.state = BatchedArticulationState(cfg.num_envs, num_joints=self.arm_joint_dim)
+        self.default_joint_pos = mx.array(cfg.default_joint_pos, dtype=mx.float32).reshape((1, self.arm_joint_dim))
+        self.joint_lower_limits = mx.array(cfg.joint_lower_limits, dtype=mx.float32).reshape((1, self.arm_joint_dim))
+        self.joint_upper_limits = mx.array(cfg.joint_upper_limits, dtype=mx.float32).reshape((1, self.arm_joint_dim))
+        self.action_targets = mx.zeros((cfg.num_envs, cfg.action_space), dtype=mx.float32)
+        self.gripper_joint_pos = mx.full((cfg.num_envs,), cfg.default_gripper_state, dtype=mx.float32)
+        self.gripper_joint_vel = mx.zeros((cfg.num_envs,), dtype=mx.float32)
+        self.joint_acc = mx.zeros((cfg.num_envs, self.arm_joint_dim), dtype=mx.float32)
+        self.applied_torque = mx.zeros((cfg.num_envs, self.arm_joint_dim), dtype=mx.float32)
+        self.ee_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.ee_quat_w = mx.zeros((cfg.num_envs, 4), dtype=mx.float32)
+        self.support_cube_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.middle_cube_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.top_cube_pos_w = mx.zeros((cfg.num_envs, 3), dtype=mx.float32)
+        self.middle_grasped = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.top_grasped = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.middle_stacked = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.top_stacked = mx.zeros((cfg.num_envs,), dtype=mx.bool_)
+        self.reset()
+
+    @property
+    def physics_dt(self) -> float:
+        return self.cfg.sim_dt
+
+    def reset(self, *, soft: bool = False) -> None:
+        del soft
+        self.reset_envs(list(range(self.num_envs)))
+
+    def reset_envs(self, env_ids: list[int]) -> None:
+        if not env_ids:
+            return
+        ids = mx.array(env_ids, dtype=mx.int32)
+        rows = len(env_ids)
+        joint_pos = mx.broadcast_to(self.default_joint_pos, (rows, self.arm_joint_dim)) + self.reset_sampler.uniform(
+            (rows, self.arm_joint_dim),
+            -self.cfg.joint_reset_noise,
+            self.cfg.joint_reset_noise,
+        )
+        joint_pos = mx.clip(
+            joint_pos,
+            mx.broadcast_to(self.joint_lower_limits, (rows, self.arm_joint_dim)),
+            mx.broadcast_to(self.joint_upper_limits, (rows, self.arm_joint_dim)),
+        )
+        self.state.reset_envs(env_ids, joint_pos=joint_pos, joint_vel=0.0, joint_effort_target=0.0)
+        self.action_targets[ids] = 0.0
+        self.gripper_joint_pos[ids] = self.cfg.default_gripper_state
+        self.gripper_joint_vel[ids] = 0.0
+        self.joint_acc[ids] = 0.0
+        self.applied_torque[ids] = 0.0
+        support_x = self.reset_sampler.uniform(
+            (rows,), self.cfg.support_cube_x_range[0], self.cfg.support_cube_x_range[1]
+        )
+        support_y = self.reset_sampler.uniform(
+            (rows,), self.cfg.support_cube_y_range[0], self.cfg.support_cube_y_range[1]
+        )
+        middle_direction = mx.where(self.reset_sampler.uniform((rows,), 0.0, 1.0) > 0.5, 1.0, -1.0)
+        top_direction = -middle_direction
+        middle_x = mx.clip(
+            support_x
+            + self.reset_sampler.uniform(
+                (rows,), self.cfg.middle_cube_offset_x_range[0], self.cfg.middle_cube_offset_x_range[1]
+            ),
+            self.cfg.support_cube_x_range[0] - 0.06,
+            self.cfg.support_cube_x_range[1] + 0.18,
+        )
+        middle_y = mx.clip(
+            support_y
+            + middle_direction
+            * self.reset_sampler.uniform(
+                (rows,), self.cfg.middle_cube_offset_y_range[0], self.cfg.middle_cube_offset_y_range[1]
+            ),
+            self.cfg.support_cube_y_range[0] - 0.18,
+            self.cfg.support_cube_y_range[1] + 0.18,
+        )
+        top_x = mx.clip(
+            support_x
+            + self.reset_sampler.uniform(
+                (rows,), self.cfg.top_cube_offset_x_range[0], self.cfg.top_cube_offset_x_range[1]
+            ),
+            self.cfg.support_cube_x_range[0] - 0.18,
+            self.cfg.support_cube_x_range[1] + 0.18,
+        )
+        top_y = mx.clip(
+            support_y
+            + top_direction
+            * self.reset_sampler.uniform(
+                (rows,), self.cfg.top_cube_offset_y_range[0], self.cfg.top_cube_offset_y_range[1]
+            ),
+            self.cfg.support_cube_y_range[0] - 0.18,
+            self.cfg.support_cube_y_range[1] + 0.18,
+        )
+        table_height = mx.full((rows,), self.cfg.table_height, dtype=mx.float32)
+        self.support_cube_pos_w[ids] = mx.stack((support_x, support_y, table_height), axis=-1)
+        self.middle_cube_pos_w[ids] = mx.stack((middle_x, middle_y, table_height), axis=-1)
+        self.top_cube_pos_w[ids] = mx.stack((top_x, top_y, table_height), axis=-1)
+        self.middle_grasped[ids] = False
+        self.top_grasped[ids] = False
+        self.middle_stacked[ids] = False
+        self.top_stacked[ids] = False
+        self.ee_pos_w[ids], self.ee_quat_w[ids] = ur10e_end_effector_pose_hotpath(self.state.joint_pos[ids])
+
+    def set_action_targets(self, actions: Any) -> None:
+        self.action_targets = mx.clip(mx.array(actions, dtype=mx.float32).reshape((self.num_envs, self.cfg.action_space)), -1.0, 1.0)
+
+    def step(self, *, render: bool = True, update_fabric: bool = False) -> None:
+        del render, update_fabric
+        dt = self.physics_dt
+        arm_action_targets = self.action_targets[:, : self.arm_joint_dim]
+        desired_joint_pos = self.state.joint_pos + self.cfg.action_scale * arm_action_targets
+        desired_joint_pos = mx.clip(
+            desired_joint_pos,
+            mx.broadcast_to(self.joint_lower_limits, desired_joint_pos.shape),
+            mx.broadcast_to(self.joint_upper_limits, desired_joint_pos.shape),
+        )
+        pos_error = desired_joint_pos - self.state.joint_pos
+        acc = self.cfg.joint_stiffness * pos_error - self.cfg.joint_damping * self.state.joint_vel
+        acc = acc / self.cfg.joint_inertia
+        self.state.joint_vel = self.state.joint_vel + dt * acc
+        self.state.joint_pos = mx.clip(
+            self.state.joint_pos + dt * self.state.joint_vel,
+            mx.broadcast_to(self.joint_lower_limits, self.state.joint_pos.shape),
+            mx.broadcast_to(self.joint_upper_limits, self.state.joint_pos.shape),
+        )
+        self.joint_acc = acc
+        self.applied_torque = self.cfg.joint_stiffness * pos_error
+        self.ee_pos_w, self.ee_quat_w = ur10e_end_effector_pose_hotpath(self.state.joint_pos)
+        (
+            self.gripper_joint_pos,
+            self.gripper_joint_vel,
+            self.middle_grasped,
+            self.top_grasped,
+            self.middle_stacked,
+            self.top_stacked,
+            self.middle_cube_pos_w,
+            self.top_cube_pos_w,
+        ) = franka_stack_rgb_step_hotpath(
+            self.middle_cube_pos_w,
+            self.top_cube_pos_w,
+            self.support_cube_pos_w,
+            self.ee_pos_w,
+            self.gripper_joint_pos,
+            self.action_targets[:, self.arm_joint_dim],
+            self.middle_grasped,
+            self.top_grasped,
+            self.middle_stacked,
+            self.top_stacked,
+            self.physics_dt,
+            self.cfg.gripper_lower_limit,
+            self.cfg.gripper_upper_limit,
+            self.cfg.gripper_closed_threshold,
+            self.cfg.stack_release_open_threshold,
+            self.cfg.grasp_distance_threshold,
+            self.cfg.grasp_offset_z,
+            self.cfg.table_height,
+            self.cfg.stack_offset_z,
+            self.cfg.stack_xy_threshold,
+            self.cfg.stack_z_threshold,
+        )
+
+    def get_joint_state(self, articulation: Any) -> tuple[mx.array, mx.array]:
+        del articulation
+        joint_pos, joint_vel = self.state.read()
+        return (
+            mx.concatenate((joint_pos, self.gripper_joint_pos[:, None]), axis=1),
+            mx.concatenate((joint_vel, self.gripper_joint_vel[:, None]), axis=1),
+        )
+
+    def set_joint_effort_target(self, articulation: Any, efforts: Any, *, joint_ids: Any | None = None) -> None:
+        del articulation
+        effort_array = mx.array(efforts, dtype=mx.float32)
+        if joint_ids is None and effort_array.shape[-1] == self.arm_joint_dim + 1:
+            effort_array = effort_array[..., : self.arm_joint_dim]
+        self.state.set_effort_target(effort_array, joint_ids=joint_ids)
+
+    def write_joint_state(
+        self,
+        articulation: Any,
+        joint_pos: Any,
+        joint_vel: Any,
+        *,
+        joint_acc: Any | None = None,
+        env_ids: Any | None = None,
+    ) -> None:
+        del articulation, joint_acc
+        joint_pos_array = mx.array(joint_pos, dtype=mx.float32)
+        joint_vel_array = mx.array(joint_vel, dtype=mx.float32)
+        if joint_pos_array.shape[-1] == self.arm_joint_dim + 1:
+            self.gripper_joint_pos = mx.array(self.gripper_joint_pos)
+            self.gripper_joint_vel = mx.array(self.gripper_joint_vel)
+            if env_ids is None:
+                self.gripper_joint_pos = joint_pos_array[:, -1]
+                self.gripper_joint_vel = joint_vel_array[:, -1]
+            else:
+                ids = mx.array(env_ids, dtype=mx.int32)
+                self.gripper_joint_pos[ids] = joint_pos_array[:, -1]
+                self.gripper_joint_vel[ids] = joint_vel_array[:, -1]
+            joint_pos_array = joint_pos_array[:, : self.arm_joint_dim]
+            joint_vel_array = joint_vel_array[:, : self.arm_joint_dim]
+        self.state.write(joint_pos_array, joint_vel_array, env_ids=env_ids)
+        self.ee_pos_w, self.ee_quat_w = ur10e_end_effector_pose_hotpath(self.state.joint_pos)
+
+    def write_root_pose(self, articulation: Any, root_pose: Any, *, env_ids: Any | None = None) -> None:
+        del articulation, root_pose, env_ids
+
+    def write_root_velocity(self, articulation: Any, root_velocity: Any, *, env_ids: Any | None = None) -> None:
+        del articulation, root_velocity, env_ids
+
+    def active_is_top_cube(self) -> mx.array:
+        return self.middle_stacked
+
+    def active_cube_pos_w(self) -> mx.array:
+        return mx.where(self.active_is_top_cube()[:, None], self.top_cube_pos_w, self.middle_cube_pos_w)
+
+    def middle_stack_target_pos_w(self) -> mx.array:
+        return self.support_cube_pos_w + mx.array([0.0, 0.0, self.cfg.stack_offset_z], dtype=mx.float32)
+
+    def top_stack_target_pos_w(self) -> mx.array:
+        return self.middle_cube_pos_w + mx.array([0.0, 0.0, self.cfg.stack_offset_z], dtype=mx.float32)
+
+    def active_stack_target_pos_w(self) -> mx.array:
+        return mx.where(self.active_is_top_cube()[:, None], self.top_stack_target_pos_w(), self.middle_stack_target_pos_w())
+
+    def middle_stack_error(self) -> mx.array:
+        return self.middle_stack_target_pos_w() - self.middle_cube_pos_w
+
+    def top_stack_error(self) -> mx.array:
+        return self.top_stack_target_pos_w() - self.top_cube_pos_w
+
+    def active_stack_error(self) -> mx.array:
+        return self.active_stack_target_pos_w() - self.active_cube_pos_w()
+
+    def active_grasped(self) -> mx.array:
+        return mx.where(self.active_is_top_cube(), self.top_grasped, self.middle_grasped)
+
+    def stack_success(self) -> mx.array:
+        return self.top_stacked
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "backend": self.name,
+            "task": getattr(self.cfg, "task_name", self.task_key),
+            "upstream_task_id": self.upstream_task_id,
+            "num_envs": self.num_envs,
+            "semantic_contract": self.cfg.semantic_contract,
+            "upstream_alias_semantics_preserved": self.cfg.upstream_alias_semantics_preserved,
+            "contract_notes": getattr(self.cfg, "contract_notes", ""),
+            "capabilities": self.capabilities.__dict__,
+            "contract": {
+                "reset_signature": self.contract.reset_signature,
+                "step_signature": self.contract.step_signature,
+                "articulations": self.contract.articulations.__dict__,
+            },
+            "subsystems": {
+                "analytic_kinematics": True,
+                "pose_command_tracking": True,
+                "object_tracking": True,
+                "grasp_logic": True,
+                "multi_object_logic": True,
+                "stack_logic": True,
+                "suction_grasp_surrogate": True,
+                "hotpath": get_ur10e_hotpath_backend(),
+            },
+            "joint_state_shape": list(self.get_joint_state(None)[0].shape),
+        }
+
+
+class MacUR10LongSuctionStackSimBackend(MacUR10StackRgbSimBackend):
+    """Reduced UR10 long-suction three-cube stack backend on MLX/mac-sim."""
+
+    task_key = "ur10-long-suction-stack"
+    upstream_task_id = "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0"
+
+
+class MacUR10ShortSuctionStackSimBackend(MacUR10StackRgbSimBackend):
+    """Reduced UR10 short-suction three-cube stack backend on MLX/mac-sim."""
+
+    task_key = "ur10-short-suction-stack"
+    upstream_task_id = "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0"
 
 
 class MacOpenArmReachSimBackend(MacFrankaReachSimBackend):
@@ -1996,6 +2344,126 @@ class MacUR10eGearAssembly2F85Env(MacUR10eGearAssemblyEnv):
         self.reset()
 
 
+class MacUR10StackRgbEnv(MacUR10ReachEnv):
+    """Vectorized reduced UR10 suction three-cube stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10LongSuctionStackEnvCfg | MacUR10ShortSuctionStackEnvCfg | None = None):
+        self.cfg = cfg or MacUR10LongSuctionStackEnvCfg()
+        mx.random.seed(self.cfg.seed)
+        self.reset_sampler = DeterministicResetSampler(self.cfg.seed)
+        runtime = set_runtime_selection(resolve_runtime_selection("mlx", "mac-sim", "cpu"))
+        self.runtime = runtime
+        self.device = runtime.device
+        self.num_envs = self.cfg.num_envs
+        self.step_dt = self.cfg.sim_dt * self.cfg.decimation
+        self.max_episode_length = math.ceil(self.cfg.episode_length_s / self.step_dt)
+        self.sim_backend = MacUR10StackRgbSimBackend(self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend"))
+        self._actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self._previous_actions = mx.zeros((self.num_envs, self.cfg.action_space), dtype=mx.float32)
+        self.reward_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.episode_return_buf = mx.zeros((self.num_envs,), dtype=mx.float32)
+        self.reset_terminated = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_time_outs = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset_buf = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.episode_length_buf = mx.zeros((self.num_envs,), dtype=mx.int32)
+        self.obs_buf = {"policy": mx.zeros((self.num_envs, self.cfg.observation_space), dtype=mx.float32)}
+        self._previous_middle_stacked = mx.zeros((self.num_envs,), dtype=mx.bool_)
+        self.reset()
+
+    def _pre_physics_step(self, actions: Any) -> None:
+        self._previous_middle_stacked = mx.array(self.sim_backend.middle_stacked)
+        super()._pre_physics_step(actions)
+
+    def _reset_idx(self, env_ids: list[int]) -> None:
+        super()._reset_idx(env_ids)
+        if env_ids:
+            ids = mx.array(env_ids, dtype=mx.int32)
+            self._previous_middle_stacked[ids] = self.sim_backend.middle_stacked[ids]
+
+    def _build_policy_observations(self) -> mx.array:
+        joint_pos, joint_vel = self.sim_backend.get_joint_state(None)
+        active_cube_error = self.sim_backend.active_cube_pos_w() - self.sim_backend.ee_pos_w
+        return mx.concatenate(
+            (
+                joint_pos,
+                joint_vel,
+                self.sim_backend.ee_pos_w,
+                self.sim_backend.middle_cube_pos_w,
+                self.sim_backend.top_cube_pos_w,
+                self.sim_backend.support_cube_pos_w,
+                active_cube_error,
+                self.sim_backend.middle_stack_error(),
+                self.sim_backend.top_stack_error(),
+                self.sim_backend.middle_grasped.astype(mx.float32).reshape((-1, 1)),
+                self.sim_backend.top_grasped.astype(mx.float32).reshape((-1, 1)),
+                self.sim_backend.middle_stacked.astype(mx.float32).reshape((-1, 1)),
+                self.sim_backend.top_stacked.astype(mx.float32).reshape((-1, 1)),
+                self.sim_backend.active_is_top_cube().astype(mx.float32).reshape((-1, 1)),
+            ),
+            axis=-1,
+        )
+
+    def _get_rewards(self) -> mx.array:
+        active_cube_distance = mx.linalg.norm(self.sim_backend.active_cube_pos_w() - self.sim_backend.ee_pos_w, axis=1)
+        active_stack_distance = mx.linalg.norm(self.sim_backend.active_stack_error(), axis=1)
+        active_cube_height = self.sim_backend.active_cube_pos_w()[:, 2]
+        reach_reward = self.cfg.reach_reward_scale * mx.exp(-self.cfg.position_reward_gain * active_cube_distance)
+        grasp_reward = self.cfg.grasp_reward_scale * self.sim_backend.active_grasped().astype(mx.float32)
+        lift_reward = self.cfg.lift_reward_scale * mx.maximum(active_cube_height - self.cfg.table_height, 0.0)
+        middle_stage_bonus = self.cfg.middle_stage_bonus * (
+            self.sim_backend.middle_stacked & ~self._previous_middle_stacked
+        ).astype(mx.float32)
+        top_stack_align_reward = (
+            self.cfg.top_stack_align_reward_scale
+            * mx.exp(-self.cfg.top_stack_distance_reward_gain * active_stack_distance)
+            * self.sim_backend.active_is_top_cube().astype(mx.float32)
+        )
+        success_bonus = self.cfg.stack_success_bonus * self.sim_backend.stack_success().astype(mx.float32)
+        action_penalty = self.cfg.action_rate_penalty_scale * mx.sum(mx.square(self._actions - self._previous_actions), axis=1)
+        joint_vel_penalty = self.cfg.joint_vel_penalty_scale * mx.sum(
+            mx.square(self.sim_backend.state.joint_vel), axis=1
+        )
+        return (
+            reach_reward
+            + grasp_reward
+            + lift_reward
+            + middle_stage_bonus
+            + top_stack_align_reward
+            + success_bonus
+            + action_penalty
+            + joint_vel_penalty
+        ) * self.step_dt
+
+    def _get_dones(self) -> tuple[mx.array, mx.array]:
+        success = self.sim_backend.stack_success()
+        time_out = self.episode_length_buf >= self.max_episode_length
+        return success, time_out
+
+
+class MacUR10LongSuctionStackEnv(MacUR10StackRgbEnv):
+    """Vectorized reduced UR10 long-suction three-cube stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10LongSuctionStackEnvCfg | None = None):
+        self.cfg = cfg or MacUR10LongSuctionStackEnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacUR10LongSuctionStackSimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self.reset()
+
+
+class MacUR10ShortSuctionStackEnv(MacUR10StackRgbEnv):
+    """Vectorized reduced UR10 short-suction three-cube stack task for MLX/mac-sim."""
+
+    def __init__(self, cfg: MacUR10ShortSuctionStackEnvCfg | None = None):
+        self.cfg = cfg or MacUR10ShortSuctionStackEnvCfg()
+        super().__init__(self.cfg)
+        self.sim_backend = MacUR10ShortSuctionStackSimBackend(
+            self.cfg, reset_sampler=self.reset_sampler.fork("sim-backend")
+        )
+        self.reset()
+
+
 class MacOpenArmReachEnv(MacFrankaReachEnv):
     """Vectorized reduced OpenArm reach task for MLX/mac-sim."""
 
@@ -2915,6 +3383,17 @@ def train_ur10e_gear_assembly_2f140_policy(cfg: MacUR10eGearAssembly2F140TrainCf
     )
 
 
+def train_ur10e_gear_assembly_2f140_ros_inference_policy(cfg: MacUR10eGearAssembly2F140TrainCfg) -> dict[str, Any]:
+    """Train a reduced UR10e 2F-140 gear-assembly ROS-inference policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacUR10eGearAssembly2F140Env,
+        task_id="Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0",
+        log_prefix="mlx-ur10e-gear-assembly-2f140-ros-inference",
+    )
+
+
 def train_ur10e_gear_assembly_2f85_policy(cfg: MacUR10eGearAssembly2F85TrainCfg) -> dict[str, Any]:
     """Train a reduced continuous-control UR10e 2F-85 gear-assembly policy on the mac-native MLX slice."""
 
@@ -2923,6 +3402,17 @@ def train_ur10e_gear_assembly_2f85_policy(cfg: MacUR10eGearAssembly2F85TrainCfg)
         env_factory=MacUR10eGearAssembly2F85Env,
         task_id="Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
         log_prefix="mlx-ur10e-gear-assembly-2f85",
+    )
+
+
+def train_ur10e_gear_assembly_2f85_ros_inference_policy(cfg: MacUR10eGearAssembly2F85TrainCfg) -> dict[str, Any]:
+    """Train a reduced UR10e 2F-85 gear-assembly ROS-inference policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacUR10eGearAssembly2F85Env,
+        task_id="Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+        log_prefix="mlx-ur10e-gear-assembly-2f85-ros-inference",
     )
 
 
@@ -3002,6 +3492,25 @@ def play_ur10e_gear_assembly_2f140_policy(
     )
 
 
+def play_ur10e_gear_assembly_2f140_ros_inference_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10eGearAssembly2F140EnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced UR10e 2F-140 gear-assembly ROS-inference policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10eGearAssembly2F140RosInferenceEnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10eGearAssembly2F140Env,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
 def play_ur10e_gear_assembly_2f85_policy(
     checkpoint_path: str,
     *,
@@ -3012,6 +3521,25 @@ def play_ur10e_gear_assembly_2f85_policy(
     """Run a trained reduced UR10e 2F-85 gear-assembly policy greedily and return episode returns."""
 
     cfg = env_cfg or MacUR10eGearAssembly2F85EnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10eGearAssembly2F85Env,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_ur10e_gear_assembly_2f85_ros_inference_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10eGearAssembly2F85EnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced UR10e 2F-85 gear-assembly ROS-inference policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10eGearAssembly2F85RosInferenceEnvCfg(num_envs=1)
     return _play_reach_like_policy(
         checkpoint_path,
         env_factory=MacUR10eGearAssembly2F85Env,
@@ -3141,6 +3669,10 @@ def _train_franka_lift_like_policy(
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
+            extra={
+                "semantic_contract": getattr(cfg.env, "semantic_contract", "aligned"),
+                "upstream_alias_semantics_preserved": getattr(cfg.env, "upstream_alias_semantics_preserved", True),
+            },
         ),
     )
     return {
@@ -3269,9 +3801,15 @@ def play_openarm_lift_policy(
 
 
 def _train_franka_stack_like_policy(
-    cfg: MacFrankaStackTrainCfg | MacFrankaStackInstanceRandomizeTrainCfg,
+    cfg: MacFrankaStackTrainCfg
+    | MacFrankaStackInstanceRandomizeTrainCfg
+    | MacUR10LongSuctionStackTrainCfg
+    | MacUR10ShortSuctionStackTrainCfg,
     *,
-    env_factory: type[MacFrankaStackEnv] | type[MacFrankaStackInstanceRandomizeEnv],
+    env_factory: type[MacFrankaStackEnv]
+    | type[MacFrankaStackInstanceRandomizeEnv]
+    | type[MacUR10LongSuctionStackEnv]
+    | type[MacUR10ShortSuctionStackEnv],
     task_id: str,
     log_prefix: str,
 ) -> dict[str, Any]:
@@ -3388,6 +3926,10 @@ def _train_franka_stack_like_policy(
             policy_distribution="gaussian",
             action_std=cfg.action_std,
             train_cfg=asdict(cfg),
+            extra={
+                "semantic_contract": getattr(cfg.env, "semantic_contract", "aligned"),
+                "upstream_alias_semantics_preserved": getattr(cfg.env, "upstream_alias_semantics_preserved", True),
+            },
         ),
     )
     return {
@@ -3447,8 +3989,14 @@ def train_franka_stack_instance_randomize_policy(cfg: MacFrankaStackInstanceRand
 def _play_franka_stack_like_policy(
     checkpoint_path: str,
     *,
-    env_factory: type[MacFrankaStackEnv] | type[MacFrankaStackInstanceRandomizeEnv],
-    env_cfg: MacFrankaStackEnvCfg | MacFrankaStackInstanceRandomizeEnvCfg,
+    env_factory: type[MacFrankaStackEnv]
+    | type[MacFrankaStackInstanceRandomizeEnv]
+    | type[MacUR10LongSuctionStackEnv]
+    | type[MacUR10ShortSuctionStackEnv],
+    env_cfg: MacFrankaStackEnvCfg
+    | MacFrankaStackInstanceRandomizeEnvCfg
+    | MacUR10LongSuctionStackEnvCfg
+    | MacUR10ShortSuctionStackEnvCfg,
     episodes: int,
     hidden_dim: int | None,
 ) -> list[float]:
@@ -3539,6 +4087,66 @@ def play_franka_stack_instance_randomize_policy(
     return _play_franka_stack_like_policy(
         checkpoint_path,
         env_factory=MacFrankaStackInstanceRandomizeEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def train_ur10_long_suction_stack_policy(cfg: MacUR10LongSuctionStackTrainCfg) -> dict[str, Any]:
+    """Train a reduced UR10 long-suction stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacUR10LongSuctionStackEnv,
+        task_id="Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
+        log_prefix="mlx-ur10-long-suction-stack",
+    )
+
+
+def train_ur10_short_suction_stack_policy(cfg: MacUR10ShortSuctionStackTrainCfg) -> dict[str, Any]:
+    """Train a reduced UR10 short-suction stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacUR10ShortSuctionStackEnv,
+        task_id="Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
+        log_prefix="mlx-ur10-short-suction-stack",
+    )
+
+
+def play_ur10_long_suction_stack_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10LongSuctionStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained UR10 long-suction stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10LongSuctionStackEnvCfg(num_envs=1)
+    return _play_franka_stack_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10LongSuctionStackEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_ur10_short_suction_stack_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10ShortSuctionStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained UR10 short-suction stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10ShortSuctionStackEnvCfg(num_envs=1)
+    return _play_franka_stack_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10ShortSuctionStackEnv,
         env_cfg=cfg,
         episodes=episodes,
         hidden_dim=hidden_dim,

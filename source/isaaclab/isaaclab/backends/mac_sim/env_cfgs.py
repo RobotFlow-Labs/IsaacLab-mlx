@@ -538,6 +538,30 @@ class MacUR10eGearAssembly2F85EnvCfg(MacUR10eGearAssembly2F140EnvCfg):
 
 
 @configclass
+class MacUR10eGearAssembly2F140RosInferenceEnvCfg(MacUR10eGearAssembly2F140EnvCfg):
+    """Reduced mac-native 2F-140 gear-assembly configuration for the ROS-inference variant."""
+
+    semantic_contract: str = "reduced-no-ros-inference"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native UR10e 2F-140 gear-assembly slice preserves the analytic assembly workflow, "
+        "but it does not include the upstream ROS inference transport or deployed-robot process stack."
+    )
+
+
+@configclass
+class MacUR10eGearAssembly2F85RosInferenceEnvCfg(MacUR10eGearAssembly2F85EnvCfg):
+    """Reduced mac-native 2F-85 gear-assembly configuration for the ROS-inference variant."""
+
+    semantic_contract: str = "reduced-no-ros-inference"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native UR10e 2F-85 gear-assembly slice preserves the analytic assembly workflow, "
+        "but it does not include the upstream ROS inference transport or deployed-robot process stack."
+    )
+
+
+@configclass
 class MacOpenArmReachEnvCfg(MacFrankaReachEnvCfg):
     """Reduced mac-native OpenArm unimanual reach configuration."""
 
@@ -848,6 +872,88 @@ class MacFrankaBinStackEnvCfg(MacFrankaStackRgbEnvCfg):
     middle_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)
     top_cube_x_range: tuple[float, float] = (0.62, 0.70)
     top_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)
+
+
+@configclass
+class MacUR10LongSuctionStackEnvCfg(MacUR10ReachEnvCfg):
+    """Reduced mac-native UR10 long-suction three-cube stack configuration."""
+
+    action_space: int = 7
+    observation_space: int = 40
+    episode_length_s: float = 12.0
+    action_scale: float = 0.07
+    default_joint_pos: tuple[float, ...] = (0.0, -1.35, 1.55, -1.75, -1.57, 0.0)
+    joint_lower_limits: tuple[float, ...] = (
+        -2.0 * math.pi,
+        -math.pi,
+        -math.pi,
+        -2.0 * math.pi,
+        -2.0 * math.pi,
+        -2.0 * math.pi,
+    )
+    joint_upper_limits: tuple[float, ...] = (
+        2.0 * math.pi,
+        0.0,
+        math.pi,
+        2.0 * math.pi,
+        2.0 * math.pi,
+        2.0 * math.pi,
+    )
+    task_name: str = "ur10-long-suction-stack"
+    semantic_contract: str = "reduced-analytic-suction-stack"
+    upstream_alias_semantics_preserved: bool = False
+    suction_variant: str = "long"
+    contract_notes: str = (
+        "This mac-native slice preserves the UR10 long-suction three-cube stack workflow with "
+        "analytic pose tracking and suction-state surrogates instead of the upstream CPU-only "
+        "surface-gripper simulation and full UR10 suction stack."
+    )
+
+    support_cube_x_range: tuple[float, float] = (0.42, 0.54)
+    support_cube_y_range: tuple[float, float] = (-0.06, 0.06)
+    middle_cube_offset_x_range: tuple[float, float] = (0.10, 0.16)
+    middle_cube_offset_y_range: tuple[float, float] = (0.08, 0.14)
+    top_cube_offset_x_range: tuple[float, float] = (-0.16, -0.10)
+    top_cube_offset_y_range: tuple[float, float] = (0.08, 0.14)
+
+    gripper_lower_limit: float = -1.0
+    gripper_upper_limit: float = 1.0
+    default_gripper_state: float = 1.0
+    gripper_closed_threshold: float = -0.5
+    stack_release_open_threshold: float = 0.5
+    grasp_distance_threshold: float = 0.11
+    grasp_offset_z: float = 0.08
+    stack_offset_z: float = 0.04
+    stack_xy_threshold: float = 0.045
+    stack_z_threshold: float = 0.035
+    table_height: float = 0.0203
+
+    grasp_reward_scale: float = 0.4
+    lift_reward_scale: float = 1.1
+    middle_stage_bonus: float = 2.0
+    top_stack_align_reward_scale: float = 2.8
+    top_stack_distance_reward_gain: float = 9.5
+    stack_success_bonus: float = 8.0
+
+
+@configclass
+class MacUR10ShortSuctionStackEnvCfg(MacUR10LongSuctionStackEnvCfg):
+    """Reduced mac-native UR10 short-suction three-cube stack configuration."""
+
+    task_name: str = "ur10-short-suction-stack"
+    suction_variant: str = "short"
+    contract_notes: str = (
+        "This mac-native slice preserves the UR10 short-suction three-cube stack workflow with "
+        "analytic pose tracking and suction-state surrogates instead of the upstream CPU-only "
+        "surface-gripper simulation and full UR10 suction stack."
+    )
+    support_cube_x_range: tuple[float, float] = (0.40, 0.52)
+    middle_cube_offset_x_range: tuple[float, float] = (0.09, 0.15)
+    top_cube_offset_x_range: tuple[float, float] = (-0.15, -0.09)
+    grasp_distance_threshold: float = 0.095
+    grasp_offset_z: float = 0.06
+    stack_xy_threshold: float = 0.04
+    top_stack_align_reward_scale: float = 3.0
 
 
 @configclass

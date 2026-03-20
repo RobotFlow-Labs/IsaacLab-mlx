@@ -104,6 +104,9 @@ def _task_contract_excerpt(benchmark: dict[str, Any]) -> dict[str, Any]:
     diagnostics = benchmark.get("diagnostics", {})
     sim_backend = diagnostics.get("sim_backend", {})
     subsystems = sim_backend.get("subsystems", {})
+    for field in ("semantic_contract", "upstream_alias_semantics_preserved"):
+        if field in sim_backend:
+            contract[field] = sim_backend[field]
     if "hotpath" in subsystems:
         contract["hotpath"] = subsystems["hotpath"]
     sensor = diagnostics.get("sensor", {})

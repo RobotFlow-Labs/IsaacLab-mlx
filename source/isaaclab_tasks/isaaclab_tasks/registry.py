@@ -264,6 +264,72 @@ MAC_SAFE_TASK_SPECS = (
         ),
     },
     {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F140-ROS-Inference-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F140Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": (
+                    "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F140RosInferenceEnvCfg"
+                ),
+            },
+            semantic_contract="reduced-no-ros-inference",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-140 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow, but it does not include the upstream ROS inference transport or deployed-robot "
+                "runtime stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F85Env",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": (
+                    "isaaclab.backends.mac_sim.env_cfgs:MacUR10eGearAssembly2F85RosInferenceEnvCfg"
+                ),
+            },
+            semantic_contract="reduced-no-ros-inference",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e 2F-85 gear-assembly slice preserves the shaft-alignment and insertion "
+                "workflow, but it does not include the upstream ROS inference transport or deployed-robot "
+                "runtime stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-UR10-Long-Suction-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10LongSuctionStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10LongSuctionStackEnvCfg",
+            },
+            semantic_contract="reduced-analytic-suction-stack",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10 long-suction stack slice preserves the staged three-cube stacking workflow, "
+                "but models the suction state as a scalar analytic surrogate instead of the upstream suction/contact stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-UR10-Short-Suction-IK-Rel-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10ShortSuctionStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10ShortSuctionStackEnvCfg",
+            },
+            semantic_contract="reduced-analytic-suction-stack",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10 short-suction stack slice preserves the staged three-cube stacking workflow, "
+                "but models the suction state as a scalar analytic surrogate instead of the upstream suction/contact stack."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Lift-Cube-Franka-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaLiftEnv",
         "kwargs": {

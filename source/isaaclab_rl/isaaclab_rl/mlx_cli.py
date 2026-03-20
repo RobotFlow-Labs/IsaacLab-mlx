@@ -16,34 +16,7 @@ from typing import Any
 
 from .mlx import MLX_TASK_ALIASES, evaluate_mlx_task, get_mlx_task_spec, list_mlx_tasks, list_trainable_mlx_tasks, train_mlx_task
 
-TASK_PREFIXES = {
-    "cartpole": "mlx-cartpole",
-    "cartpole-rgb-camera": "mlx-cartpole-rgb-camera",
-    "cartpole-depth-camera": "mlx-cartpole-depth-camera",
-    "cart-double-pendulum": "mlx-cart-double-pendulum",
-    "quadcopter": "mlx-quadcopter",
-    "anymal-c-flat": "mlx-anymal-c-flat",
-    "anymal-c-rough": "mlx-anymal-c-rough",
-    "h1-flat": "mlx-h1-flat",
-    "h1-rough": "mlx-h1-rough",
-    "franka-reach": "mlx-franka-reach",
-    "openarm-reach": "mlx-openarm-reach",
-    "openarm-bi-reach": "mlx-openarm-bi-reach",
-    "ur10-reach": "mlx-ur10-reach",
-    "ur10e-deploy-reach": "mlx-ur10e-deploy-reach",
-    "ur10e-gear-assembly-2f140": "mlx-ur10e-gear-assembly-2f140",
-    "ur10e-gear-assembly-2f85": "mlx-ur10e-gear-assembly-2f85",
-    "franka-lift": "mlx-franka-lift",
-    "openarm-lift": "mlx-openarm-lift",
-    "franka-teddy-bear-lift": "mlx-franka-teddy-bear-lift",
-    "franka-stack-instance-randomize": "mlx-franka-stack-instance-randomize",
-    "franka-stack": "mlx-franka-stack",
-    "franka-stack-rgb": "mlx-franka-stack-rgb",
-    "franka-bin-stack": "mlx-franka-bin-stack",
-    "franka-cabinet": "mlx-franka-cabinet",
-    "franka-open-drawer": "mlx-franka-open-drawer",
-    "openarm-open-drawer": "mlx-openarm-open-drawer",
-}
+TASK_PREFIXES = {task: f"mlx-{task}" for task in list_mlx_tasks()}
 
 
 def _task_choices(*, trainable_only: bool) -> tuple[str, ...]:
