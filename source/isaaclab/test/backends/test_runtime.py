@@ -232,6 +232,11 @@ def test_create_sensor_backend_follows_runtime():
         "external_stereo_capture": True,
         "synthetic_camera_tasks": True,
     }
+    assert mac_state["tooling_sources"] == {
+        "analytic_camera_tasks": "mac-native analytic task slices",
+        "external_stereo_capture": "zed-sdk-mlx terminal-hosted capture path",
+        "synthetic_camera_tasks": "task-local synthetic camera slices",
+    }
 
 
 def test_create_planner_backend_follows_runtime():

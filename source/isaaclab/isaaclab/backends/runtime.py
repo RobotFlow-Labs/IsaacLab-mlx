@@ -647,6 +647,11 @@ class MacSensorBackend(SensorBackend):
                 "external_stereo_capture": True,
                 "synthetic_camera_tasks": True,
             },
+            "tooling_sources": {
+                "analytic_camera_tasks": "mac-native analytic task slices",
+                "external_stereo_capture": "zed-sdk-mlx terminal-hosted capture path",
+                "synthetic_camera_tasks": "task-local synthetic camera slices",
+            },
             "camera_contract": "synthetic-task-slices+external-capture-only",
         }
 

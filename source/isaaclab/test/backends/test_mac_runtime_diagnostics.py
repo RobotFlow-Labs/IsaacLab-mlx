@@ -48,6 +48,11 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
         "external_stereo_capture": True,
         "synthetic_camera_tasks": True,
     }
+    assert payload["sensor"]["tooling_sources"] == {
+        "analytic_camera_tasks": "mac-native analytic task slices",
+        "external_stereo_capture": "zed-sdk-mlx terminal-hosted capture path",
+        "synthetic_camera_tasks": "task-local synthetic camera slices",
+    }
     assert payload["planner"]["backend"] == "mac-planners"
 
 
