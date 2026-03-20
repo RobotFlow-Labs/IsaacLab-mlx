@@ -63,7 +63,9 @@ from .hotpath import (
     franka_lift_object_step_hotpath,
     franka_stack_object_step_hotpath,
     franka_stack_rgb_step_hotpath,
+    get_franka_cabinet_hotpath_backend,
     get_franka_hotpath_backend,
+    get_franka_lift_hotpath_backend,
     get_franka_stack_hotpath_backend,
     get_franka_stack_rgb_hotpath_backend,
     get_ur10e_hotpath_backend,
@@ -1524,7 +1526,7 @@ class MacFrankaLiftSimBackend(MacFrankaReachSimBackend):
             "analytic_kinematics": True,
             "object_tracking": True,
             "grasp_logic": True,
-            "hotpath": get_franka_hotpath_backend(),
+            "hotpath": get_franka_lift_hotpath_backend(),
         }
         return payload
 
@@ -1874,7 +1876,7 @@ class MacFrankaCabinetSimBackend(MacFrankaReachSimBackend):
             "object_tracking": True,
             "grasp_logic": True,
             "drawer_logic": True,
-            "hotpath": get_franka_hotpath_backend(),
+            "hotpath": get_franka_cabinet_hotpath_backend(),
         }
         return payload
 

@@ -112,6 +112,7 @@ without pausing for replanning after every small success.
 - `DONE` The reduced pick-place surrogate family now includes `Isaac-PickPlace-GR1T2-Abs-v0` alongside the waist-enabled, G1, nut-pour, and exhaust-pipe aliases, all mapped honestly onto the existing `franka-bin-stack` substrate through the lazy registry, parsed env configs, public MLX wrapper, and installed CLI without inflating the canonical public task counts
 - `DONE` Franka stack family hotpaths now carry dedicated family-specific Metal labels across backend diagnostics, benchmarks, and semantic drift: `franka-stack` reports `mlx-metal-franka-stack`, while `franka-stack-rgb` and `franka-bin-stack` report `mlx-metal-franka-stack-rgb` instead of reusing the generic Franka end-effector label
 - `DONE` Planner/ROS batch helpers now explicitly reject mixed topic-root batches in tests, keeping `batch_index` ordering semantics honest for both planner world-state and joint-trajectory envelopes
+- `DONE` Three more upstream-compatible manipulation aliases now resolve honestly to existing canonical mac-native slices without changing public counts: `Isaac-Lift-Cube-Franka-IK-Rel-Play-v0` maps to `franka-lift`; `Isaac-Stack-Cube-Franka-IK-Abs-Play-v0` maps to `franka-stack`; and `Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Abs-v0` maps to `franka-stack-instance-randomize`, with lazy-registry, wrapper, CLI, and parsed-config coverage kept in sync
 
 ## Phase A: Import And Packaging Safety
 

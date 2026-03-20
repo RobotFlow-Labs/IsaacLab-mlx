@@ -134,14 +134,48 @@ def test_ros2_process_bridge_publishes_batch_in_batch_index_order(monkeypatch):
 
     def _publish_via_cli(envelope, *, once=True, check=True):
         published_topics.append(envelope.topic)
-        return envelope.topic
+        return subprocess.CompletedProcess(
+            args=["ros2", "topic", "pub", envelope.topic],
+            returncode=0,
+            stdout=f"published {envelope.topic}",
+            stderr="",
+        )
 
     monkeypatch.setattr(bridge, "publish_via_cli", _publish_via_cli)
 
     results = bridge.publish_batch_via_cli(tuple(envelopes))
 
     assert published_topics == ["/planner/joint_trajectory/0", "/planner/joint_trajectory/1"]
-    assert results == ["/planner/joint_trajectory/0", "/planner/joint_trajectory/1"]
+    assert [result.batch_index for result in results] == [0, 1]
+    assert [result.topic for result in results] == ["/planner/joint_trajectory/0", "/planner/joint_trajectory/1"]
+    assert [result.returncode for result in results] == [0, 0]
+    assert results[0].stdout == "published /planner/joint_trajectory/0"
+
+
+def test_ros2_process_bridge_builds_batch_publish_manifest_in_batch_index_order():
+    """Batch publish manifests should be deterministic and replay-safe without ROS installed."""
+    bridge = Ros2ProcessBridge()
+    envelopes = [
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/1",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 1},
+            batch_index=1,
+        ),
+        Ros2MessageEnvelope(
+            topic="/planner/world_state/0",
+            msg_type="robotflow_msgs/msg/PlannerWorldState",
+            payload={"frame_id": "world", "batch_index": 0},
+            batch_index=0,
+        ),
+    ]
+
+    manifest = bridge.build_batch_publish_manifest(tuple(envelopes))
+
+    assert [item.batch_index for item in manifest] == [0, 1]
+    assert [item.topic for item in manifest] == ["/planner/world_state/0", "/planner/world_state/1"]
+    assert manifest[0].returncode is None
+    assert manifest[0].command[4] == "/planner/world_state/0"
 
 
 def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(monkeypatch):
@@ -167,14 +201,24 @@ def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(mon
         published_topics.append(envelope.topic)
         if envelope.topic.endswith("/1"):
             raise subprocess.CalledProcessError(returncode=1, cmd=["ros2", "topic", "pub"], output="", stderr="boom")
-        return envelope.topic
+        return subprocess.CompletedProcess(
+            args=["ros2", "topic", "pub", envelope.topic],
+            returncode=0,
+            stdout=f"published {envelope.topic}",
+            stderr="",
+        )
 
     monkeypatch.setattr(bridge, "publish_via_cli", _publish_via_cli)
 
-    with pytest.raises(RuntimeError, match="batch_index=1.*'/planner/world_state/1'"):
+    with pytest.raises(RuntimeError, match="batch_index=1.*'/planner/world_state/1'.*returncode=1") as exc_info:
         bridge.publish_batch_via_cli(tuple(envelopes))
 
     assert published_topics == ["/planner/world_state/0", "/planner/world_state/1"]
+    manifest = exc_info.value.batch_publish_manifest
+    assert [item["batch_index"] for item in manifest] == [0, 1]
+    assert manifest[-1]["topic"] == "/planner/world_state/1"
+    assert manifest[-1]["returncode"] == 1
+    assert manifest[-1]["stderr"] == "boom"
 
 
 def test_ros2_process_bridge_rejects_invalid_batch_envelopes():
@@ -230,6 +274,24 @@ def test_ros2_process_bridge_rejects_invalid_batch_envelopes():
 
     with pytest.raises(ValueError, match="does not belong to batch topic root"):
         bridge.publish_batch_via_cli(
+            (
+                Ros2MessageEnvelope(
+                    topic="/planner/world_state/0",
+                    msg_type="robotflow_msgs/msg/PlannerWorldState",
+                    payload={"frame_id": "world", "batch_index": 0},
+                    batch_index=0,
+                ),
+                Ros2MessageEnvelope(
+                    topic="/joint_trajectory/1",
+                    msg_type="trajectory_msgs/msg/JointTrajectory",
+                    payload={"joint_names": ["joint_1"], "batch_index": 1},
+                    batch_index=1,
+                ),
+            )
+        )
+
+    with pytest.raises(ValueError, match="does not belong to batch topic root"):
+        bridge.build_batch_publish_manifest(
             (
                 Ros2MessageEnvelope(
                     topic="/planner/world_state/0",
@@ -502,3 +564,7 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
     ]
     assert summary["planner_obstacle_counts"] == [2, 3]
     assert summary["trajectory_waypoint_counts"] == [4, 5]
+    assert [item["batch_index"] for item in summary["planner_batch_publish_manifest"]] == [0, 1]
+    assert [item["batch_index"] for item in summary["trajectory_batch_publish_manifest"]] == [0, 1]
+    assert summary["planner_batch_publish_manifest"][0]["returncode"] is None
+    assert summary["trajectory_batch_publish_manifest"][0]["command"][4] == "/planner/joint_trajectory/0"

@@ -29,7 +29,9 @@ from isaaclab.backends.mac_sim.hotpath import (  # noqa: E402
     franka_stack_rgb_step_hotpath,
     get_anymal_leg_extension_hotpath_backend,
     get_contact_hotpath_backend,
+    get_franka_cabinet_hotpath_backend,
     get_franka_hotpath_backend,
+    get_franka_lift_hotpath_backend,
     get_franka_stack_hotpath_backend,
     get_franka_stack_rgb_hotpath_backend,
     get_locomotion_hotpath_backend,
@@ -188,7 +190,9 @@ def test_hotpath_backend_label_is_stable():
     assert HOTPATH_BACKEND == "mlx-compiled"
     assert get_anymal_leg_extension_hotpath_backend() in {"mlx-compiled", "mlx-metal-anymal-leg-extension"}
     assert get_contact_hotpath_backend() in {"mlx-compiled", "mlx-metal-contact"}
+    assert get_franka_cabinet_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-cabinet"}
     assert get_franka_hotpath_backend() in {"mlx-compiled", "mlx-metal-ee"}
+    assert get_franka_lift_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-lift"}
     assert get_franka_stack_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack"}
     assert get_franka_stack_rgb_hotpath_backend() in {"mlx-compiled", "mlx-metal-franka-stack-rgb"}
     assert get_locomotion_hotpath_backend() in {"mlx-compiled", "mlx-metal-root-step"}

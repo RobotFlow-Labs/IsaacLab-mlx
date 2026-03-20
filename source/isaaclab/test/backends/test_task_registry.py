@@ -41,14 +41,21 @@ SAFE_TASK_IDS = (
     "Isaac-Lift-Cube-Franka-v0",
     "Isaac-Lift-Cube-Franka-IK-Abs-v0",
     "Isaac-Lift-Cube-Franka-IK-Rel-v0",
+    "Isaac-Lift-Cube-Franka-IK-Rel-Play-v0",
     "Isaac-Lift-Cube-OpenArm-v0",
     "Isaac-Place-Toy2Box-Agibot-Right-Arm-RmpFlow-v0",
     "Isaac-Place-Mug-Agibot-Left-Arm-RmpFlow-v0",
     "Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
+    "Isaac-Stack-Cube-Instance-Randomize-Franka-Play-v0",
+    "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Abs-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0",
+    "Isaac-Stack-Cube-Franka-IK-Abs-Play-v0",
+    "Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-Play-v0",
+    "Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-Play-v0",
+    "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-Play-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
@@ -292,21 +299,38 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-v0", device="cpu", num_envs=5)
     lift_ik_abs_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-IK-Abs-v0", device="cpu", num_envs=6)
     lift_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=7)
+    lift_ik_rel_play_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-Franka-IK-Rel-Play-v0", device="cpu", num_envs=8)
     openarm_lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Cube-OpenArm-v0", device="cpu", num_envs=8)
     teddy_bear_lift_cfg = parse_cfg.parse_env_cfg("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0", device="cpu", num_envs=8)
     stack_instance_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Instance-Randomize-Franka-v0", device="cpu", num_envs=9)
+    stack_instance_play_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-Instance-Randomize-Franka-Play-v0", device="cpu", num_envs=9
+    )
+    stack_instance_ik_abs_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Abs-v0", device="cpu", num_envs=10
+    )
     stack_instance_ik_rel_cfg = parse_cfg.parse_env_cfg(
         "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0", device="cpu", num_envs=10
     )
     stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-v0", device="cpu", num_envs=4)
     stack_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=9)
+    stack_ik_abs_play_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Abs-Play-v0", device="cpu", num_envs=10)
     stack_ik_rel_play_cfg = parse_cfg.parse_env_cfg(
         "Isaac-Stack-Cube-Franka-IK-Rel-Play-v0", device="cpu", num_envs=10
+    )
+    stack_redgreen_play_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-Play-v0", device="cpu", num_envs=4
+    )
+    stack_bluegreen_play_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-Play-v0", device="cpu", num_envs=4
     )
     stack_blueprint_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", device="cpu", num_envs=6)
     stack_skillgen_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", device="cpu", num_envs=7)
     stack_rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=2)
     stack_rgb_alt_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0", device="cpu", num_envs=3)
+    stack_rgb_alt_play_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-Play-v0", device="cpu", num_envs=3
+    )
     stack_visuomotor_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", device="cpu", num_envs=4)
     stack_visuomotor_cosmos_cfg = parse_cfg.parse_env_cfg(
         "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0", device="cpu", num_envs=5
@@ -351,6 +375,8 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert lift_ik_abs_cfg.num_envs == 6
     assert type(lift_ik_rel_cfg).__name__ == "MacFrankaLiftEnvCfg"
     assert lift_ik_rel_cfg.num_envs == 7
+    assert type(lift_ik_rel_play_cfg).__name__ == "MacFrankaLiftEnvCfg"
+    assert lift_ik_rel_play_cfg.num_envs == 8
     assert type(openarm_lift_cfg).__name__ == "MacOpenArmLiftEnvCfg"
     assert openarm_lift_cfg.num_envs == 8
     assert openarm_lift_cfg.action_space == 8
@@ -361,6 +387,10 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_instance_cfg.num_envs == 9
     assert stack_instance_cfg.action_space == 8
     assert stack_instance_cfg.observation_space == 35
+    assert type(stack_instance_play_cfg).__name__ == "MacFrankaStackInstanceRandomizeEnvCfg"
+    assert stack_instance_play_cfg.num_envs == 9
+    assert type(stack_instance_ik_abs_cfg).__name__ == "MacFrankaStackInstanceRandomizeEnvCfg"
+    assert stack_instance_ik_abs_cfg.num_envs == 10
     assert type(stack_instance_ik_rel_cfg).__name__ == "MacFrankaStackInstanceRandomizeEnvCfg"
     assert stack_instance_ik_rel_cfg.num_envs == 10
     assert type(stack_cfg).__name__ == "MacFrankaStackEnvCfg"
@@ -368,11 +398,17 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_cfg.action_space == 8
     assert type(stack_ik_rel_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_ik_rel_cfg.num_envs == 9
+    assert type(stack_ik_abs_play_cfg).__name__ == "MacFrankaStackEnvCfg"
+    assert stack_ik_abs_play_cfg.num_envs == 10
     assert type(stack_ik_rel_play_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_ik_rel_play_cfg.num_envs == 10
     assert stack_ik_rel_play_cfg.action_space == 8
     assert stack_ik_rel_play_cfg.semantic_contract == "reduced-analytic-stack"
     assert stack_ik_rel_play_cfg.upstream_alias_semantics_preserved is False
+    assert type(stack_redgreen_play_cfg).__name__ == "MacFrankaStackEnvCfg"
+    assert stack_redgreen_play_cfg.num_envs == 4
+    assert type(stack_bluegreen_play_cfg).__name__ == "MacFrankaStackEnvCfg"
+    assert stack_bluegreen_play_cfg.num_envs == 4
     assert type(stack_blueprint_cfg).__name__ == "MacFrankaStackBlueprintEnvCfg"
     assert stack_blueprint_cfg.num_envs == 6
     assert stack_blueprint_cfg.semantic_contract == "reduced-no-blueprint"
@@ -387,6 +423,8 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_rgb_cfg.observation_space == 42
     assert type(stack_rgb_alt_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
     assert stack_rgb_alt_cfg.num_envs == 3
+    assert type(stack_rgb_alt_play_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
+    assert stack_rgb_alt_play_cfg.num_envs == 3
     assert type(stack_visuomotor_cfg).__name__ == "MacFrankaStackVisuomotorEnvCfg"
     assert stack_visuomotor_cfg.num_envs == 4
     assert stack_visuomotor_cfg.action_space == 8

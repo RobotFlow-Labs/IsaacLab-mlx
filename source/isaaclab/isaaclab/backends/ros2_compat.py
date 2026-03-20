@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from pathlib import Path
 import shutil
@@ -73,6 +73,31 @@ class Ros2MessageEnvelope:
             "frame_id": self.frame_id,
             "stamp_ns": self.stamp_ns,
             "batch_index": self.batch_index,
+        }
+
+
+@dataclass(frozen=True)
+class Ros2BatchPublishRecord:
+    """Serializable record for one batch publish attempt through the ROS 2 CLI."""
+
+    batch_index: int
+    topic: str
+    msg_type: str
+    command: tuple[str, ...]
+    returncode: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "kind": "ros2_batch_publish_record",
+            "batch_index": self.batch_index,
+            "topic": self.topic,
+            "msg_type": self.msg_type,
+            "command": list(self.command),
+            "returncode": self.returncode,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
         }
 
 
@@ -353,26 +378,71 @@ class Ros2ProcessBridge:
         indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=topic_root)
         return [self.build_topic_pub_command(envelope, once=once) for _, envelope in indexed_envelopes]
 
+    def build_batch_publish_manifest(
+        self,
+        envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
+        *,
+        once: bool = True,
+    ) -> list[Ros2BatchPublishRecord]:
+        """Build a replay-safe batch publish manifest in typed batch-index order."""
+
+        if not envelopes:
+            return []
+        indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=_topic_root_for_batch(envelopes[0].topic))
+        return [
+            Ros2BatchPublishRecord(
+                batch_index=batch_index,
+                topic=envelope.topic,
+                msg_type=envelope.msg_type,
+                command=tuple(self.build_topic_pub_command(envelope, once=once)),
+            )
+            for batch_index, envelope in indexed_envelopes
+        ]
+
     def publish_batch_via_cli(
         self,
         envelopes: list[Ros2MessageEnvelope] | tuple[Ros2MessageEnvelope, ...],
         *,
         once: bool = True,
         check: bool = True,
-    ) -> list[subprocess.CompletedProcess[str]]:
+    ) -> list[Ros2BatchPublishRecord]:
         """Publish a typed ROS batch sequentially in batch-index order."""
 
         if not envelopes:
             return []
         indexed_envelopes = _sorted_batch_envelopes(envelopes, topic_root=_topic_root_for_batch(envelopes[0].topic))
-        results: list[subprocess.CompletedProcess[str]] = []
+        results: list[Ros2BatchPublishRecord] = []
         for batch_index, envelope in indexed_envelopes:
+            record = Ros2BatchPublishRecord(
+                batch_index=batch_index,
+                topic=envelope.topic,
+                msg_type=envelope.msg_type,
+                command=tuple(self.build_topic_pub_command(envelope, once=once)),
+            )
             try:
-                results.append(self.publish_via_cli(envelope, once=once, check=check))
+                completed = self.publish_via_cli(envelope, once=once, check=check)
             except subprocess.CalledProcessError as exc:
-                raise RuntimeError(
-                    f"ROS 2 batch publish failed at batch_index={batch_index} topic='{envelope.topic}'"
-                ) from exc
+                failed_record = replace(
+                    record,
+                    returncode=exc.returncode,
+                    stdout=exc.output or "",
+                    stderr=exc.stderr or "",
+                )
+                results.append(failed_record)
+                error = RuntimeError(
+                    f"ROS 2 batch publish failed at batch_index={batch_index} topic='{envelope.topic}' "
+                    f"returncode={exc.returncode}"
+                )
+                error.batch_publish_manifest = [item.state_dict() for item in results]
+                raise error from exc
+            results.append(
+                replace(
+                    record,
+                    returncode=completed.returncode,
+                    stdout=completed.stdout or "",
+                    stderr=completed.stderr or "",
+                )
+            )
         return results
 
     def build_topic_echo_command(self, topic: str, *, once: bool = True) -> list[str]:

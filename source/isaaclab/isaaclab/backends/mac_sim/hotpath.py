@@ -823,6 +823,9 @@ _franka_stack_object_step_compiled = mx.compile(_franka_stack_object_step_impl)
 _franka_stack_object_step_metal = None
 _franka_stack_object_hotpath_initialized = False
 FRANKA_STACK_HOTPATH_BACKEND = HOTPATH_BACKEND
+_franka_lift_object_step_metal = None
+_franka_lift_hotpath_initialized = False
+FRANKA_LIFT_HOTPATH_BACKEND = HOTPATH_BACKEND
 _franka_stack_rgb_step_metal = None
 _franka_stack_rgb_hotpath_initialized = False
 FRANKA_STACK_RGB_HOTPATH_BACKEND = HOTPATH_BACKEND
@@ -928,6 +931,57 @@ def _build_franka_stack_object_metal_kernel():
         return None
 
 
+def _build_franka_lift_object_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float physics_dt = params[0];
+        float gripper_lower_limit = params[1];
+        float gripper_upper_limit = params[2];
+        float gripper_closed_threshold = params[3];
+        float grasp_distance_threshold = params[4];
+        float grasp_offset_z = params[5];
+        float table_height = params[6];
+
+        float3 cube = float3(cube_pos_w[env_id * 3 + 0], cube_pos_w[env_id * 3 + 1], cube_pos_w[env_id * 3 + 2]);
+        float3 ee = float3(ee_pos_w[env_id * 3 + 0], ee_pos_w[env_id * 3 + 1], ee_pos_w[env_id * 3 + 2]);
+        float gripper_joint = gripper_joint_pos[env_id];
+        float gripper_action_value = gripper_action[env_id];
+        float grasped_prev = grasped[env_id];
+
+        float gripper_target = gripper_action_value < 0.0f ? gripper_lower_limit : gripper_upper_limit;
+        float gripper_velocity = (gripper_target - gripper_joint) / physics_dt;
+
+        float3 diff = cube - ee;
+        float dist_to_cube = metal::length(diff);
+        bool gripper_closed = gripper_target <= gripper_closed_threshold;
+        bool can_grasp = dist_to_cube <= grasp_distance_threshold;
+        bool next_grasped = (grasped_prev > 0.5f || (can_grasp && gripper_closed)) && gripper_closed;
+
+        float3 attached_cube = ee + float3(0.0f, 0.0f, -grasp_offset_z);
+        float resting_z = metal::max(table_height, cube.z - physics_dt * 0.35f);
+        float3 resting_cube = float3(cube.x, cube.y, resting_z);
+        float3 next_cube = next_grasped ? attached_cube : resting_cube;
+
+        gripper_target_out[env_id] = gripper_target;
+        gripper_velocity_out[env_id] = gripper_velocity;
+        next_grasped_out[env_id] = next_grasped ? 1.0f : 0.0f;
+        next_cube_pos_out[env_id * 3 + 0] = next_cube.x;
+        next_cube_pos_out[env_id * 3 + 1] = next_cube.y;
+        next_cube_pos_out[env_id * 3 + 2] = next_cube.z;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="franka_lift_object_step",
+            input_names=["cube_pos_w", "ee_pos_w", "gripper_joint_pos", "gripper_action", "grasped", "params"],
+            output_names=["gripper_target_out", "gripper_velocity_out", "next_grasped_out", "next_cube_pos_out"],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
 def _ensure_franka_stack_object_hotpath() -> None:
     global _franka_stack_object_step_metal
     global _franka_stack_object_hotpath_initialized
@@ -943,6 +997,23 @@ def _ensure_franka_stack_object_hotpath() -> None:
 def get_franka_stack_hotpath_backend() -> str:
     _ensure_franka_stack_object_hotpath()
     return FRANKA_STACK_HOTPATH_BACKEND
+
+
+def _ensure_franka_lift_hotpath() -> None:
+    global _franka_lift_object_step_metal
+    global _franka_lift_hotpath_initialized
+    global FRANKA_LIFT_HOTPATH_BACKEND
+    if _franka_lift_hotpath_initialized:
+        return
+    _franka_lift_hotpath_initialized = True
+    _franka_lift_object_step_metal = _build_franka_lift_object_metal_kernel()
+    if _franka_lift_object_step_metal is not None:
+        FRANKA_LIFT_HOTPATH_BACKEND = "mlx-metal-franka-lift"
+
+
+def get_franka_lift_hotpath_backend() -> str:
+    _ensure_franka_lift_hotpath()
+    return FRANKA_LIFT_HOTPATH_BACKEND
 
 
 def _build_franka_stack_rgb_metal_kernel():
@@ -1323,8 +1394,272 @@ def ur10e_end_effector_pose_hotpath(joint_pos: mx.array) -> tuple[mx.array, mx.a
     return _ur10e_end_effector_pose_compiled(joint_pos)
 
 
-franka_lift_object_step_hotpath = mx.compile(_franka_lift_object_step_impl)
-franka_cabinet_step_hotpath = mx.compile(_franka_cabinet_step_impl)
+_franka_cabinet_step_compiled = mx.compile(_franka_cabinet_step_impl)
+_franka_cabinet_step_metal = None
+_franka_cabinet_hotpath_initialized = False
+FRANKA_CABINET_HOTPATH_BACKEND = HOTPATH_BACKEND
+
+
+def _build_franka_cabinet_metal_kernel():
+    if not hasattr(mx, "fast") or not hasattr(mx.fast, "metal_kernel"):
+        return None
+    source = r"""
+        uint env_id = thread_position_in_grid.x;
+        float physics_dt = params[0];
+        float gripper_lower_limit = params[1];
+        float gripper_upper_limit = params[2];
+        float gripper_closed_threshold = params[3];
+        float handle_grasp_threshold = params[4];
+        float drawer_open_distance_max = params[5];
+        float drawer_success_distance = params[6];
+
+        float3 handle_anchor = float3(
+            handle_anchor_pos_w[env_id * 3 + 0],
+            handle_anchor_pos_w[env_id * 3 + 1],
+            handle_anchor_pos_w[env_id * 3 + 2]
+        );
+        float3 ee = float3(ee_pos_w[env_id * 3 + 0], ee_pos_w[env_id * 3 + 1], ee_pos_w[env_id * 3 + 2]);
+        float gripper_joint = gripper_joint_pos[env_id];
+        float gripper_action_value = gripper_action[env_id];
+        float grasped_prev = grasped[env_id];
+        float opened_prev = opened[env_id];
+        float drawer_open_prev = drawer_open_amount[env_id];
+
+        float gripper_target = gripper_action_value < 0.0f ? gripper_lower_limit : gripper_upper_limit;
+        float gripper_velocity = (gripper_target - gripper_joint) / physics_dt;
+        float3 current_handle = float3(handle_anchor.x + drawer_open_prev, handle_anchor.y, handle_anchor.z);
+        float3 handle_delta = current_handle - ee;
+        float dist_to_handle = metal::sqrt(
+            handle_delta.x * handle_delta.x + handle_delta.y * handle_delta.y + handle_delta.z * handle_delta.z
+        );
+        float gripper_closed = gripper_target <= gripper_closed_threshold ? 1.0f : 0.0f;
+        float can_grasp = dist_to_handle <= handle_grasp_threshold ? 1.0f : 0.0f;
+        float next_grasped = ((grasped_prev > 0.5f || can_grasp > 0.5f) && gripper_closed > 0.5f && opened_prev <= 0.5f)
+            ? 1.0f
+            : 0.0f;
+
+        float pulled_open = metal::clamp(ee.x - handle_anchor.x, 0.0f, drawer_open_distance_max);
+        float next_drawer_open = next_grasped > 0.5f ? pulled_open : drawer_open_prev;
+        float next_opened = (opened_prev > 0.5f || next_drawer_open >= drawer_success_distance) ? 1.0f : 0.0f;
+        next_grasped = next_grasped * (1.0f - next_opened);
+
+        float3 next_handle = float3(handle_anchor.x + next_drawer_open, handle_anchor.y, handle_anchor.z);
+
+        gripper_target_out[env_id] = gripper_target;
+        gripper_velocity_out[env_id] = gripper_velocity;
+        next_grasped_out[env_id] = next_grasped;
+        next_opened_out[env_id] = next_opened;
+        next_drawer_open_amount_out[env_id] = next_drawer_open;
+        next_handle_pos_w[env_id * 3 + 0] = next_handle.x;
+        next_handle_pos_w[env_id * 3 + 1] = next_handle.y;
+        next_handle_pos_w[env_id * 3 + 2] = next_handle.z;
+    """
+    try:
+        return mx.fast.metal_kernel(
+            name="franka_cabinet_step",
+            input_names=[
+                "handle_anchor_pos_w",
+                "ee_pos_w",
+                "gripper_joint_pos",
+                "gripper_action",
+                "grasped",
+                "opened",
+                "drawer_open_amount",
+                "params",
+            ],
+            output_names=[
+                "gripper_target_out",
+                "gripper_velocity_out",
+                "next_grasped_out",
+                "next_opened_out",
+                "next_drawer_open_amount_out",
+                "next_handle_pos_w",
+            ],
+            source=source,
+        )
+    except Exception:
+        return None
+
+
+def _ensure_franka_cabinet_hotpath() -> None:
+    global _franka_cabinet_step_metal
+    global _franka_cabinet_hotpath_initialized
+    global FRANKA_CABINET_HOTPATH_BACKEND
+    if _franka_cabinet_hotpath_initialized:
+        return
+    _franka_cabinet_hotpath_initialized = True
+    _franka_cabinet_step_metal = _build_franka_cabinet_metal_kernel()
+    if _franka_cabinet_step_metal is not None:
+        FRANKA_CABINET_HOTPATH_BACKEND = "mlx-metal-franka-cabinet"
+
+
+def get_franka_cabinet_hotpath_backend() -> str:
+    _ensure_franka_cabinet_hotpath()
+    return FRANKA_CABINET_HOTPATH_BACKEND
+
+
+def franka_cabinet_step_hotpath(
+    handle_anchor_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    grasped: mx.array,
+    opened: mx.array,
+    drawer_open_amount: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    handle_grasp_threshold: float,
+    drawer_open_distance_max: float,
+    drawer_success_distance: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array, mx.array, mx.array]:
+    _ensure_franka_cabinet_hotpath()
+    handle_anchor_pos_w = mx.array(handle_anchor_pos_w, dtype=mx.float32)
+    ee_pos_w = mx.array(ee_pos_w, dtype=mx.float32)
+    gripper_joint_pos = mx.array(gripper_joint_pos, dtype=mx.float32)
+    gripper_action = mx.array(gripper_action, dtype=mx.float32)
+    grasped = mx.array(grasped, dtype=mx.bool_)
+    opened = mx.array(opened, dtype=mx.bool_)
+    drawer_open_amount = mx.array(drawer_open_amount, dtype=mx.float32)
+    if _franka_cabinet_step_metal is None:
+        return _franka_cabinet_step_compiled(
+            handle_anchor_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped,
+            opened,
+            drawer_open_amount,
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            handle_grasp_threshold,
+            drawer_open_distance_max,
+            drawer_success_distance,
+        )
+    if int(handle_anchor_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0, 3), dtype=mx.float32),
+        )
+    params = mx.array(
+        [
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            handle_grasp_threshold,
+            drawer_open_distance_max,
+            drawer_success_distance,
+        ],
+        dtype=mx.float32,
+    )
+    outputs = _franka_cabinet_step_metal(
+        inputs=[
+            handle_anchor_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped,
+            opened,
+            drawer_open_amount,
+            params,
+        ],
+        grid=(int(handle_anchor_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            (int(handle_anchor_pos_w.shape[0]),),
+            (int(handle_anchor_pos_w.shape[0]),),
+            (int(handle_anchor_pos_w.shape[0]),),
+            (int(handle_anchor_pos_w.shape[0]),),
+            (int(handle_anchor_pos_w.shape[0]),),
+            tuple(handle_anchor_pos_w.shape),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return (
+        outputs[0],
+        outputs[1],
+        outputs[2].astype(mx.bool_),
+        outputs[3].astype(mx.bool_),
+        outputs[4],
+        outputs[5],
+    )
+
+
+def franka_lift_object_step_hotpath(
+    cube_pos_w: mx.array,
+    ee_pos_w: mx.array,
+    gripper_joint_pos: mx.array,
+    gripper_action: mx.array,
+    grasped: mx.array,
+    physics_dt: float,
+    gripper_lower_limit: float,
+    gripper_upper_limit: float,
+    gripper_closed_threshold: float,
+    grasp_distance_threshold: float,
+    grasp_offset_z: float,
+    table_height: float,
+) -> tuple[mx.array, mx.array, mx.array, mx.array]:
+    _ensure_franka_lift_hotpath()
+    cube_pos_w = mx.array(cube_pos_w, dtype=mx.float32)
+    ee_pos_w = mx.array(ee_pos_w, dtype=mx.float32)
+    gripper_joint_pos = mx.array(gripper_joint_pos, dtype=mx.float32)
+    gripper_action = mx.array(gripper_action, dtype=mx.float32)
+    grasped = mx.array(grasped, dtype=mx.float32)
+    if _franka_lift_object_step_metal is None:
+        return _franka_lift_object_step_impl(
+            cube_pos_w,
+            ee_pos_w,
+            gripper_joint_pos,
+            gripper_action,
+            grasped.astype(mx.bool_),
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+        )
+    if int(cube_pos_w.shape[0]) == 0:
+        return (
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.float32),
+            mx.zeros((0,), dtype=mx.bool_),
+            mx.zeros((0, 3), dtype=mx.float32),
+        )
+    params = mx.array(
+        [
+            physics_dt,
+            gripper_lower_limit,
+            gripper_upper_limit,
+            gripper_closed_threshold,
+            grasp_distance_threshold,
+            grasp_offset_z,
+            table_height,
+        ],
+        dtype=mx.float32,
+    )
+    outputs = _franka_lift_object_step_metal(
+        inputs=[cube_pos_w, ee_pos_w, gripper_joint_pos, gripper_action, grasped, params],
+        grid=(int(cube_pos_w.shape[0]), 1, 1),
+        threadgroup=(64, 1, 1),
+        output_shapes=[
+            (int(cube_pos_w.shape[0]),),
+            (int(cube_pos_w.shape[0]),),
+            (int(cube_pos_w.shape[0]),),
+            tuple(cube_pos_w.shape),
+        ],
+        output_dtypes=[mx.float32, mx.float32, mx.float32, mx.float32],
+    )
+    return outputs[0], outputs[1], outputs[2].astype(mx.bool_), outputs[3]
 
 
 def franka_stack_rgb_step_hotpath(

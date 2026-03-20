@@ -123,6 +123,12 @@ def main() -> int:
     trajectory_batch_commands = bridge.build_topic_pub_batch_commands(
         tuple(reversed(planner_plan_batch_envelopes))
     )
+    planner_batch_publish_manifest = [
+        item.state_dict() for item in bridge.build_batch_publish_manifest(tuple(reversed(planner_world_batch_envelopes)))
+    ]
+    trajectory_batch_publish_manifest = [
+        item.state_dict() for item in bridge.build_batch_publish_manifest(tuple(reversed(planner_plan_batch_envelopes)))
+    ]
 
     summary = {
         "cli_available": bridge.cli_available(),
@@ -145,6 +151,8 @@ def main() -> int:
         "trajectory_batch_size": len(restored_plan_batch),
         "planner_batch_pub_commands": planner_batch_commands,
         "trajectory_batch_pub_commands": trajectory_batch_commands,
+        "planner_batch_publish_manifest": planner_batch_publish_manifest,
+        "trajectory_batch_publish_manifest": trajectory_batch_publish_manifest,
         "message_summary": message_summary,
     }
     if args.summary_out is not None:

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T03:22:03Z",
+  "generated_at": "2026-03-20T03:40:35Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -26,7 +26,7 @@
     "agibot-place-toy2box": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-lift",
         "observation_dim": 34,
         "output_signature": {
           "final_cube_distance_mean": 0.4789530336856842,
@@ -56,7 +56,7 @@
     "agibot-place-upright-mug": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-lift",
         "observation_dim": 34,
         "output_signature": {
           "final_cube_distance_mean": 0.5662651658058167,
@@ -295,7 +295,7 @@
     "franka-cabinet": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-cabinet",
         "observation_dim": 28,
         "output_signature": {
           "final_drawer_open_mean": 0.0,
@@ -320,7 +320,7 @@
     "franka-lift": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-lift",
         "observation_dim": 27,
         "output_signature": {
           "final_cube_distance_mean": 0.48122885823249817,
@@ -344,7 +344,7 @@
     "franka-open-drawer": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-cabinet",
         "observation_dim": 28,
         "output_signature": {
           "final_drawer_open_mean": 0.0,
@@ -480,7 +480,7 @@
     "franka-teddy-bear-lift": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-lift",
         "observation_dim": 27,
         "output_signature": {
           "final_cube_distance_mean": 0.4780619144439697,
@@ -619,7 +619,7 @@
     "openarm-lift": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-lift",
         "observation_dim": 27,
         "output_signature": {
           "final_cube_distance_mean": 0.5217757225036621,
@@ -645,7 +645,7 @@
     "openarm-open-drawer": {
       "contract": {
         "action_dim": 8,
-        "hotpath": "mlx-metal-ee",
+        "hotpath": "mlx-metal-franka-cabinet",
         "observation_dim": 28,
         "output_signature": {
           "final_drawer_open_mean": 0.0,

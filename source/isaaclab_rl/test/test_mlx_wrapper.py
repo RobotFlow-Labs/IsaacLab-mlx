@@ -155,12 +155,25 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").task == "Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0"
     assert get_mlx_task_spec("Isaac-Deploy-GearAssembly-UR10e-2F85-ROS-Inference-v0").semantic_contract == "reduced-no-ros-inference"
     assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-lift")
+    assert get_mlx_task_spec("Isaac-Lift-Cube-Franka-IK-Rel-Play-v0") == get_mlx_task_spec("franka-lift")
     assert get_mlx_task_spec("Isaac-Lift-Cube-OpenArm-Play-v0") == get_mlx_task_spec("openarm-lift")
     assert get_mlx_task_spec("Isaac-Lift-Teddy-Bear-Franka-IK-Abs-v0") == get_mlx_task_spec("franka-teddy-bear-lift")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-Play-v0") == get_mlx_task_spec(
+        "franka-stack-instance-randomize"
+    )
+    assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Abs-v0") == get_mlx_task_spec(
+        "franka-stack-instance-randomize"
+    )
     assert get_mlx_task_spec("Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0") == get_mlx_task_spec(
         "franka-stack-instance-randomize"
     )
+    assert get_mlx_task_spec("Isaac-Stack-Cube-Franka-IK-Abs-Play-v0") == get_mlx_task_spec("franka-stack")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-RedGreen-Franka-IK-Rel-Play-v0") == get_mlx_task_spec("franka-stack")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreen-Franka-IK-Rel-Play-v0") == get_mlx_task_spec("franka-stack")
     assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0") == get_mlx_task_spec("franka-stack-rgb")
+    assert get_mlx_task_spec("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-Play-v0") == get_mlx_task_spec(
+        "franka-stack-rgb"
+    )
     assert get_mlx_task_spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0") == get_mlx_task_spec("franka-bin-stack")
     assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-Abs-v0").task == "Isaac-PickPlace-GR1T2-Abs-v0"
     assert get_mlx_task_spec("Isaac-PickPlace-GR1T2-Abs-v0").semantic_contract == "reduced-pick-place-surrogate"
