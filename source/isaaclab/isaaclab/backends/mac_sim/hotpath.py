@@ -614,7 +614,7 @@ def _build_anymal_body_positions_metal_kernel():
         uint root_base = env_id * 3;
         uint joint_base = env_id * joint_dim;
         uint command_base = env_id * 3;
-        uint body_base = env_id * 9;
+        uint body_base = env_id * 27;
 
         float root_x = root_pos_w[root_base + 0];
         float root_y = root_pos_w[root_base + 1];
