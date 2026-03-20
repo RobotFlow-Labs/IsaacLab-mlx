@@ -185,6 +185,21 @@ MAC_SAFE_TASK_SPECS = (
         ),
     },
     {
+        "id": "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacUR10eDeployReachEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacUR10eDeployReachRosInferenceEnvCfg",
+            },
+            semantic_contract="reduced-no-ros-inference",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native UR10e deploy reach slice preserves the joint-space reach workflow, "
+                "but it does not include the upstream ROS inference transport or deployed-robot runtime stack."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacUR10eGearAssembly2F140Env",
         "kwargs": _with_task_contract(
@@ -377,6 +392,38 @@ MAC_SAFE_TASK_SPECS = (
         },
     },
     {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackVisuomotorEnvCfg",
+            },
+            semantic_contract="reduced-visuomotor-surrogate",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native visuomotor Franka stack slice preserves the three-cube stack workflow "
+                "with synthetic RGB observations and analytic object dynamics instead of the upstream "
+                "robomimic image stack."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackRgbEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackVisuomotorCosmosEnvCfg",
+            },
+            semantic_contract="reduced-no-cosmos",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native visuomotor-cosmos Franka stack slice preserves the three-cube stack workflow "
+                "with synthetic RGB observations, but it does not include the upstream robomimic visuomotor stack "
+                "or the Cosmos multimodal image contract for RGB, segmentation, normals, and depth channels."
+            ),
+        ),
+    },
+    {
         "id": "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
         "entry_point": "isaaclab.backends.mac_sim:MacFrankaBinStackEnv",
         "kwargs": _with_task_contract(
@@ -397,6 +444,36 @@ MAC_SAFE_TASK_SPECS = (
         "kwargs": {
             "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackEnvCfg",
         },
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackBlueprintEnvCfg",
+            },
+            semantic_contract="reduced-no-blueprint",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native blueprint Franka stack slice preserves the stack workflow but does not include "
+                "the upstream blueprint-conditioned generation semantics."
+            ),
+        ),
+    },
+    {
+        "id": "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
+        "entry_point": "isaaclab.backends.mac_sim:MacFrankaStackEnv",
+        "kwargs": _with_task_contract(
+            {
+                "env_cfg_entry_point": "isaaclab.backends.mac_sim.env_cfgs:MacFrankaStackSkillgenEnvCfg",
+            },
+            semantic_contract="reduced-no-skillgen",
+            upstream_alias_semantics_preserved=False,
+            contract_notes=(
+                "The mac-native skillgen Franka stack slice preserves the stack workflow but does not include "
+                "the upstream skill-generation or demonstration-conditioned behavior."
+            ),
+        ),
     },
     {
         "id": "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",

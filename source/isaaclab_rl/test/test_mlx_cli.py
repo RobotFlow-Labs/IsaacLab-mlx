@@ -452,7 +452,7 @@ def test_mlx_cli_module_normalizes_upstream_manipulation_aliases(tmp_path: Path)
     assert Path(train_payload["checkpoint_path"]).exists()
 
 
-def test_mlx_cli_module_handles_lift_alias_and_rejects_unsupported_manipulation_id(tmp_path: Path):
+def test_mlx_cli_module_handles_lift_alias_and_reduced_manipulation_aliases(tmp_path: Path):
     train_output_path = tmp_path / "module-lift-alias-train.json"
     checkpoint_path = tmp_path / "module-lift-alias-policy.npz"
 
@@ -491,24 +491,95 @@ def test_mlx_cli_module_handles_lift_alias_and_rejects_unsupported_manipulation_
     assert train_payload["task"] == "franka-lift"
     assert Path(train_payload["checkpoint_path"]).exists()
 
-    unsupported_result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "isaaclab_rl.mlx_cli",
-            "evaluate",
-            "--task",
+    for alias_task, canonical_task, semantic_contract, file_stem in (
+        ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference", "ur10e-ros"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "franka-blueprint"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "franka-skillgen"),
+        (
             "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
-        ],
-        cwd=_repo_root(),
-        env=_module_env(),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+            "franka-stack-rgb",
+            "reduced-visuomotor-surrogate",
+            "franka-visuomotor",
+        ),
+        (
+            "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
+            "franka-stack-rgb",
+            "reduced-no-cosmos",
+            "franka-cosmos",
+        ),
+    ):
+        alias_eval_output_path = tmp_path / f"{file_stem}-eval.json"
+        alias_eval_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "evaluate",
+                "--task",
+                alias_task,
+                "--num-envs",
+                "8",
+                "--episodes",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--max-steps",
+                "256",
+                "--json-out",
+                str(alias_eval_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
-    assert unsupported_result.returncode != 0
-    assert "invalid choice" in unsupported_result.stderr
+        assert alias_eval_result.returncode == 0, alias_eval_result.stderr
+        alias_eval_payload = json.loads(alias_eval_output_path.read_text(encoding="utf-8"))
+        assert alias_eval_payload["task"] == canonical_task
+        assert alias_eval_payload["episodes_completed"] == 1
+        assert alias_eval_payload["task_spec"]["semantic_contract"] == semantic_contract
+        assert alias_eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+        alias_train_output_path = tmp_path / f"{file_stem}-train.json"
+        alias_checkpoint_path = tmp_path / f"{file_stem}-policy.npz"
+        alias_train_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "isaaclab_rl.mlx_cli",
+                "train",
+                "--task",
+                alias_task,
+                "--num-envs",
+                "8",
+                "--updates",
+                "1",
+                "--rollout-steps",
+                "8",
+                "--epochs-per-update",
+                "1",
+                "--episode-length-s",
+                "0.5",
+                "--checkpoint",
+                str(alias_checkpoint_path),
+                "--json-out",
+                str(alias_train_output_path),
+            ],
+            cwd=_repo_root(),
+            env=_module_env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert alias_train_result.returncode == 0, alias_train_result.stderr
+        alias_train_payload = json.loads(alias_train_output_path.read_text(encoding="utf-8"))
+        assert alias_train_payload["task"] == canonical_task
+        assert Path(alias_train_payload["checkpoint_path"]).exists()
+        assert alias_train_payload["task_spec"]["semantic_contract"] == semantic_contract
+        assert alias_train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
 
 
 def test_mlx_cli_module_handles_teddy_bear_lift_alias(tmp_path: Path):

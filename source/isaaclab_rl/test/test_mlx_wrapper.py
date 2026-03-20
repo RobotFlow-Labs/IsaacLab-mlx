@@ -142,6 +142,46 @@ def test_public_mlx_wrapper_normalizes_upstream_manipulation_alias_specs():
     assert get_mlx_task_spec("Isaac-Open-Drawer-OpenArm-Play-v0") == get_mlx_task_spec("openarm-open-drawer")
 
 
+@pytest.mark.parametrize(
+    ("alias_task", "canonical_task", "semantic_contract", "note_fragment"),
+    (
+        ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference", "ros inference"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint", "blueprint"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen", "skill-generation"),
+        (
+            "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+            "franka-stack-rgb",
+            "reduced-visuomotor-surrogate",
+            "synthetic rgb",
+        ),
+        (
+            "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
+            "franka-stack-rgb",
+            "reduced-no-cosmos",
+            "cosmos",
+        ),
+    ),
+)
+def test_public_mlx_wrapper_exposes_reduced_alias_specs(
+    alias_task: str,
+    canonical_task: str,
+    semantic_contract: str,
+    note_fragment: str,
+):
+    """Reduced upstream aliases should carry explicit non-parity task specs."""
+
+    alias_spec = get_mlx_task_spec(alias_task)
+    canonical_spec = get_mlx_task_spec(canonical_task)
+
+    assert alias_spec.task == alias_task
+    assert alias_spec.trainable is canonical_spec.trainable
+    assert alias_spec.default_hidden_dim == canonical_spec.default_hidden_dim
+    assert alias_spec.default_action_std == canonical_spec.default_action_std
+    assert alias_spec.semantic_contract == semantic_contract
+    assert alias_spec.upstream_alias_semantics_preserved is False
+    assert note_fragment in alias_spec.notes.lower()
+
+
 def test_train_and_evaluate_anymal_via_public_mlx_wrapper(tmp_path: Path):
     """The MLX wrapper should provide a stable train/evaluate surface for locomotion tasks."""
     checkpoint_path = tmp_path / "anymal-wrapper-policy.npz"
@@ -1189,6 +1229,57 @@ def test_train_and_evaluate_upstream_manipulation_aliases_via_public_mlx_wrapper
     assert open_drawer_eval_payload["episodes_completed"] == 1
 
 
+@pytest.mark.parametrize(
+    ("alias_task", "canonical_task", "semantic_contract"),
+    (
+        ("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", "ur10e-deploy-reach", "reduced-no-ros-inference"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", "franka-stack", "reduced-no-blueprint"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", "franka-stack", "reduced-no-skillgen"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", "franka-stack-rgb", "reduced-visuomotor-surrogate"),
+        ("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0", "franka-stack-rgb", "reduced-no-cosmos"),
+    ),
+)
+def test_train_and_evaluate_reduced_upstream_aliases_via_public_mlx_wrapper(
+    tmp_path: Path,
+    alias_task: str,
+    canonical_task: str,
+    semantic_contract: str,
+):
+    """Reduced upstream aliases should train and replay while preserving canonical task ids in payloads."""
+
+    checkpoint_path = tmp_path / f"{canonical_task}-{semantic_contract}-wrapper-policy.npz"
+
+    train_payload = train_mlx_task(
+        alias_task,
+        num_envs=8,
+        updates=1,
+        rollout_steps=8,
+        epochs_per_update=1,
+        hidden_dim=32,
+        checkpoint=str(checkpoint_path),
+        eval_interval=1,
+        episode_length_s=0.5,
+        seed=79,
+    )
+    eval_payload = evaluate_mlx_task(
+        alias_task,
+        checkpoint=str(checkpoint_path),
+        episodes=1,
+        episode_length_s=0.5,
+        seed=79,
+    )
+
+    assert train_payload["task"] == canonical_task
+    assert Path(train_payload["checkpoint_path"]).exists()
+    assert train_payload["task_spec"]["semantic_contract"] == semantic_contract
+    assert train_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+    assert eval_payload["task"] == canonical_task
+    assert eval_payload["mode"] == "checkpoint"
+    assert eval_payload["episodes_completed"] == 1
+    assert eval_payload["task_spec"]["semantic_contract"] == semantic_contract
+    assert eval_payload["task_spec"]["upstream_alias_semantics_preserved"] is False
+
+
 def test_public_mlx_wrapper_rejects_non_trainable_tasks():
     """The wrapper should fail explicitly when training is requested for eval-only tasks."""
     with pytest.raises(ValueError, match="does not expose an MLX training surface"):
@@ -1201,13 +1292,13 @@ def test_public_mlx_wrapper_rejects_unknown_tasks():
         get_mlx_task_spec("shadow-hand-vision")
 
     with pytest.raises(ValueError, match="Unsupported MLX task"):
-        get_mlx_task_spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
+        get_mlx_task_spec("Isaac-Tracking-LocoManip-Digit-v0")
 
     with pytest.raises(ValueError, match="Unsupported MLX evaluation task"):
         evaluate_mlx_task("shadow-hand-vision")
 
     with pytest.raises(ValueError, match="Unsupported MLX evaluation task"):
-        evaluate_mlx_task("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
+        evaluate_mlx_task("Isaac-Tracking-LocoManip-Digit-v0")
 
 
 def test_public_mlx_wrapper_rejects_checkpoint_for_eval_only_tasks():

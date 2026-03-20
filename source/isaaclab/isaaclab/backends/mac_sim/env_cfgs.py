@@ -442,8 +442,13 @@ class MacUR10eDeployReachEnvCfg:
     target_pitch_range: tuple[float, float] = (-math.pi / 6.0, math.pi / 6.0)
     target_yaw_range: tuple[float, float] = (-math.pi / 2.0 - 2.0 * math.pi / 3.0, -math.pi / 2.0 + 2.0 * math.pi / 3.0)
 
+    task_name: str = "ur10e-deploy-reach"
     semantic_contract: str = "reduced-analytic-pose"
     upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "This mac-native slice preserves the UR10e deploy-reach joint-space pose workflow with "
+        "analytic pose tracking instead of the full deployment frame-transform and ROS inference stack."
+    )
     seed: int = 42
 
 
@@ -460,8 +465,22 @@ class MacUR10ReachEnvCfg(MacUR10eDeployReachEnvCfg):
     target_roll_range: tuple[float, float] = (-math.pi / 6.0, math.pi / 6.0)
     target_pitch_range: tuple[float, float] = (math.pi / 2.0, math.pi / 2.0)
     target_yaw_range: tuple[float, float] = (-math.pi / 2.0, math.pi / 2.0)
+    task_name: str = "ur10-reach"
     semantic_contract: str = "reduced-analytic-pose"
     upstream_alias_semantics_preserved: bool = False
+
+
+@configclass
+class MacUR10eDeployReachRosInferenceEnvCfg(MacUR10eDeployReachEnvCfg):
+    """Reduced mac-native UR10e deploy-reach configuration for the ROS-inference variant."""
+
+    task_name: str = "ur10e-deploy-reach"
+    semantic_contract: str = "reduced-no-ros-inference"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native UR10e deploy-reach slice preserves the joint-space reach workflow, but it "
+        "does not include the upstream ROS inference transport or deployed-robot runtime stack."
+    )
 
 
 @configclass
@@ -488,6 +507,7 @@ class MacUR10eGearAssembly2F140EnvCfg(MacUR10eDeployReachEnvCfg):
     insertion_reward_scale: float = 1.1
     insertion_reward_gain: float = 6.0
     gear_type_offsets_x: tuple[float, float, float] = (0.076125, 0.030375, -0.045375)
+    task_name: str = "ur10e-gear-assembly-2f140"
     semantic_contract: str = "reduced-analytic-assembly"
     upstream_alias_semantics_preserved: bool = False
     gripper_variant: str = "2f140"
@@ -508,6 +528,7 @@ class MacUR10eGearAssembly2F85EnvCfg(MacUR10eGearAssembly2F140EnvCfg):
     insertion_success_depth: float = 0.044
     insertion_rate: float = 0.16
     insertion_reward_scale: float = 1.0
+    task_name: str = "ur10e-gear-assembly-2f85"
     gripper_variant: str = "2f85"
     contract_notes: str = (
         "This mac-native slice preserves the UR10e gear-assembly pose-command workflow with "
@@ -696,6 +717,10 @@ class MacFrankaStackEnvCfg(MacFrankaLiftEnvCfg):
 
     observation_space: int = 33
     episode_length_s: float = 10.0
+    task_name: str = "franka-stack"
+    semantic_contract: str = "aligned"
+    upstream_alias_semantics_preserved: bool = True
+    contract_notes: str = "Analytic two-cube stack slice."
 
     support_cube_x_range: tuple[float, float] = (0.44, 0.58)
     support_cube_y_range: tuple[float, float] = (-0.06, 0.06)
@@ -722,6 +747,7 @@ class MacFrankaStackInstanceRandomizeEnvCfg(MacFrankaStackEnvCfg):
     support_cube_y_range: tuple[float, float] = (-0.07, 0.07)
     movable_cube_offset_x_range: tuple[float, float] = (0.08, 0.18)
     movable_cube_offset_y_range: tuple[float, float] = (0.05, 0.14)
+    task_name: str = "franka-stack-instance-randomize"
     variant_count: int = 4
     variant_labels: tuple[str, ...] = ("blue", "red", "yellow", "green")
 
@@ -778,6 +804,10 @@ class MacFrankaStackRgbEnvCfg(MacFrankaStackEnvCfg):
 
     observation_space: int = 42
     episode_length_s: float = 12.0
+    task_name: str = "franka-stack-rgb"
+    semantic_contract: str = "aligned"
+    upstream_alias_semantics_preserved: bool = True
+    contract_notes: str = "Analytic three-cube sequential stack slice."
 
     support_cube_x_range: tuple[float, float] = (0.44, 0.56)
     support_cube_y_range: tuple[float, float] = (-0.05, 0.05)
@@ -802,6 +832,7 @@ class MacFrankaBinStackEnvCfg(MacFrankaStackRgbEnvCfg):
     """
 
     observation_space: int = 45
+    task_name: str = "franka-bin-stack"
     semantic_contract: str = "reduced-no-mimic"
     upstream_alias_semantics_preserved: bool = False
     contract_notes: str = (
@@ -817,3 +848,56 @@ class MacFrankaBinStackEnvCfg(MacFrankaStackRgbEnvCfg):
     middle_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)
     top_cube_x_range: tuple[float, float] = (0.62, 0.70)
     top_cube_y_abs_range: tuple[float, float] = (0.10, 0.18)
+
+
+@configclass
+class MacFrankaStackBlueprintEnvCfg(MacFrankaStackEnvCfg):
+    """Configuration for the reduced Franka stack blueprint variant."""
+
+    task_name: str = "franka-stack-blueprint"
+    semantic_contract: str = "reduced-no-blueprint"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native blueprint variant preserves the Franka stack workflow but does not include "
+        "the upstream blueprint-conditioned generation semantics."
+    )
+
+
+@configclass
+class MacFrankaStackSkillgenEnvCfg(MacFrankaStackEnvCfg):
+    """Configuration for the reduced Franka stack skillgen variant."""
+
+    task_name: str = "franka-stack-skillgen"
+    semantic_contract: str = "reduced-no-skillgen"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native skillgen variant preserves the Franka stack workflow but does not include "
+        "the upstream skill-generation or demonstration-conditioned behavior."
+    )
+
+
+@configclass
+class MacFrankaStackVisuomotorEnvCfg(MacFrankaStackRgbEnvCfg):
+    """Configuration for the reduced Franka stack visuomotor variant."""
+
+    task_name: str = "franka-stack-visuomotor"
+    semantic_contract: str = "reduced-visuomotor-surrogate"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native visuomotor variant preserves the three-cube stack workflow with synthetic RGB "
+        "observations and analytic object dynamics instead of the upstream robomimic image stack."
+    )
+
+
+@configclass
+class MacFrankaStackVisuomotorCosmosEnvCfg(MacFrankaStackRgbEnvCfg):
+    """Configuration for the reduced Franka stack visuomotor-cosmos variant."""
+
+    task_name: str = "franka-stack-visuomotor-cosmos"
+    semantic_contract: str = "reduced-no-cosmos"
+    upstream_alias_semantics_preserved: bool = False
+    contract_notes: str = (
+        "The mac-native visuomotor-cosmos variant preserves the three-cube stack workflow with synthetic RGB "
+        "observations, but it does not include the upstream robomimic visuomotor stack or the Cosmos multimodal "
+        "image contract for RGB, segmentation, normals, and depth channels."
+    )

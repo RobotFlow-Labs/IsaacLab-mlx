@@ -28,6 +28,7 @@ from isaaclab.utils.configclass import configclass
 
 from .env_cfgs import (
     MacFrankaBinStackEnvCfg,
+    MacFrankaStackBlueprintEnvCfg,
     MacFrankaCabinetEnvCfg,
     MacFrankaLiftEnvCfg,
     MacOpenArmBiReachEnvCfg,
@@ -39,11 +40,15 @@ from .env_cfgs import (
     MacFrankaStackEnvCfg,
     MacFrankaStackInstanceRandomizeEnvCfg,
     MacFrankaStackRgbEnvCfg,
+    MacFrankaStackSkillgenEnvCfg,
+    MacFrankaStackVisuomotorCosmosEnvCfg,
+    MacFrankaStackVisuomotorEnvCfg,
     MacFrankaTeddyBearLiftEnvCfg,
     MacUR10ReachEnvCfg,
     MacUR10eGearAssembly2F140EnvCfg,
     MacUR10eGearAssembly2F85EnvCfg,
     MacUR10eDeployReachEnvCfg,
+    MacUR10eDeployReachRosInferenceEnvCfg,
 )
 from .hotpath import (
     franka_cabinet_step_hotpath,
@@ -726,11 +731,12 @@ class MacUR10eDeployReachSimBackend(MacSimBackend):
     def state_dict(self) -> dict[str, Any]:
         return {
             "backend": self.name,
-            "task": "ur10e-deploy-reach",
+            "task": getattr(self.cfg, "task_name", "ur10e-deploy-reach"),
             "upstream_task_id": "Isaac-Deploy-Reach-UR10e-v0",
             "num_envs": self.num_envs,
             "semantic_contract": self.cfg.semantic_contract,
             "upstream_alias_semantics_preserved": self.cfg.upstream_alias_semantics_preserved,
+            "contract_notes": getattr(self.cfg, "contract_notes", ""),
             "capabilities": self.capabilities.__dict__,
             "contract": {
                 "reset_signature": self.contract.reset_signature,
@@ -1254,7 +1260,12 @@ class MacFrankaStackSimBackend(MacFrankaReachSimBackend):
 
     def state_dict(self) -> dict[str, Any]:
         payload = super().state_dict()
-        payload["task"] = "franka-stack"
+        payload["task"] = getattr(self.cfg, "task_name", "franka-stack")
+        payload["semantic_contract"] = getattr(self.cfg, "semantic_contract", "aligned")
+        payload["upstream_alias_semantics_preserved"] = getattr(
+            self.cfg, "upstream_alias_semantics_preserved", True
+        )
+        payload["contract_notes"] = getattr(self.cfg, "contract_notes", "")
         payload["subsystems"] = {
             "analytic_kinematics": True,
             "object_tracking": True,
@@ -1298,7 +1309,7 @@ class MacFrankaStackInstanceRandomizeSimBackend(MacFrankaStackSimBackend):
 
     def state_dict(self) -> dict[str, Any]:
         payload = super().state_dict()
-        payload["task"] = "franka-stack-instance-randomize"
+        payload["task"] = getattr(self.cfg, "task_name", "franka-stack-instance-randomize")
         payload["subsystems"] = {
             **payload.get("subsystems", {}),
             "instance_randomization": True,
@@ -1568,7 +1579,12 @@ class MacFrankaStackRgbSimBackend(MacFrankaReachSimBackend):
 
     def state_dict(self) -> dict[str, Any]:
         payload = super().state_dict()
-        payload["task"] = "franka-stack-rgb"
+        payload["task"] = getattr(self.cfg, "task_name", "franka-stack-rgb")
+        payload["semantic_contract"] = getattr(self.cfg, "semantic_contract", "aligned")
+        payload["upstream_alias_semantics_preserved"] = getattr(
+            self.cfg, "upstream_alias_semantics_preserved", True
+        )
+        payload["contract_notes"] = getattr(self.cfg, "contract_notes", "")
         payload["subsystems"] = {
             "analytic_kinematics": True,
             "object_tracking": True,
@@ -1635,7 +1651,7 @@ class MacFrankaBinStackSimBackend(MacFrankaStackRgbSimBackend):
 
     def state_dict(self) -> dict[str, Any]:
         payload = super().state_dict()
-        payload["task"] = "franka-bin-stack"
+        payload["task"] = getattr(self.cfg, "task_name", "franka-bin-stack")
         payload["semantic_contract"] = self.cfg.semantic_contract
         payload["upstream_alias_semantics_preserved"] = self.cfg.upstream_alias_semantics_preserved
         payload["contract_notes"] = self.cfg.contract_notes
@@ -2866,6 +2882,17 @@ def train_ur10e_deploy_reach_policy(cfg: MacUR10eDeployReachTrainCfg) -> dict[st
     )
 
 
+def train_ur10e_deploy_reach_ros_inference_policy(cfg: MacUR10eDeployReachTrainCfg) -> dict[str, Any]:
+    """Train a reduced UR10e deploy-reach ROS-inference policy on the mac-native MLX slice."""
+
+    return _train_reach_like_policy(
+        cfg,
+        env_factory=MacUR10eDeployReachEnv,
+        task_id="Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
+        log_prefix="mlx-ur10e-deploy-reach-ros-inference",
+    )
+
+
 def train_ur10_reach_policy(cfg: MacUR10ReachTrainCfg) -> dict[str, Any]:
     """Train a reduced continuous-control UR10 reach policy on the mac-native MLX slice."""
 
@@ -2909,6 +2936,25 @@ def play_ur10e_deploy_reach_policy(
     """Run a trained reduced UR10e deploy-reach policy greedily and return episode returns."""
 
     cfg = env_cfg or MacUR10eDeployReachEnvCfg(num_envs=1)
+    return _play_reach_like_policy(
+        checkpoint_path,
+        env_factory=MacUR10eDeployReachEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_ur10e_deploy_reach_ros_inference_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacUR10eDeployReachEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced UR10e deploy-reach ROS-inference policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacUR10eDeployReachRosInferenceEnvCfg(num_envs=1)
     return _play_reach_like_policy(
         checkpoint_path,
         env_factory=MacUR10eDeployReachEnv,
@@ -3365,6 +3411,28 @@ def train_franka_stack_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
     )
 
 
+def train_franka_stack_blueprint_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
+    """Train a reduced blueprint-conditioned Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacFrankaStackEnv,
+        task_id="Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
+        log_prefix="mlx-franka-stack-blueprint",
+    )
+
+
+def train_franka_stack_skillgen_policy(cfg: MacFrankaStackTrainCfg) -> dict[str, Any]:
+    """Train a reduced skillgen Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_stack_like_policy(
+        cfg,
+        env_factory=MacFrankaStackEnv,
+        task_id="Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
+        log_prefix="mlx-franka-stack-skillgen",
+    )
+
+
 def train_franka_stack_instance_randomize_policy(cfg: MacFrankaStackInstanceRandomizeTrainCfg) -> dict[str, Any]:
     """Train a lightweight continuous-control Franka instance-randomized stack policy on the mac-native MLX slice."""
 
@@ -3411,6 +3479,44 @@ def play_franka_stack_policy(
     """Run a trained Franka stack policy greedily and return episode returns."""
 
     cfg = env_cfg or MacFrankaStackEnvCfg(num_envs=1)
+    return _play_franka_stack_like_policy(
+        checkpoint_path,
+        env_factory=MacFrankaStackEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_stack_blueprint_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced blueprint Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackBlueprintEnvCfg(num_envs=1)
+    return _play_franka_stack_like_policy(
+        checkpoint_path,
+        env_factory=MacFrankaStackEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_stack_skillgen_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced skillgen Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackSkillgenEnvCfg(num_envs=1)
     return _play_franka_stack_like_policy(
         checkpoint_path,
         env_factory=MacFrankaStackEnv,
@@ -3826,6 +3932,28 @@ def train_franka_stack_rgb_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, A
     )
 
 
+def train_franka_stack_visuomotor_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, Any]:
+    """Train a reduced visuomotor Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_multi_stack_policy(
+        cfg,
+        env_factory=MacFrankaStackRgbEnv,
+        task_id="Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+        log_prefix="mlx-franka-stack-visuomotor",
+    )
+
+
+def train_franka_stack_visuomotor_cosmos_policy(cfg: MacFrankaStackRgbTrainCfg) -> dict[str, Any]:
+    """Train a reduced visuomotor-cosmos Franka stack policy on the mac-native MLX slice."""
+
+    return _train_franka_multi_stack_policy(
+        cfg,
+        env_factory=MacFrankaStackRgbEnv,
+        task_id="Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
+        log_prefix="mlx-franka-stack-visuomotor-cosmos",
+    )
+
+
 def train_franka_bin_stack_policy(cfg: MacFrankaBinStackTrainCfg) -> dict[str, Any]:
     """Train a lightweight continuous-control bin-anchored Franka stack policy on the mac-native MLX slice."""
 
@@ -3872,6 +4000,44 @@ def play_franka_stack_rgb_policy(
     """Run a trained three-cube Franka stack policy greedily and return episode returns."""
 
     cfg = env_cfg or MacFrankaStackRgbEnvCfg(num_envs=1)
+    return _play_franka_multi_stack_policy(
+        checkpoint_path,
+        env_factory=MacFrankaStackRgbEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_stack_visuomotor_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackRgbEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced visuomotor Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackVisuomotorEnvCfg(num_envs=1)
+    return _play_franka_multi_stack_policy(
+        checkpoint_path,
+        env_factory=MacFrankaStackRgbEnv,
+        env_cfg=cfg,
+        episodes=episodes,
+        hidden_dim=hidden_dim,
+    )
+
+
+def play_franka_stack_visuomotor_cosmos_policy(
+    checkpoint_path: str,
+    *,
+    env_cfg: MacFrankaStackRgbEnvCfg | None = None,
+    episodes: int = 3,
+    hidden_dim: int | None = None,
+) -> list[float]:
+    """Run a trained reduced visuomotor-cosmos Franka stack policy greedily and return episode returns."""
+
+    cfg = env_cfg or MacFrankaStackVisuomotorCosmosEnvCfg(num_envs=1)
     return _play_franka_multi_stack_policy(
         checkpoint_path,
         env_factory=MacFrankaStackRgbEnv,

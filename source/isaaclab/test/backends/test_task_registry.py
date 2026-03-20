@@ -29,6 +29,7 @@ SAFE_TASK_IDS = (
     "Isaac-Reach-UR10-v0",
     "Isaac-Deploy-Reach-UR10e-v0",
     "Isaac-Deploy-Reach-UR10e-Play-v0",
+    "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F140-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0",
     "Isaac-Deploy-GearAssembly-UR10e-2F85-v0",
@@ -41,6 +42,10 @@ SAFE_TASK_IDS = (
     "Isaac-Stack-Cube-Instance-Randomize-Franka-v0",
     "Isaac-Stack-Cube-Instance-Randomize-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Franka-IK-Rel-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
+    "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
     "Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0",
     "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0",
@@ -61,13 +66,8 @@ UNSUPPORTED_MAC_TASK_IDS = (
     "Isaac-PickPlace-GR1T2-Abs-v0",
     "Isaac-Repose-Cube-Shadow-Vision-Direct-v0",
     "Isaac-Dexsuite-Kuka-Allegro-Reorient-v0",
-    "Isaac-Deploy-Reach-UR10e-ROS-Inference-v0",
     "Isaac-Navigation-Flat-Anymal-C-v0",
     "Isaac-Tracking-LocoManip-Digit-v0",
-    "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0",
-    "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0",
-    "Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0",
-    "Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0",
 )
 
 
@@ -101,6 +101,7 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     ur10_reach_spec = gym.spec("Isaac-Reach-UR10-v0")
     ur10e_spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
     ur10e_play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+    ur10e_ros_inference_spec = gym.spec("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0")
     ur10e_gear_2f140_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-v0")
     ur10e_gear_2f140_play_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0")
     ur10e_gear_2f85_spec = gym.spec("Isaac-Deploy-GearAssembly-UR10e-2F85-v0")
@@ -117,6 +118,8 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert ur10e_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert ur10e_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ur10e_ros_inference_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-ros-inference"
+    assert ur10e_ros_inference_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_gear_2f140_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
     assert ur10e_gear_2f140_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert ur10e_gear_2f140_play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-assembly"
@@ -131,8 +134,20 @@ def test_mlx_task_registry_registers_supported_mac_tasks(monkeypatch):
     assert openarm_open_drawer_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     bin_stack_spec = gym.spec("Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0")
+    blueprint_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0")
+    skillgen_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0")
+    visuomotor_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0")
+    visuomotor_cosmos_stack_spec = gym.spec("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0")
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-mimic"
     assert bin_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert blueprint_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-blueprint"
+    assert blueprint_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert skillgen_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-skillgen"
+    assert skillgen_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert visuomotor_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-visuomotor-surrogate"
+    assert visuomotor_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert visuomotor_cosmos_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-cosmos"
+    assert visuomotor_cosmos_stack_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
     for task_id in UNSUPPORTED_MAC_TASK_IDS:
         assert gym.spec(task_id).id == task_id
@@ -265,8 +280,14 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     )
     stack_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-v0", device="cpu", num_envs=4)
     stack_ik_rel_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-v0", device="cpu", num_envs=9)
+    stack_blueprint_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Blueprint-v0", device="cpu", num_envs=6)
+    stack_skillgen_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Skillgen-v0", device="cpu", num_envs=7)
     stack_rgb_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-RedGreenBlue-Franka-IK-Rel-v0", device="cpu", num_envs=2)
     stack_rgb_alt_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-BlueGreenRed-Franka-IK-Rel-v0", device="cpu", num_envs=3)
+    stack_visuomotor_cfg = parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", device="cpu", num_envs=4)
+    stack_visuomotor_cosmos_cfg = parse_cfg.parse_env_cfg(
+        "Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-v0", device="cpu", num_envs=5
+    )
     bin_stack_cfg_entry = parse_cfg.load_cfg_from_registry(
         "Isaac-Stack-Cube-Bin-Franka-IK-Rel-Mimic-v0", "env_cfg_entry_point"
     )
@@ -316,12 +337,28 @@ def test_parse_env_cfg_supports_franka_manipulation_task_cfgs(monkeypatch):
     assert stack_cfg.action_space == 8
     assert type(stack_ik_rel_cfg).__name__ == "MacFrankaStackEnvCfg"
     assert stack_ik_rel_cfg.num_envs == 9
+    assert type(stack_blueprint_cfg).__name__ == "MacFrankaStackBlueprintEnvCfg"
+    assert stack_blueprint_cfg.num_envs == 6
+    assert stack_blueprint_cfg.semantic_contract == "reduced-no-blueprint"
+    assert stack_blueprint_cfg.upstream_alias_semantics_preserved is False
+    assert type(stack_skillgen_cfg).__name__ == "MacFrankaStackSkillgenEnvCfg"
+    assert stack_skillgen_cfg.num_envs == 7
+    assert stack_skillgen_cfg.semantic_contract == "reduced-no-skillgen"
+    assert stack_skillgen_cfg.upstream_alias_semantics_preserved is False
     assert type(stack_rgb_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
     assert stack_rgb_cfg.num_envs == 2
     assert stack_rgb_cfg.action_space == 8
     assert stack_rgb_cfg.observation_space == 42
     assert type(stack_rgb_alt_cfg).__name__ == "MacFrankaStackRgbEnvCfg"
     assert stack_rgb_alt_cfg.num_envs == 3
+    assert type(stack_visuomotor_cfg).__name__ == "MacFrankaStackVisuomotorEnvCfg"
+    assert stack_visuomotor_cfg.num_envs == 4
+    assert stack_visuomotor_cfg.semantic_contract == "reduced-visuomotor-surrogate"
+    assert stack_visuomotor_cfg.upstream_alias_semantics_preserved is False
+    assert type(stack_visuomotor_cosmos_cfg).__name__ == "MacFrankaStackVisuomotorCosmosEnvCfg"
+    assert stack_visuomotor_cosmos_cfg.num_envs == 5
+    assert stack_visuomotor_cosmos_cfg.semantic_contract == "reduced-no-cosmos"
+    assert stack_visuomotor_cosmos_cfg.upstream_alias_semantics_preserved is False
     assert type(bin_stack_cfg_entry).__name__ == "MacFrankaBinStackEnvCfg"
     assert type(bin_stack_cfg).__name__ == "MacFrankaBinStackEnvCfg"
     assert bin_stack_cfg.num_envs == 5
@@ -357,8 +394,10 @@ def test_parse_env_cfg_supports_ur10e_deploy_reach_task_cfg(monkeypatch):
 
     cfg = parse_cfg.parse_env_cfg("Isaac-Deploy-Reach-UR10e-v0", device="cpu", num_envs=6)
     play_cfg = parse_cfg.parse_env_cfg("Isaac-Deploy-Reach-UR10e-Play-v0", device="cpu", num_envs=7)
+    ros_inference_cfg = parse_cfg.parse_env_cfg("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0", device="cpu", num_envs=8)
     spec = gym.spec("Isaac-Deploy-Reach-UR10e-v0")
     play_spec = gym.spec("Isaac-Deploy-Reach-UR10e-Play-v0")
+    ros_inference_spec = gym.spec("Isaac-Deploy-Reach-UR10e-ROS-Inference-v0")
 
     assert type(cfg).__name__ == "MacUR10eDeployReachEnvCfg"
     assert cfg.num_envs == 6
@@ -372,10 +411,18 @@ def test_parse_env_cfg_supports_ur10e_deploy_reach_task_cfg(monkeypatch):
     assert play_cfg.observation_space == 19
     assert play_cfg.semantic_contract == "reduced-analytic-pose"
     assert play_cfg.upstream_alias_semantics_preserved is False
+    assert type(ros_inference_cfg).__name__ == "MacUR10eDeployReachRosInferenceEnvCfg"
+    assert ros_inference_cfg.num_envs == 8
+    assert ros_inference_cfg.action_space == 6
+    assert ros_inference_cfg.observation_space == 19
+    assert ros_inference_cfg.semantic_contract == "reduced-no-ros-inference"
+    assert ros_inference_cfg.upstream_alias_semantics_preserved is False
     assert spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
     assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-analytic-pose"
     assert play_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
+    assert ros_inference_spec.kwargs[registry.TASK_CONTRACT_KEY]["semantic_contract"] == "reduced-no-ros-inference"
+    assert ros_inference_spec.kwargs[registry.TASK_CONTRACT_KEY]["upstream_alias_semantics_preserved"] is False
 
 
 def test_parse_env_cfg_supports_ur10e_gear_assembly_task_cfgs(monkeypatch):
@@ -517,4 +564,4 @@ def test_parse_env_cfg_rejects_isaacsim_only_tasks_on_mac(monkeypatch):
         parse_cfg.parse_env_cfg("Isaac-Repose-Cube-Shadow-Vision-Direct-v0", device="cpu")
 
     with pytest.raises(UnsupportedBackendError, match="sim-backend=isaacsim"):
-        parse_cfg.parse_env_cfg("Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-v0", device="cpu")
+        parse_cfg.parse_env_cfg("Isaac-Tracking-LocoManip-Digit-v0", device="cpu")
