@@ -591,6 +591,33 @@ class MacSimBackend(SimBackend):
                 "task_local_assets": "task-local analytic asset adapters",
                 "task_local_spawners": "task-local analytic spawner adapters",
             },
+            "capability_boundaries": {
+                "scene_state": {
+                    "shared": True,
+                    "task_local": False,
+                    "source": "MacSimSceneState",
+                },
+                "articulation_io": {
+                    "shared": True,
+                    "task_local": False,
+                    "source": "generic batched articulation buffers",
+                },
+                "contacts": {
+                    "shared": False,
+                    "task_local": True,
+                    "source": "analytic contacts and reduced contact buffers",
+                },
+                "assets": {
+                    "shared": False,
+                    "task_local": True,
+                    "source": "task-local analytic asset adapters",
+                },
+                "spawners": {
+                    "shared": False,
+                    "task_local": True,
+                    "source": "task-local analytic spawner adapters",
+                },
+            },
             "scene_profile": {
                 "articulation_profile": "shared batched articulation and root-state buffers",
                 "contact_profile": "analytic contacts and reduced contact buffers",

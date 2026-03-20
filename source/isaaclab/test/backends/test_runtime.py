@@ -213,6 +213,33 @@ def test_create_sim_backend_returns_macsim_adapter():
         "task_local_assets": "task-local analytic asset adapters",
         "task_local_spawners": "task-local analytic spawner adapters",
     }
+    assert state["capability_boundaries"] == {
+        "scene_state": {
+            "shared": True,
+            "task_local": False,
+            "source": "MacSimSceneState",
+        },
+        "articulation_io": {
+            "shared": True,
+            "task_local": False,
+            "source": "generic batched articulation buffers",
+        },
+        "contacts": {
+            "shared": False,
+            "task_local": True,
+            "source": "analytic contacts and reduced contact buffers",
+        },
+        "assets": {
+            "shared": False,
+            "task_local": True,
+            "source": "task-local analytic asset adapters",
+        },
+        "spawners": {
+            "shared": False,
+            "task_local": True,
+            "source": "task-local analytic spawner adapters",
+        },
+    }
     assert state["attached"] is False
     assert state["supported_tasks"]["current_mac_native_count"] >= 13
 

@@ -51,6 +51,33 @@ def test_build_runtime_diagnostics_payload_reports_supported_surface():
         "task_local_assets": "task-local analytic asset adapters",
         "task_local_spawners": "task-local analytic spawner adapters",
     }
+    assert payload["sim"]["capability_boundaries"] == {
+        "scene_state": {
+            "shared": True,
+            "task_local": False,
+            "source": "MacSimSceneState",
+        },
+        "articulation_io": {
+            "shared": True,
+            "task_local": False,
+            "source": "generic batched articulation buffers",
+        },
+        "contacts": {
+            "shared": False,
+            "task_local": True,
+            "source": "analytic contacts and reduced contact buffers",
+        },
+        "assets": {
+            "shared": False,
+            "task_local": True,
+            "source": "task-local analytic asset adapters",
+        },
+        "spawners": {
+            "shared": False,
+            "task_local": True,
+            "source": "task-local analytic spawner adapters",
+        },
+    }
     assert payload["sim"]["supported_tasks"]["current_mac_native_count"] >= 13
     assert payload["sim"]["supported_tasks"]["public_benchmark_groups"]["sensor-mac-native"] == [
         "cartpole-rgb-camera",
