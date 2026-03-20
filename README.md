@@ -46,6 +46,7 @@ What works today:
 - trainable `MLX + mac-sim` OpenArm reach, bimanual reach, cube-lift, and open-drawer slices with explicit reduced-contract metadata, deterministic analytic surrogate kinematics, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
 - trainable `MLX + mac-sim` UR10 reach and UR10e deploy-reach slices with deterministic analytic pose tracking, reduced-contract metadata (`semantic_contract="reduced-analytic-pose"`), benchmark coverage, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
 - trainable `MLX + mac-sim` UR10e gear-assembly slices for the Robotiq 2F-140 and 2F-85 grippers with explicit reduced-contract metadata (`semantic_contract="reduced-analytic-assembly"`), insertion-aware policy observations, benchmark coverage, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
+- trainable `MLX + mac-sim` Factory peg-insert slice with explicit reduced-contract metadata (`semantic_contract="reduced-analytic-peg-insert"`), insertion-depth surrogate observations, benchmark coverage in the `manipulation-expansion` group, and replay/checkpoint support through the same public MLX wrapper and installed CLI surface
 - upstream-compatible Franka reach/lift/stack/open-drawer controller variants now resolve through the lazy task registry, public `isaaclab_rl.mlx` wrapper, and installed MLX CLI onto the existing reduced mac-native slices instead of failing on macOS import/runtime seams
 - upstream-compatible `Isaac-Deploy-Reach-UR10e-v0`, `Isaac-Deploy-Reach-UR10e-Play-v0`, and `Isaac-Deploy-Reach-UR10e-ROS-Inference-v0` identifiers now resolve through the same lazy registry, public wrapper, and installed CLI onto the canonical `ur10e-deploy-reach` slice while keeping the reduced-contract metadata explicit
 - upstream-compatible `Isaac-Deploy-GearAssembly-UR10e-2F140-v0`, `Isaac-Deploy-GearAssembly-UR10e-2F140-Play-v0`, `Isaac-Deploy-GearAssembly-UR10e-2F85-v0`, and `Isaac-Deploy-GearAssembly-UR10e-2F85-Play-v0` identifiers now resolve through the same lazy registry, public wrapper, and installed CLI onto the canonical `ur10e-gear-assembly-2f140` and `ur10e-gear-assembly-2f85` slices while keeping the reduced-contract metadata explicit
@@ -109,7 +110,7 @@ Current public options:
 - `isaacsim`: upstream runtime adapter
 - `mac-sim`: Mac-native adapter path
 
-The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 28 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, UR10e gear-assembly 2F-140, UR10e gear-assembly 2F-85, UR10 long-suction stack, UR10 short-suction stack, Franka lift, OpenArm lift, Agibot place toy2box, Agibot place upright mug, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer, plus synthetic cartpole RGB/depth camera variants for 30 public MLX/mac task IDs overall. Twenty-six of those public tasks are trainable end-to-end on the MLX/mac path. The task capability matrix below is the authoritative public support surface.
+The current `mac-sim` implementation is still intentionally narrower than upstream Isaac Sim, but it is no longer only task-local slices. It now includes a shared generic batched articulation/scene substrate for reset/step plus joint/root-state IO, and it currently powers 28 current mac-native rollout tasks: cartpole, cart-double-pendulum, quadcopter, ANYmal-C flat, ANYmal-C rough, H1 flat, H1 rough, Franka reach, OpenArm reach, OpenArm bimanual reach, UR10 reach, UR10e deploy-reach, UR10e gear-assembly 2F-140, UR10e gear-assembly 2F-85, UR10 long-suction stack, UR10 short-suction stack, Franka lift, OpenArm lift, Agibot place toy2box, Agibot place upright mug, Franka teddy-bear lift, Franka stack instance-randomize, Franka stack, Franka stack RGB, Franka bin-stack, Franka cabinet, Franka open-drawer, and OpenArm open-drawer, plus synthetic cartpole RGB/depth camera variants and the reduced Factory peg-insert slice for 31 public MLX/mac task IDs overall. Twenty-seven of those public tasks are trainable end-to-end on the MLX/mac path. The task capability matrix below is the authoritative public support surface.
 
 ### Kernel backend
 
@@ -710,7 +711,7 @@ The current ROS 2 bridge is also intentionally plain. It focuses on message/proc
 - [`source/isaaclab/isaaclab/backends/ros2_compat.py`](source/isaaclab/isaaclab/backends/ros2_compat.py)
 - [`scripts/tools/ros2_bridge_smoke.py`](scripts/tools/ros2_bridge_smoke.py)
 
-Batch publish helpers now reject mixed topic-root batches across command building, typed manifest generation, and CLI publish execution, and the replayable batch transcript plus session manifest capture ordered input envelopes, commands, publish results, transcript paths, and replay metadata for deterministic audit, so planner world-state and joint-trajectory envelopes cannot be silently interleaved and replayed out of contract.
+Batch publish helpers now reject mixed topic-root batches across command building, typed manifest generation, and CLI publish execution, and the replayable batch transcript plus session manifest reconstruct ordered replay command groups, capture publish results, transcript paths, and replay metadata, and keep planner world-state and joint-trajectory envelopes out of silent interleaving and out-of-contract replay.
 
 Example planner smoke:
 
@@ -734,7 +735,7 @@ This is the current compatibility contract:
 - ROS compatibility on macOS means plain message/process interoperability first, including ROS-friendly world-state and joint-trajectory envelopes plus typed round-trip reconstruction without importing ROS Python bindings
 - batched ROS planner envelopes are reconstructed by `batch_index`, not by input order, so JSONL message reordering cannot silently corrupt planner/world batch recovery
 - batch publish transcripts preserve planned envelopes, generated commands, and publish results as plain data so process-level failures can be audited and replayed without ROS Python bindings
-- batch publish session manifests aggregate transcript paths and replay metadata so a publish session can be reconstructed deterministically after the fact
+- batch publish session manifests aggregate transcript paths and replay metadata so a publish session can be reconstructed deterministically into ordered command groups after the fact
 - CUDA stream transport, NITROS, and GXF remain future follow-on work
 
 ## Kernel Inventory
