@@ -20,6 +20,7 @@ from .planner_compat import JointMotionPlan, PlannerWorldObstacle, PlannerWorldS
 ROS2_MESSAGE_ENVELOPE_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION = 1
 ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION = 1
+ROS2_BATCH_PUBLISH_REPLAY_GROUP_SCHEMA_VERSION = 1
 
 
 def _normalize_message_value(value: Any) -> Any:
@@ -122,6 +123,32 @@ def _topic_root_for_batch(topic: str) -> str:
     if "/" not in topic:
         return topic
     return topic.rsplit("/", 1)[0]
+
+
+def _validate_batch_publish_transcript_dict(transcript: Any) -> dict[str, Any]:
+    normalized = _normalize_message_value(transcript)
+    if not isinstance(normalized, dict):
+        raise ValueError("batch publish transcript must be a mapping")
+    if int(normalized.get("schema_version", ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION)) != ROS2_BATCH_PUBLISH_TRANSCRIPT_SCHEMA_VERSION:
+        raise ValueError(f"Unsupported ROS 2 batch publish transcript schema version: {normalized.get('schema_version')}")
+    if normalized.get("kind", "ros2_batch_publish_transcript") != "ros2_batch_publish_transcript":
+        raise ValueError(f"Unsupported ROS 2 batch publish transcript kind: {normalized.get('kind')}")
+    if normalized.get("topic_root") is None:
+        topic_sequence = normalized.get("topic_sequence", [])
+        if topic_sequence:
+            normalized["topic_root"] = _topic_root_for_batch(str(topic_sequence[0]))
+        else:
+            raise ValueError("batch publish transcript is missing topic_root")
+    normalized.setdefault("command_sequence", [])
+    normalized.setdefault("record_sequence", [])
+    normalized.setdefault("batch_indices", [])
+    normalized.setdefault("topic_sequence", [])
+    normalized.setdefault("msg_type_sequence", [])
+    normalized.setdefault("message_count", len(normalized["batch_indices"]))
+    normalized.setdefault("record_count", len(normalized["record_sequence"]))
+    normalized.setdefault("observed_record_count", len(normalized["record_sequence"]))
+    normalized.setdefault("replayable", True)
+    return normalized
 
 
 def _sorted_batch_envelopes(
@@ -501,6 +528,86 @@ class Ros2ProcessBridge:
             "batch_publish_transcript_count": len(transcripts),
             "replayable": bool(transcripts or normalized_paths),
         }
+
+    def build_batch_publish_replay_groups(
+        self,
+        session_manifest: dict[str, Any],
+        *,
+        base_dir: str | Path | None = None,
+        prefer_paths: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Reconstruct ordered publish command groups from a replayable session manifest."""
+
+        manifest = _normalize_message_value(session_manifest)
+        if not isinstance(manifest, dict):
+            raise ValueError("session manifest must be a mapping")
+        if int(manifest.get("schema_version", ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION)) != ROS2_BATCH_PUBLISH_SESSION_MANIFEST_SCHEMA_VERSION:
+            raise ValueError(
+                f"Unsupported ROS 2 batch publish session manifest schema version: {manifest.get('schema_version')}"
+            )
+        if manifest.get("kind", "ros2_batch_publish_session_manifest") != "ros2_batch_publish_session_manifest":
+            raise ValueError(f"Unsupported ROS 2 batch publish session manifest kind: {manifest.get('kind')}")
+
+        raw_paths = [str(path) for path in manifest.get("publish_transcript_paths", ())]
+        embedded_transcripts = list(manifest.get("batch_publish_transcripts", ()))
+        base_path = None if base_dir is None else Path(base_dir)
+
+        def _resolve_path(raw_path: str) -> Path:
+            path = Path(raw_path)
+            if path.is_absolute() or base_path is None:
+                return path
+            return base_path / path
+
+        transcript_entries: list[tuple[str, int, dict[str, Any], str | None]] = []
+        if prefer_paths and raw_paths:
+            for index, raw_path in enumerate(raw_paths):
+                resolved_path = _resolve_path(raw_path)
+                transcript_entries.append((resolved_path.stem, index, _validate_batch_publish_transcript_dict(json.loads(resolved_path.read_text(encoding="utf-8"))), str(resolved_path)))
+        elif embedded_transcripts:
+            for index, transcript in enumerate(embedded_transcripts):
+                path = raw_paths[index] if index < len(raw_paths) else None
+                transcript_entries.append((str(index), index, _validate_batch_publish_transcript_dict(transcript), path))
+        elif raw_paths:
+            for index, raw_path in enumerate(raw_paths):
+                resolved_path = _resolve_path(raw_path)
+                transcript_entries.append((resolved_path.stem, index, _validate_batch_publish_transcript_dict(json.loads(resolved_path.read_text(encoding="utf-8"))), str(resolved_path)))
+        else:
+            raise ValueError("session manifest does not contain publish transcript paths or batch publish transcripts")
+
+        transcript_entries.sort(
+            key=lambda item: (
+                str(item[2].get("topic_root", "")),
+                item[2].get("batch_indices", []),
+                item[1],
+            )
+        )
+        command_root = [str(value) for value in manifest.get("command_root", (self.ros2_executable, "topic", "pub"))]
+        replay_metadata = _normalize_message_value(manifest.get("replay_metadata", {}))
+        command_groups: list[dict[str, Any]] = []
+        for group_index, (_, transcript_index, transcript, transcript_path) in enumerate(transcript_entries):
+            command_groups.append(
+                {
+                    "schema_version": ROS2_BATCH_PUBLISH_REPLAY_GROUP_SCHEMA_VERSION,
+                    "kind": "ros2_batch_publish_replay_group",
+                    "group_index": group_index,
+                    "transcript_index": transcript_index,
+                    "topic_root": transcript["topic_root"],
+                    "command_root": command_root,
+                    "publish_transcript_path": transcript_path,
+                    "batch_indices": list(transcript["batch_indices"]),
+                    "topic_sequence": list(transcript["topic_sequence"]),
+                    "msg_type_sequence": list(transcript["msg_type_sequence"]),
+                    "command_sequence": [list(command) for command in transcript["command_sequence"]],
+                    "record_sequence": _normalize_message_value(transcript["record_sequence"]),
+                    "publish_state": transcript.get("publish_state"),
+                    "message_count": transcript["message_count"],
+                    "record_count": transcript["record_count"],
+                    "observed_record_count": transcript["observed_record_count"],
+                    "replay_metadata": replay_metadata,
+                    "replayable": bool(transcript.get("replayable", True) and manifest.get("replayable", True)),
+                }
+            )
+        return command_groups
 
     def publish_batch_via_cli(
         self,

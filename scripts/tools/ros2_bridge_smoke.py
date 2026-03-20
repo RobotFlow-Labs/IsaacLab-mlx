@@ -151,6 +151,10 @@ def main() -> int:
         },
         batch_publish_transcripts=(planner_batch_publish_transcript, trajectory_batch_publish_transcript),
     )
+    process_replay_command_groups = bridge.build_batch_publish_replay_groups(
+        process_session_manifest,
+        base_dir=args.output.parent,
+    )
 
     summary = {
         "cli_available": bridge.cli_available(),
@@ -180,6 +184,7 @@ def main() -> int:
         "planner_batch_transcript_path": str(planner_batch_transcript_path),
         "trajectory_batch_transcript_path": str(trajectory_batch_transcript_path),
         "process_session_manifest": process_session_manifest,
+        "process_replay_command_groups": process_replay_command_groups,
         "message_summary": message_summary,
     }
     if args.summary_out is not None:

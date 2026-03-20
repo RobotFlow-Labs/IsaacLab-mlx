@@ -241,6 +241,64 @@ def test_ros2_process_bridge_builds_batch_publish_session_manifest():
     assert manifest["replayable"] is True
 
 
+def test_ros2_process_bridge_replays_session_manifest_into_ordered_command_groups(tmp_path: Path):
+    """Session manifests should replay into deterministic ordered command groups from transcript files."""
+    bridge = Ros2ProcessBridge()
+    planner_transcript = bridge.build_batch_publish_transcript(
+        (
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/0",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 0},
+                batch_index=0,
+            ),
+            Ros2MessageEnvelope(
+                topic="/planner/world_state/1",
+                msg_type="robotflow_msgs/msg/PlannerWorldState",
+                payload={"frame_id": "world", "batch_index": 1},
+                batch_index=1,
+            ),
+        )
+    )
+    trajectory_transcript = bridge.build_batch_publish_transcript(
+        (
+            Ros2MessageEnvelope(
+                topic="/planner/joint_trajectory/0",
+                msg_type="trajectory_msgs/msg/JointTrajectory",
+                payload={"joint_names": ["joint_1"], "batch_index": 0},
+                batch_index=0,
+            ),
+            Ros2MessageEnvelope(
+                topic="/planner/joint_trajectory/1",
+                msg_type="trajectory_msgs/msg/JointTrajectory",
+                payload={"joint_names": ["joint_1"], "batch_index": 1},
+                batch_index=1,
+            ),
+        )
+    )
+    planner_path = tmp_path / "planner-transcript.json"
+    trajectory_path = tmp_path / "trajectory-transcript.json"
+    planner_path.write_text(json.dumps(planner_transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    trajectory_path.write_text(json.dumps(trajectory_transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    session_manifest = bridge.build_batch_publish_session_manifest(
+        publish_transcript_paths=("planner-transcript.json", "trajectory-transcript.json"),
+        replay_metadata={"source": "unit-test", "session": "replay"},
+    )
+
+    replay_groups = bridge.build_batch_publish_replay_groups(session_manifest, base_dir=tmp_path)
+
+    assert [group["topic_root"] for group in replay_groups] == ["/planner/joint_trajectory", "/planner/world_state"]
+    assert [group["group_index"] for group in replay_groups] == [0, 1]
+    assert replay_groups[0]["publish_transcript_path"] == str(trajectory_path)
+    assert replay_groups[1]["publish_transcript_path"] == str(planner_path)
+    assert replay_groups[0]["command_root"] == ["ros2", "topic", "pub"]
+    assert replay_groups[0]["command_sequence"][0][4] == "/planner/joint_trajectory/0"
+    assert replay_groups[1]["command_sequence"][0][4] == "/planner/world_state/0"
+    assert replay_groups[1]["replay_metadata"]["source"] == "unit-test"
+    assert replay_groups[0]["replayable"] is True
+
+
 def test_ros2_process_bridge_wraps_batch_publish_failures_with_batch_context(monkeypatch):
     """Batch publish failures should report the failing batch index and topic."""
     bridge = Ros2ProcessBridge()
@@ -645,3 +703,8 @@ def test_ros2_bridge_smoke_uses_planner_backend_round_trip(tmp_path: Path):
         "/planner/joint_trajectory",
         "/planner/world_state",
     ]
+    assert [group["topic_root"] for group in summary["process_replay_command_groups"]] == [
+        "/planner/joint_trajectory",
+        "/planner/world_state",
+    ]
+    assert summary["process_replay_command_groups"][0]["command_sequence"][0][4] == "/planner/joint_trajectory/0"
