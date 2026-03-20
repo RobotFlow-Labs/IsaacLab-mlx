@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-20T03:40:35Z",
+  "generated_at": "2026-03-20T06:39:43Z",
   "git_sha": null,
   "hardware_label": "darwin-arm64",
   "parameters": {
@@ -20,7 +20,7 @@
   },
   "run_id": null,
   "schema_version": 1,
-  "task_count": 32,
+  "task_count": 33,
   "task_group": "full",
   "tasks": {
     "agibot-place-toy2box": {
@@ -253,6 +253,34 @@
           "final_reward_mean": 0.9424142837524414
         },
         "sensor_implementation": "analytic-cartpole-camera"
+      },
+      "cpu_fallback": false,
+      "runtime": {
+        "compute_backend": "mlx",
+        "kernel_backend": "metal",
+        "sim_backend": "mac-sim"
+      }
+    },
+    "factory-peg-insert": {
+      "contract": {
+        "action_dim": 6,
+        "hotpath": "mlx-compiled",
+        "observation_dim": 19,
+        "output_signature": {
+          "final_assembled_ratio": 0.0,
+          "final_ee_height_mean": 0.41429030895233154,
+          "final_joint_pos_abs_mean": 1.0599894523620605,
+          "final_joint_vel_abs_mean": 0.0,
+          "final_orientation_error_mean": 0.9389723539352417,
+          "final_peg_insert_depth_mean": 0.0,
+          "final_peg_variant_mean": 1.125,
+          "final_policy_mean": -0.06648749858140945,
+          "final_policy_std": 0.7846049070358276,
+          "final_reward_mean": 0.015260584652423859,
+          "final_target_distance_mean": 0.3959442377090454
+        },
+        "semantic_contract": "reduced-analytic-peg-insert",
+        "upstream_alias_semantics_preserved": false
       },
       "cpu_fallback": false,
       "runtime": {

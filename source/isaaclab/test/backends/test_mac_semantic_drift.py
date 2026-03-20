@@ -62,7 +62,7 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
 
     assert snapshot["hardware_label"] == "m5-ultra"
     assert "train-cartpole" not in snapshot["tasks"]
-    assert snapshot["task_count"] == 32
+    assert snapshot["task_count"] == 33
     assert snapshot["tasks"]["cartpole"]["contract"]["observation_dim"] == 4
     assert snapshot["tasks"]["cartpole-rgb-camera"]["contract"]["camera_mode"] == "rgb"
     assert snapshot["tasks"]["cartpole-depth-camera"]["contract"]["image_shape"] == [100, 100, 1]
@@ -96,6 +96,12 @@ def test_semantic_drift_snapshot_covers_rollout_contracts(tmp_path: Path):
     assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_insert_depth_mean"] >= 0.0
     assert 0.0 <= snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_assembled_ratio"] <= 1.0
     assert snapshot["tasks"]["ur10e-gear-assembly-2f85"]["contract"]["output_signature"]["final_gear_type_mean"] >= 0.0
+    assert snapshot["tasks"]["factory-peg-insert"]["contract"]["action_dim"] == 6
+    assert snapshot["tasks"]["factory-peg-insert"]["contract"]["semantic_contract"] == "reduced-analytic-peg-insert"
+    assert snapshot["tasks"]["factory-peg-insert"]["contract"]["upstream_alias_semantics_preserved"] is False
+    assert snapshot["tasks"]["factory-peg-insert"]["contract"]["output_signature"]["final_peg_insert_depth_mean"] >= 0.0
+    assert snapshot["tasks"]["factory-peg-insert"]["contract"]["output_signature"]["final_peg_variant_mean"] >= 0.0
+    assert 0.0 <= snapshot["tasks"]["factory-peg-insert"]["contract"]["output_signature"]["final_assembled_ratio"] <= 1.0
     assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["action_dim"] == 7
     assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["hotpath"] == expected_ur10e_hotpath
     assert snapshot["tasks"]["ur10-long-suction-stack"]["contract"]["semantic_contract"] == "reduced-analytic-suction-stack"
